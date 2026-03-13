@@ -14,6 +14,9 @@ export default async function DashboardPage() {
           <span className="text-white font-semibold text-lg">AuraTrade</span>
         </div>
         <div className="flex items-center gap-4">
+          <a href="/upload" className="text-zinc-400 hover:text-zinc-200 text-sm transition-colors">
+            Upload
+          </a>
           <span className="text-zinc-400 text-sm">{session.user.email}</span>
           <LogoutButton />
         </div>
