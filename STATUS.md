@@ -41,6 +41,7 @@
 | 2026-03-13 | User provided real TOS CSV sample for Phase 3 parser validation. File not yet read/parsed. |
 | 2026-03-13 | Phase 3 complete. CSV is Schwab/TDA Transaction History (NOT TOS Activity & Positions). Date-only (no time), commission explicit in "Fees & Comm", two format variants (2022 TDA + 2026 Schwab). Commission formula `(Price - NetPrice) × Qty` does NOT apply. |
 | 2026-03-13 | Parser bug fix (A7): 2026 Schwab file is reverse-chronological (newest row first). Parser now detects (first date > last date) and reverses + renumbers rowIndex. Fixes 421 phantom open positions that were really completed intraday trades. 25 parser tests passing. |
+| 2026-03-13 | Dedup fix: replaced rowIndex-offset execTime encoding with explicit `daySeq Int` column on Execution. daySeq = 0-based occurrence index within (accountId, execTime, symbol, side, qty, price) group. Unique constraint now includes daySeq. Same execution from two overlapping CSV files always gets same daySeq → correctly deduplicated. Migration: `20260313200000_add_execution_dayseq`. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -52,9 +53,8 @@
 - `next build` passes clean, zero TypeScript errors.
 - Parser exports `parseSchwabCSV()` — handles both TDA (2022) and Schwab (2026) CSV variants.
 - Grouper exports `groupTrades(executions)` → `{ trades, warnings }`. Pure function, no DB calls.
-- execTime dedup strategy: rowIndex milliseconds offset applied at upload layer (prevents same-date duplicate Execution rows).
 - Phase 5 complete. Upload page at `/upload`. Two API routes: POST /api/upload (parse+preview) and POST /api/upload/[id]/confirm (write to DB).
 - Confirm step: upserts executions, rebuilds ALL RoundTripTrades from scratch (safe for overlapping re-uploads).
-- execTime stored as date + rowIndex ms (preserves FIFO order, prevents duplicate row collisions).
+- execTime = pure midnight UTC date. daySeq = content-based intra-day sequence for dedup + FIFO ordering.
 - Toaster added to root layout (sonner, dark theme).
 - **Next: Phase 6 — Trades List Page** (`src/app/(app)/trades/page.tsx`)
