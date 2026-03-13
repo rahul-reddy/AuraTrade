@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 7 — Market Data Integration**
+**Phase 7.5 — Trade Context Enrichment Pipeline**
 
 ## Phase Checklist
 
@@ -16,7 +16,7 @@
 | 4 | Trade grouping engine (FIFO) | ✅ Done | FIFO grouper, VWAP, LONG/SHORT PnL, open positions, 17 tests passing. |
 | 5 | Upload flow (two-phase commit) | ✅ Done | Dropzone UI, parse preview, confirm writes to DB. Full trade rebuild on confirm. |
 | 6 | Trades list page | ✅ Done | Server-rendered trades page, API filters, CSV export, extracted table component, loading/error states |
-| 7 | Market data integration (yahoo-finance2) | Not started | |
+| 7 | Market data integration (yahoo-finance2) | ✅ Done | Yahoo client, cache layer, authenticated API route, symbol-page market data preview, loading/error states |
 | 7.5 | Trade context enrichment pipeline | Not started | |
 | 8 | Interactive chart (Lightweight Charts) | Not started | Hero feature |
 | 9 | Performance metrics engine (Kelly, formulas) | Not started | All formulas verified before implementation |
@@ -47,6 +47,9 @@
 | 2026-03-13 | Dashboard stub nav bug fixed: `/dashboard` top bar now links to both `/trades` and `/upload`, so Phase 6 is reachable through the UI instead of only by direct URL entry. |
 | 2026-03-13 | Playwright installed for local smoke testing. Added `playwright.config.ts`, auth/navigation smoke test, upload/import smoke test, and a CSV fixture. `npx playwright test` passes locally against the dev server. |
 | 2026-03-13 | Adopted feature-branch + PR workflow: meaningful work should land through short-lived branches into `master`, with local tester pass, local reviewer pass, and CodeRabbit PR review as the default merge gate. |
+| 2026-03-13 | Tightened the branch workflow: user-facing changes should pass Playwright before commit unless a blocker is explicitly called out. Added a chart-market-data smoke test that covers `/trades` → `/chart/[symbol]` navigation after CSV import. |
+| 2026-03-13 | Phase 7 complete. Added `src/lib/market-data/yahoo-client.ts`, `src/lib/market-data/market-data-cache.ts`, and authenticated `GET /api/market-data`. The symbol page at `/chart/[symbol]` now shows timeframe-switched candle previews with fallback messaging, plus route-level loading/error states. |
+| 2026-03-13 | Market data cache schema corrected for intraday support: `MarketDataCache.date` now stores candle timestamps (migration `20260313212628_market_data_cache_timestamps`) instead of `@db.Date`, which previously could only store one row per day. |
 | 2026-03-13 | `next build` is currently NOT clean: Next.js 16 middleware/proxy edge runtime still imports Prisma via auth middleware. Full-project lint also still fails because ESLint scans `src/generated/prisma`. |
 
 ## Pending User Actions
@@ -54,7 +57,7 @@
 - [x] ~~Provide sample TOS CSV export for parser validation~~ — received 2026-03-13
 
 ## Where We Stopped (2026-03-13)
-- Phases 1, 2, 2b, 3, 4, 5, 6 complete.
+- Phases 1, 2, 2b, 3, 4, 5, 6, and 7 complete.
 - Docker container `auratrade-pg` running on port 5432, all 12 DB tables present.
 - `npx tsc --noEmit` passes. `next build` still fails because auth middleware pulls Prisma into the edge runtime. Full-project `npm run lint` still fails because generated Prisma client files under `src/generated/prisma` are linted.
 - Parser exports `parseSchwabCSV()` — handles both TDA (2022) and Schwab (2026) CSV variants.
@@ -64,5 +67,6 @@
 - execTime = pure midnight UTC date. daySeq = content-based intra-day sequence for dedup + FIFO ordering.
 - Toaster added to root layout (sonner, dark theme).
 - Phase 6 complete. `/trades` now has URL-synced filters, sortable columns, page-size control, CSV export, loading/error states, and a non-404 symbol detail target at `/chart/[symbol]`.
-- Verification: `npx tsc --noEmit` passes, `npx jest --runInBand` passes (42 tests), targeted ESLint passes on the modified Phase 6 files, and `npx playwright test` passes with 2 local smoke tests.
-- **Next: Phase 7 — Market Data Integration** (`src/lib/market-data/yahoo-client.ts`, `src/lib/market-data/market-data-cache.ts`)
+- Phase 7 complete. `/api/market-data` now serves cached Yahoo candles, `MarketDataCache` stores timestamped intraday rows, and `/chart/[symbol]` now has a real market-data preview with timeframe switching and fallback/error states ahead of the Phase 8 interactive chart.
+- Verification: `npx tsc --noEmit` passes, `npx jest --runInBand` passes (48 tests), targeted ESLint passes on the modified Phase 7 files, and `npx playwright test` passes with 3 local smoke tests including the chart market-data flow.
+- **Next: Phase 7.5 — Trade Context Enrichment Pipeline** (`src/lib/engine/trade-enrichment.ts`)
