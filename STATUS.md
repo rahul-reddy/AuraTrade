@@ -46,6 +46,7 @@
 | 2026-03-13 | Added route-level loading + error states for `/trades`, plus a temporary `/chart/[symbol]` symbol detail page so trade links resolve before the Phase 8 interactive chart lands. |
 | 2026-03-13 | Dashboard stub nav bug fixed: `/dashboard` top bar now links to both `/trades` and `/upload`, so Phase 6 is reachable through the UI instead of only by direct URL entry. |
 | 2026-03-13 | Playwright installed for local smoke testing. Added `playwright.config.ts`, auth/navigation smoke test, upload/import smoke test, and a CSV fixture. `npx playwright test` passes locally against the dev server. |
+| 2026-03-13 | Adopted feature-branch + PR workflow: meaningful work should land through short-lived branches into `master`, with local tester pass, local reviewer pass, and CodeRabbit PR review as the default merge gate. |
 | 2026-03-13 | `next build` is currently NOT clean: Next.js 16 middleware/proxy edge runtime still imports Prisma via auth middleware. Full-project lint also still fails because ESLint scans `src/generated/prisma`. |
 
 ## Pending User Actions
