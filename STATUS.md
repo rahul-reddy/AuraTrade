@@ -44,6 +44,7 @@
 | 2026-03-13 | Dedup fix: replaced rowIndex-offset execTime encoding with explicit `daySeq Int` column on Execution. daySeq = 0-based occurrence index within (accountId, execTime, symbol, side, qty, price) group. Unique constraint now includes daySeq. Same execution from two overlapping CSV files always gets same daySeq → correctly deduplicated. Migration: `20260313200000_add_execution_dayseq`. |
 | 2026-03-13 | Phase 6 complete. Trades list page now supports URL-synced filters for symbol/direction/status/setup/date/pageSize, CSV export includes notes, and table markup was extracted to `src/components/trades/TradesTable.tsx`. |
 | 2026-03-13 | Added route-level loading + error states for `/trades`, plus a temporary `/chart/[symbol]` symbol detail page so trade links resolve before the Phase 8 interactive chart lands. |
+| 2026-03-13 | Dashboard stub nav bug fixed: `/dashboard` top bar now links to both `/trades` and `/upload`, so Phase 6 is reachable through the UI instead of only by direct URL entry. |
 | 2026-03-13 | `next build` is currently NOT clean: Next.js 16 middleware/proxy edge runtime still imports Prisma via auth middleware. Full-project lint also still fails because ESLint scans `src/generated/prisma`. |
 
 ## Pending User Actions
