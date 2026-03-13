@@ -48,7 +48,7 @@
 - [x] ~~Provide sample TOS CSV export for parser validation~~ — received 2026-03-13
 
 ## Where We Stopped (2026-03-13)
-- Phases 1, 2, 2b, 3 complete.
+- Phases 1, 2, 2b, 3, 4, 5 complete.
 - Docker container `auratrade-pg` running on port 5432, all 12 DB tables present.
 - `next build` passes clean, zero TypeScript errors.
 - Parser exports `parseSchwabCSV()` — handles both TDA (2022) and Schwab (2026) CSV variants.

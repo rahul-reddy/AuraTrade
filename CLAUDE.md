@@ -25,7 +25,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 4. **Every API route** starts with `getRequiredSession()` and scopes all DB queries by `userId`
 5. **Flag TOS CSV format assumptions** explicitly in code comments — never guess silently
 6. **Kelly functions** (`kellyFull`, `kellyHalf`, `kellyQuarter`) live in `metrics.ts` only — no separate `kelly.ts`
-7. **Commission formula**: `(Price - NetPrice) × Qty` for BOTH buys AND sells — verify against real TOS CSV when provided
+7. **Commission formula**: Read directly from the `Fees & Comm` column in the CSV. `(Price - NetPrice) × Qty` does NOT apply to Schwab/TDA Transaction History exports. Buys have $0 commission; sells carry the fee.
 8. **`@db.Decimal`** for ALL financial values in Prisma — never `Float`
 9. **Update `STATUS.md`** after completing each phase or significant sub-task
 10. **Every component gets a loading state AND an error state** — no blank screens ever; skeleton loaders not spinners
