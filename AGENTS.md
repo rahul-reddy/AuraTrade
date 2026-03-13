@@ -25,6 +25,7 @@ If this file conflicts with `CLAUDE.md` on product or implementation details, fo
 - Keep changes scoped. If you notice unrelated problems, mention them separately instead of folding them into the current task.
 - Before making architecture or workflow changes, check whether they should also be reflected in `CLAUDE.md`, `PLAN.md`, or `STATUS.md`.
 - Prefer updating docs in the same task when the code materially changes project reality.
+- Do not treat a meaningful feature, bug fix, or phase as done until both tester and reviewer duties are completed, or the missing verification is explicitly called out.
 
 ## Coordination Workflow
 
@@ -52,10 +53,12 @@ file focused on the shared process rather than local tooling paths.
 Use a two-agent workflow for non-trivial work when possible:
 - Builder agent: implements the change, runs checks, and prepares a concise handoff
 - Reviewer agent: performs an independent review of the diff and changed files, with findings first
+- Tester agent: runs the relevant local verification, prioritizing Playwright for user-facing flows and targeted type/lint/test checks for the touched code
 
 Rules:
 - The reviewer should not be primed with the intended answer or a desired approval outcome
 - The reviewer should focus on bugs, regressions, auth/data-scope mistakes, missing tests, broken navigation, and stale docs
+- The tester should choose the smallest test scope that still proves the change works, then expand if the change is risky
 - The builder should address findings, rerun relevant checks, and only then treat the work as ready
 - If true subagents are unavailable, emulate this with a fresh agent/chat using the same handoff notes
 
