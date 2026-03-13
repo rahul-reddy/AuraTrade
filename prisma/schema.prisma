@@ -1,0 +1,273 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth (NextAuth v5) ───────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  passwordHash  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  authAccounts     AuthAccount[]
+  sessions         Session[]
+  tradingAccounts  TradingAccount[]
+}
+
+model AuthAccount {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Side {
+  BUY
+  SELL
+  SELL_SHORT
+  BUY_TO_COVER
+}
+
+enum PosEffect {
+  OPEN
+  CLOSE
+  AUTO
+}
+
+enum Direction {
+  LONG
+  SHORT
+}
+
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+enum MarketRegime {
+  TRENDING_UP
+  TRENDING_DOWN
+  CHOPPY
+}
+
+// ─── Trading Domain ───────────────────────────────────────────────────────────
+
+model TradingAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  broker          String   @default("Schwab/TOS")
+  currency        String   @default("USD")
+  startingBalance Decimal  @db.Decimal(14, 2)
+  createdAt       DateTime @default(now())
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uploads        Upload[]
+  executions     Execution[]
+  trades         RoundTripTrade[]
+  dailySnapshots DailySnapshot[]
+
+  @@index([userId])
+}
+
+model Upload {
+  id          String       @id @default(cuid())
+  userId      String
+  accountId   String
+  fileHash    String
+  fileName    String
+  status      UploadStatus @default(PENDING)
+  totalRows   Int          @default(0)
+  newRows     Int          @default(0)
+  skippedRows Int          @default(0)
+  dateFrom    DateTime?
+  dateTo      DateTime?
+  warnings    String[]
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+
+  account TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, fileHash])
+  @@index([userId])
+  @@index([accountId])
+}
+
+model Execution {
+  id         String    @id @default(cuid())
+  accountId  String
+  uploadId   String?
+  tradeId    String?
+  execTime   DateTime  // midnight of trade date (UTC); use daySeq for intra-day ordering
+  daySeq     Int       @default(0) // 0-based occurrence index within (accountId, execTime, symbol, side, qty, price) — enables cross-file dedup
+  symbol     String
+  side       Side
+  qty        Decimal   @db.Decimal(12, 4)
+  price      Decimal   @db.Decimal(12, 4)
+  netPrice   Decimal   @db.Decimal(12, 4)
+  commission Decimal   @db.Decimal(10, 4)
+  posEffect  PosEffect
+  assetType  String    @default("STOCK")
+  spread     String?
+  orderType  String?
+  createdAt  DateTime  @default(now())
+
+  account TradingAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  trade   RoundTripTrade? @relation(fields: [tradeId], references: [id])
+
+  @@unique([accountId, execTime, symbol, side, qty, price, daySeq])
+  @@index([accountId, symbol])
+  @@index([accountId, execTime])
+  @@index([tradeId])
+}
+
+model RoundTripTrade {
+  id              String    @id @default(cuid())
+  accountId       String
+  symbol          String
+  direction       Direction
+  entryPrice      Decimal   @db.Decimal(12, 4)
+  exitPrice       Decimal?  @db.Decimal(12, 4)
+  totalQty        Decimal   @db.Decimal(12, 4)
+  closedQty       Decimal   @db.Decimal(12, 4)  @default(0)
+  grossPnl        Decimal?  @db.Decimal(14, 4)
+  totalFees       Decimal   @db.Decimal(10, 4)  @default(0)
+  netPnl          Decimal?  @db.Decimal(14, 4)
+  initialRisk     Decimal?  @db.Decimal(12, 4)
+  riskSource      String?                        // "USER" | "ATR"
+  rMultiple       Decimal?  @db.Decimal(8, 4)
+  isOpen          Boolean   @default(false)
+  entryTime       DateTime
+  exitTime        DateTime?
+  durationSeconds Int?
+  tags            String[]
+  notes           String?   @db.Text
+  notesUpdatedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  account        TradingAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  executions     Execution[]
+  context        TradeContext?
+  classification TradeClassification?
+
+  @@index([accountId, symbol])
+  @@index([accountId, entryTime])
+  @@index([accountId, isOpen])
+}
+
+model TradeContext {
+  id                  String        @id @default(cuid())
+  tradeId             String        @unique
+  sma20               Decimal       @db.Decimal(12, 4)
+  sma50               Decimal       @db.Decimal(12, 4)
+  sma200              Decimal       @db.Decimal(12, 4)
+  ema20               Decimal       @db.Decimal(12, 4)
+  atr14               Decimal       @db.Decimal(12, 4)
+  rsi14               Decimal       @db.Decimal(12, 4)
+  adx14               Decimal       @db.Decimal(12, 4)
+  bbUpper             Decimal       @db.Decimal(12, 4)
+  bbLower             Decimal       @db.Decimal(12, 4)
+  highN52w            Decimal       @db.Decimal(12, 4)
+  lowN52w             Decimal       @db.Decimal(12, 4)
+  prevClose           Decimal       @db.Decimal(12, 4)
+  gapPercent          Decimal       @db.Decimal(8, 4)
+  nearestEarningsDate DateTime?
+  daysToEarnings      Int?
+  marketRegime        MarketRegime?
+  enrichedAt          DateTime      @default(now())
+
+  trade RoundTripTrade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+}
+
+model TradeClassification {
+  id             String   @id @default(cuid())
+  tradeId        String   @unique
+  setup          String
+  confidence     Int
+  secondarySetup String?
+  scoreBreakdown Json
+  classifiedAt   DateTime @default(now())
+
+  trade RoundTripTrade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+}
+
+model DailySnapshot {
+  id            String   @id @default(cuid())
+  accountId     String
+  date          DateTime @db.Date
+  dailyPnl      Decimal  @db.Decimal(14, 4)
+  cumulativePnl Decimal  @db.Decimal(14, 4)
+  peakEquity    Decimal  @db.Decimal(14, 4)
+  drawdown      Decimal  @db.Decimal(14, 4)
+  maxDrawdown   Decimal  @db.Decimal(14, 4)
+  winCount      Int      @default(0)
+  lossCount     Int      @default(0)
+  tradeCount    Int      @default(0)
+  grossPnl      Decimal  @db.Decimal(14, 4)
+  totalFees     Decimal  @db.Decimal(10, 4)
+
+  account TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, date])
+  @@index([accountId, date])
+}
+
+model MarketDataCache {
+  id        String   @id @default(cuid())
+  symbol    String
+  date      DateTime @db.Date
+  timeframe String
+  open      Decimal  @db.Decimal(12, 4)
+  high      Decimal  @db.Decimal(12, 4)
+  low       Decimal  @db.Decimal(12, 4)
+  close     Decimal  @db.Decimal(12, 4)
+  volume    BigInt
+  fetchedAt DateTime @default(now())
+
+  @@unique([symbol, date, timeframe])
+  @@index([symbol, timeframe, date])
+}
