@@ -267,14 +267,19 @@ Files: `src/app/(app)/chart/[symbol]/page.tsx`, `src/components/charts/Candlesti
 
 **Critical:** `"use client"` + `dynamic(() => import(...), { ssr: false })` — Lightweight Charts requires window
 
+**This is the hero feature — take the time to get it right.**
+
 Features:
 - Multi-timeframe toggle: 1D, 1H, 15M, 5M, 1M (auto-fallback to daily if intraday unavailable)
-- Trade markers: green up-triangle (BUY), red down-triangle (SELL), size scales with qty
-- Hover tooltip: side, qty, price, time, running P&L
+- **Auto-timeframe switch on zoom**: as user zooms from daily → intraday range, automatically switch to the appropriate timeframe and fetch data
+- Trade markers: green up-triangle (BUY), red down-triangle (SELL), size scales with qty relative to max position size
+- Hover tooltip: side, qty, price, time, running P&L at that point
 - Position shading: background tint entry→exit, green/red opacity proportional to position size
-- Annotations: text labels ("Open +500sh @$142.30", "Trim -300sh @$145.00")
+- Annotations: text labels ("Open +500sh @$142.30", "Add +200sh @$140.10", "Trim -300sh @$145.00", "Close -400sh @$146.20")
+- **TradingView-style crosshair**: standard crosshair + info panel showing OHLCV + current position info on hover
 - Auto-navigate from trade list: click trade → chart frames that symbol + time range with padding
-- Trade list sidebar: all round-trips for the symbol, click to zoom
+- Trade list sidebar: all round-trips for the symbol, click to zoom to that trade's window
+- Smooth zoom: monthly view down to 1-minute candles
 
 ---
 
@@ -321,13 +326,15 @@ Summary cards: Total P&L (sparkline), Win Rate, Profit Factor, Avg Win/Loss ($+%
 
 Charts (Recharts):
 - Equity curve + drawdown overlay
-- P&L distribution histogram
+- P&L distribution histogram **with normal distribution curve overlay** (shows skew vs normal)
 - Rolling 20-trade win rate
 - P&L by day-of-week
 - P&L by hour of day
-- Holding duration scatter
-- Monthly P&L heatmap
-- Kelly widget (full/half/quarter + vs current avg size)
+- Holding duration scatter (X = hold time, Y = P&L — spots overtrading / cutting winners early)
+- **Position sizing scatter** (X = position size, Y = P&L — am I sizing up on bad trades?)
+- Monthly P&L heatmap (GitHub contribution graph style, green/red intensity by daily P&L)
+- Kelly widget (full/half/quarter + vs current avg size, warning if consistently over-sizing)
+- **Sector/industry breakdown** — resolve symbols to sectors via yahoo-finance2 `quoteSummary()`, show P&L by sector
 
 All charts behind TanStack Query with skeleton loaders. Every metric card clickable → filtered trades view.
 
@@ -357,13 +364,39 @@ Assign top 1–2 categories per trade, store with confidence score.
 ## Phase 12: Edge Analysis & Style Profile
 File: `src/lib/engine/edge-analysis.ts`
 
-- Style Profile: Aggregate classifications → "40% breakout, 25% pullback..."
-- Per-category stats: win rate with confidence interval, profit factor, expectancy, Kelly fraction, statistical significance (t-test: is this edge real or noise?)
-- Recommendations panel:
-  - "Your breakout trades are your strongest edge (65% WR, 2.1 PF, p < 0.05)..."
-  - "Your average-down trades are destroying value (30% WR, -$850 avg loss)..."
-  - "Morning trades (9:30–11:00) significantly outperform afternoon..."
-- Kelly sizing comparison: recommended vs actual average
+### Style Profile
+Aggregate classifications → "40% breakout, 25% pullback, 15% mean reversion, 10% scalp, 10% other"
+
+### Per-Category Stats
+Win rate with confidence interval, profit factor, expectancy, Kelly fraction, statistical significance (t-test: is this edge real or noise?)
+
+### Regime Cross-Reference
+Cross-reference trade performance vs market regime from TradeContext:
+- "Your breakout trades work best in trending markets (72% WR) but poorly in choppy markets (38% WR)"
+- Pulled from `marketRegime` field already stored in TradeContext — no new fetching needed
+
+### Edge Persistence Score
+For each identified edge, compute a rolling performance metric over time. Is the edge strengthening, stable, or decaying? Show a trend line. Flag if a historically strong edge has degraded in recent N trades.
+
+### Recommendations Panel
+- "Your breakout trades are your strongest edge (65% WR, 2.1 PF, p < 0.05). Consider allocating more capital here."
+- "Your average-down trades are destroying value (30% WR, -$850 avg loss). Strongly consider eliminating or adding a max-add rule."
+- "Your morning trades (9:30–11:00) significantly outperform afternoon. Consider reducing afternoon activity."
+- "Based on Kelly, your optimal position size for breakout trades is 8% of capital. You're currently averaging 12%. Size down."
+
+### Kelly Sizing Comparison
+Recommended (per Kelly per category) vs actual average size — visual gap indicator
+
+### Expected Value Calculator (forward-looking UI)
+Input: symbol, direction, entry price, planned size. System looks at historical performance in similar classified setups and returns:
+- "Based on 47 similar breakout trades, your expected P&L is +$420 with 62% confidence of profit"
+- Suggested position size per Kelly
+- Historical average hold time for this setup type
+
+### Risk Scorecard
+For a proposed trade, score it 1–10 on fit with demonstrated edges:
+- "This looks like a bottom-fishing trade. Your historical edge in bottom fishing is negative. Risk score: 3/10."
+- Reads from style profile + per-category win rates — no external data needed
 
 ---
 
