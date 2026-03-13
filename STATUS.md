@@ -45,6 +45,7 @@
 | 2026-03-13 | Phase 6 complete. Trades list page now supports URL-synced filters for symbol/direction/status/setup/date/pageSize, CSV export includes notes, and table markup was extracted to `src/components/trades/TradesTable.tsx`. |
 | 2026-03-13 | Added route-level loading + error states for `/trades`, plus a temporary `/chart/[symbol]` symbol detail page so trade links resolve before the Phase 8 interactive chart lands. |
 | 2026-03-13 | Dashboard stub nav bug fixed: `/dashboard` top bar now links to both `/trades` and `/upload`, so Phase 6 is reachable through the UI instead of only by direct URL entry. |
+| 2026-03-13 | Playwright installed for local smoke testing. Added `playwright.config.ts`, auth/navigation smoke test, upload/import smoke test, and a CSV fixture. `npx playwright test` passes locally against the dev server. |
 | 2026-03-13 | `next build` is currently NOT clean: Next.js 16 middleware/proxy edge runtime still imports Prisma via auth middleware. Full-project lint also still fails because ESLint scans `src/generated/prisma`. |
 
 ## Pending User Actions
@@ -62,5 +63,5 @@
 - execTime = pure midnight UTC date. daySeq = content-based intra-day sequence for dedup + FIFO ordering.
 - Toaster added to root layout (sonner, dark theme).
 - Phase 6 complete. `/trades` now has URL-synced filters, sortable columns, page-size control, CSV export, loading/error states, and a non-404 symbol detail target at `/chart/[symbol]`.
-- Verification: `npx tsc --noEmit` passes, `npx jest --runInBand` passes (42 tests), targeted ESLint passes on the modified Phase 6 files.
+- Verification: `npx tsc --noEmit` passes, `npx jest --runInBand` passes (42 tests), targeted ESLint passes on the modified Phase 6 files, and `npx playwright test` passes with 2 local smoke tests.
 - **Next: Phase 7 — Market Data Integration** (`src/lib/market-data/yahoo-client.ts`, `src/lib/market-data/market-data-cache.ts`)
