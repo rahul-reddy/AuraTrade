@@ -9,7 +9,7 @@ You are simultaneously:
 Never lose sight of any of these three lenses when making decisions.
 
 ## What This Project Is
-Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab). Will become SaaS. Built with Next.js 15, Prisma v6, NextAuth v5, PostgreSQL (Docker), yahoo-finance2.
+Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab). Will become SaaS. Built with Next.js 16, Prisma v6, NextAuth v5, PostgreSQL (Docker), yahoo-finance2.
 
 Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should look and feel like a $50/month product.
 
@@ -57,6 +57,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/middleware.ts` | Route protection |
 | `src/lib/parser/tos-csv-parser.ts` | TOS CSV parser |
 | `src/lib/engine/trade-grouper.ts` | FIFO trade grouping |
+| `src/components/trades/TradesTable.tsx` | Trades list table + pagination UI |
 | `src/lib/engine/metrics.ts` | All metrics + Kelly (Phase 9) |
 | `src/lib/engine/classifier.ts` | Trade classification (Phase 11) |
 | `src/lib/market-data/yahoo-client.ts` | Market data fetching |
