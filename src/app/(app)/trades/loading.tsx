@@ -31,16 +31,20 @@ export default function TradesLoading() {
           <Skeleton className="h-8 w-32 bg-zinc-800" />
           <Skeleton className="h-8 w-32 bg-zinc-800" />
           <Skeleton className="h-8 w-28 bg-zinc-800" />
+          <Skeleton className="h-8 w-28 bg-zinc-800" />
           <Skeleton className="h-8 w-36 bg-zinc-800" />
           <Skeleton className="h-8 w-4 bg-zinc-800" />
           <Skeleton className="h-8 w-36 bg-zinc-800" />
+          <div className="flex-1" />
+          <Skeleton className="h-8 w-28 bg-zinc-800" />
+          <Skeleton className="h-8 w-24 bg-zinc-800" />
         </div>
 
         {/* Table skeleton */}
         <div className="border border-zinc-800 rounded-lg overflow-hidden">
           {/* Header */}
           <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-3 flex items-center gap-4">
-            {[14, 8, 24, 24, 16, 16, 12, 20, 12, 16, 20].map((w, i) => (
+            {[14, 8, 24, 24, 16, 16, 12, 20, 12, 16, 20, 12].map((w, i) => (
               <Skeleton key={i} className={`h-3 w-${w} bg-zinc-800`} />
             ))}
           </div>
@@ -62,6 +66,7 @@ export default function TradesLoading() {
               <Skeleton className="h-4 w-10 bg-zinc-800" />
               <Skeleton className="h-4 w-14 bg-zinc-800" />
               <Skeleton className="h-5 w-20 bg-zinc-800" />
+              <Skeleton className="h-7 w-12 bg-zinc-800" />
             </div>
           ))}
         </div>
