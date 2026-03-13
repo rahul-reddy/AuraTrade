@@ -34,6 +34,30 @@ When starting work:
 - Check `git status`
 - Inspect the files relevant to the task before proposing or making changes
 
+## Branch And PR Workflow
+
+Do not do meaningful feature work directly on `master`.
+
+Preferred branch naming:
+- `feat/phase-7-market-data`
+- `feat/trades-export-fixes`
+- `fix/dashboard-nav`
+- `docs/sync-project-state`
+
+Workflow:
+1. Start from updated `master`
+2. Create a short-lived feature branch
+3. Implement the change on that branch
+4. Run tester duties locally
+5. Run reviewer duties locally or through a second agent pass
+6. Update docs if project reality changed
+7. Push the branch
+8. Open a PR into `master`
+9. Let CodeRabbit review the PR
+10. Address findings, rerun tests, and merge only after reviewer + tester passes are satisfied
+
+PRs should stay scoped to one meaningful unit of work: one feature, bug fix, or doc sync.
+
 When finishing work:
 - Update `STATUS.md` if a phase, meaningful sub-task, or important decision changed
 - Update `PLAN.md` if the real implementation diverged from the planned spec
@@ -61,6 +85,12 @@ Rules:
 - The tester should choose the smallest test scope that still proves the change works, then expand if the change is risky
 - The builder should address findings, rerun relevant checks, and only then treat the work as ready
 - If true subagents are unavailable, emulate this with a fresh agent/chat using the same handoff notes
+
+Minimum merge gate for meaningful changes:
+- local tester pass completed
+- local reviewer pass completed
+- CodeRabbit PR review completed or explicitly acknowledged as unavailable
+- docs updated if implementation reality changed
 
 ## Doc Sync Commands
 
