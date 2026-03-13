@@ -10,6 +10,7 @@
 
 ## Tester Pass
 
+- [ ] Relevant tester pass completed before commit
 - [ ] `npx tsc --noEmit`
 - [ ] Targeted `eslint`
 - [ ] `npx jest --runInBand` when relevant

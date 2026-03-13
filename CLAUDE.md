@@ -32,7 +32,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 10. **Every component gets a loading state AND an error state** — no blank screens ever; skeleton loaders not spinners
 11. **Don't mock what you can build** — use real sample data or realistic synthetic data; no "Lorem ipsum" dashboards
 12. **Every data point must be explorable** — click a metric → see underlying trades; click a trade → see it on the chart
-13. **Git commit after every meaningful unit of work** with a descriptive message
+13. **Git commit after every meaningful unit of work** with a descriptive message, but only after the relevant tester pass is complete; for user-facing changes this includes Playwright unless a blocker is explicitly called out
 14. **Desktop-first** — traders use wide monitors; responsive is secondary
 15. **Do meaningful feature work on a short-lived branch, not directly on `main`** — merge through a PR after tester + reviewer passes
 
@@ -62,6 +62,8 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/lib/engine/metrics.ts` | All metrics + Kelly (Phase 9) |
 | `src/lib/engine/classifier.ts` | Trade classification (Phase 11) |
 | `src/lib/market-data/yahoo-client.ts` | Market data fetching |
+| `src/lib/market-data/market-data-cache.ts` | Market data cache + staleness logic |
+| `src/app/api/market-data/route.ts` | Authenticated market data API |
 
 ## Docker DB Command (run when Docker Desktop is open)
 ```bash

@@ -48,13 +48,14 @@ Workflow:
 1. Start from updated `main`
 2. Create a short-lived feature branch
 3. Implement the change on that branch
-4. Run tester duties locally
+4. Run tester duties locally before any commit; for user-facing changes this includes Playwright
 5. Run reviewer duties locally or through a second agent pass
 6. Update docs if project reality changed
-7. Push the branch
-8. Open a PR into `main`
-9. Let CodeRabbit review the PR
-10. Address findings, rerun tests, and merge only after reviewer + tester passes are satisfied
+7. Commit only after tester duties pass
+8. Push the branch
+9. Open a PR into `main`
+10. Let CodeRabbit review the PR
+11. Address findings, rerun tests, and merge only after reviewer + tester passes are satisfied
 
 PRs should stay scoped to one meaningful unit of work: one feature, bug fix, or doc sync.
 
@@ -83,6 +84,7 @@ Rules:
 - The reviewer should not be primed with the intended answer or a desired approval outcome
 - The reviewer should focus on bugs, regressions, auth/data-scope mistakes, missing tests, broken navigation, and stale docs
 - The tester should choose the smallest test scope that still proves the change works, then expand if the change is risky
+- For user-facing changes, the tester pass should include Playwright before the change is committed unless a blocker is explicitly called out
 - The builder should address findings, rerun relevant checks, and only then treat the work as ready
 - If true subagents are unavailable, emulate this with a fresh agent/chat using the same handoff notes
 
