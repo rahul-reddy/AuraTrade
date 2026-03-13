@@ -3,15 +3,15 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 2 — Database Schema**
+**Phase 3 — TOS CSV Parser**
 
 ## Phase Checklist
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | 1 | Project bootstrap (deps, shadcn, prisma init) | ✅ Done | |
-| 2 | Database schema (`prisma/schema.prisma`) | In progress | Show full schema before running migration |
-| 2b | Auth plumbing (NextAuth v5, middleware, session) | Not started | |
+| 2 | Database schema (`prisma/schema.prisma`) | ✅ Done | Migration applied, all 12 tables created |
+| 2b | Auth plumbing (NextAuth v5, middleware, session) | ✅ Done | |
 | 3 | TOS CSV parser | Not started | Awaiting sample CSV from user for validation |
 | 4 | Trade grouping engine (FIFO) | Not started | |
 | 5 | Upload flow (two-phase commit) | Not started | |
@@ -39,13 +39,12 @@
 
 ## Pending User Actions
 - [ ] Provide sample TOS CSV export for parser validation (Phase 3)
-- [ ] **Install Docker Desktop** (docker.com/products/docker-desktop) — then tell Claude to spin up the Postgres container
-- [ ] After Docker is running, Claude will run: `docker run --name auratrade-pg -e POSTGRES_PASSWORD=password -e POSTGRES_DB=auratrade -p 5432:5432 -d postgres:16`
-- [ ] Then run: `npx prisma migrate dev --name init`
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
+- [ ] Provide sample TOS CSV export for parser validation (Phase 3)
 
-## Where We Stopped (2026-03-12)
-- Phase 1 is fully complete (deps, shadcn, prisma init, utils.ts, globals.css, fonts)
-- Phase 2 schema is **written and approved** but migration has NOT been run yet
-- Blocked on: PostgreSQL not installed. Decision made to use Docker instead of native install
-- Next step: User installs Docker Desktop → Claude spins up container → runs migration → proceeds to Phase 2b (auth)
+## Where We Stopped (2026-03-13)
+- Phases 1, 2, 2b all complete
+- Docker container `auratrade-pg` running on port 5432
+- Prisma v7 TS-native client in use — requires `@prisma/adapter-pg` (installed)
+- Build is clean (`next build` passes)
+- **Next: Phase 3 — TOS CSV Parser** (`src/lib/parser/tos-csv-parser.ts`)
