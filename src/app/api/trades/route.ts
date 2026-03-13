@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequiredSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@/generated/prisma'
+import type { Prisma } from '@/generated/prisma'
 import Papa from 'papaparse'
 import { formatDate, formatDuration } from '@/lib/format'
 
 const ALLOWED_SORT = ['entryTime', 'symbol', 'netPnl', 'durationSeconds', 'rMultiple'] as const
 type SortField = (typeof ALLOWED_SORT)[number]
+const DEFAULT_PAGE_SIZE = 50
+const MAX_PAGE_SIZE = 200
+
+function parsePageSize(raw: string | null): number {
+  const parsed = Number.parseInt(raw ?? '', 10)
+  if (Number.isNaN(parsed)) return DEFAULT_PAGE_SIZE
+  return Math.min(Math.max(parsed, 25), MAX_PAGE_SIZE)
+}
 
 function buildWhere(
   accountId: string,
@@ -24,6 +32,15 @@ function buildWhere(
   const status = params.get('status')
   if (status === 'open') where.isOpen = true
   else if (status === 'closed') where.isOpen = false
+
+  const setup = params.get('setup')
+  if (setup) {
+    where.classification = {
+      is: {
+        setup: { contains: setup, mode: 'insensitive' },
+      },
+    }
+  }
 
   const dateFrom = params.get('dateFrom')
   const dateTo = params.get('dateTo')
@@ -50,7 +67,16 @@ export async function GET(req: NextRequest) {
   const isExport = params.get('export') === 'true'
 
   try {
-    const account = await prisma.tradingAccount.findFirst({ where: { userId } })
+    const requestedAccountId = params.get('accountId')
+    const account = requestedAccountId
+      ? await prisma.tradingAccount.findFirst({
+          where: { id: requestedAccountId, userId },
+        })
+      : await prisma.tradingAccount.findFirst({
+          where: { userId },
+          orderBy: { createdAt: 'asc' },
+        })
+
     if (!account) return NextResponse.json({ error: 'no_account' }, { status: 404 })
 
     const where = buildWhere(account.id, params)
@@ -85,6 +111,7 @@ export async function GET(req: NextRequest) {
         Duration: formatDuration(t.durationSeconds),
         Status: t.isOpen ? 'Open' : 'Closed',
         Setup: t.classification?.setup ?? '',
+        Notes: t.notes ?? '',
       }))
 
       const csv = Papa.unparse(rows)
@@ -98,7 +125,7 @@ export async function GET(req: NextRequest) {
 
     // ── Paginated JSON response ──────────────────────────────────────────
     const page = Math.max(1, parseInt(params.get('page') ?? '1', 10))
-    const pageSize = 50
+    const pageSize = parsePageSize(params.get('pageSize'))
 
     const [trades, totalCount, closedAgg, winAgg, lossAgg] = await Promise.all([
       prisma.roundTripTrade.findMany({
