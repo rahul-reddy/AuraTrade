@@ -14,13 +14,10 @@ type ParsedWithDbId = ParsedExecution & { dbId: string }
 /** Map a DB Execution row back to the shape groupTrades() expects. */
 function dbExecToParsed(row: Execution): ParsedWithDbId {
   const isShort = row.side === 'SELL_SHORT' || row.side === 'BUY_TO_COVER'
-  // execTime was stored as: midnight(date) + rowIndex milliseconds
-  const midnightMs = new Date(row.execTime.toISOString().split('T')[0] + 'T00:00:00.000Z').getTime()
-  const rowIndex = row.execTime.getTime() - midnightMs
-
+  // daySeq is the 0-based intra-day occurrence index — use directly as rowIndex for FIFO ordering
   return {
     dbId: row.id,
-    rowIndex,
+    rowIndex: row.daySeq,
     date: new Date(row.execTime.toISOString().split('T')[0] + 'T00:00:00.000Z'),
     symbol: row.symbol,
     action: row.side,
@@ -44,6 +41,32 @@ function toPrismaside(
   if (side === 'SELL' && direction === 'LONG') return 'SELL'
   if (side === 'SELL' && direction === 'SHORT') return 'SELL_SHORT'
   return 'BUY_TO_COVER'
+}
+
+/**
+ * Assign a content-based daySeq to each incoming execution.
+ *
+ * daySeq = 0-based occurrence index within (execTime, symbol, side, qty, price) on a given day.
+ * Two files covering the same date range will assign the same daySeq to the same execution,
+ * so the DB unique constraint (accountId, execTime, symbol, side, qty, price, daySeq) correctly
+ * deduplicates overlapping uploads without double-counting genuinely repeated same-day fills.
+ */
+function assignDaySeqs(
+  executions: ParsedExecution[],
+): Array<ParsedExecution & { daySeq: number; execTime: Date }> {
+  const seqMap = new Map<string, number>()
+  return executions.map((ex) => {
+    const prismaside = toPrismaside(ex.side, ex.direction)
+    // Key must match the DB unique constraint fields (excluding daySeq itself)
+    const key = `${ex.date.toISOString()}|${ex.symbol}|${prismaside}|${ex.qty}|${ex.price}`
+    const seq = seqMap.get(key) ?? 0
+    seqMap.set(key, seq + 1)
+    return {
+      ...ex,
+      daySeq: seq,
+      execTime: ex.date, // pure midnight — no rowIndex offset encoding
+    }
+  })
 }
 
 // ─── route handler ────────────────────────────────────────────────────
@@ -91,11 +114,14 @@ export async function POST(
     // Parse the file
     const parseResult = parseSchwabCSV(content)
 
-    // Build Execution rows to upsert (execTime = midnight + rowIndex ms for unique ordering)
-    const execData = parseResult.executions.map((ex) => ({
+    // Assign content-based daySeq — enables cross-file dedup for overlapping date ranges
+    const withSeqs = assignDaySeqs(parseResult.executions)
+
+    const execData = withSeqs.map((ex) => ({
       accountId,
       uploadId,
-      execTime: new Date(ex.date.getTime() + ex.rowIndex),
+      execTime: ex.execTime,
+      daySeq: ex.daySeq,
       symbol: ex.symbol,
       side: toPrismaside(ex.side, ex.direction),
       qty: ex.qty,
@@ -108,7 +134,7 @@ export async function POST(
 
     const result = await prisma.$transaction(
       async (tx) => {
-        // ── 1. Upsert new executions (skipDuplicates handles re-uploads) ──
+        // ── 1. Upsert new executions (skipDuplicates deduplicates overlapping uploads) ──
         const beforeCount = await tx.execution.count({ where: { accountId } })
         await tx.execution.createMany({ data: execData, skipDuplicates: true })
         const afterCount = await tx.execution.count({ where: { accountId } })
@@ -124,7 +150,7 @@ export async function POST(
         // ── 4. Load ALL executions and rebuild round trips from scratch ──
         const allDbExecs = await tx.execution.findMany({
           where: { accountId },
-          orderBy: { execTime: 'asc' },
+          orderBy: [{ execTime: 'asc' }, { daySeq: 'asc' }],
         })
         const allParsed = allDbExecs.map(dbExecToParsed)
         const { trades: grouped, warnings } = groupTrades(allParsed)
