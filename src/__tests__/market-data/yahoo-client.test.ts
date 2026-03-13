@@ -5,25 +5,26 @@ import {
 
 describe("fetchYahooMarketData", () => {
   it("falls back to daily candles when the requested intraday range is too large", async () => {
-    const historical = jest.fn<ReturnType<YahooFinanceClient["historical"]>, Parameters<YahooFinanceClient["historical"]>>()
-      .mockResolvedValue([
-        {
-          date: new Date("2026-01-02T00:00:00.000Z"),
-          open: 100,
-          high: 105,
-          low: 99,
-          close: 104,
-          volume: 1200000,
-        },
-      ]);
-    const chart = jest.fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>();
+    const chart = jest.fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>()
+      .mockResolvedValue({
+        quotes: [
+          {
+            date: new Date("2026-01-02T00:00:00.000Z"),
+            open: 100,
+            high: 105,
+            low: 99,
+            close: 104,
+            volume: 1200000,
+          },
+        ],
+      });
 
     const result = await fetchYahooMarketData({
       symbol: "aapl",
       timeframe: "1h",
       from: new Date("2025-01-01T00:00:00.000Z"),
       to: new Date("2025-04-15T00:00:00.000Z"),
-      client: { historical, chart },
+      client: { chart },
     });
 
     expect(result.symbol).toBe("AAPL");
@@ -33,12 +34,16 @@ describe("fetchYahooMarketData", () => {
       "Intraday data not available for this date range. Showing daily.",
     );
     expect(result.candles).toHaveLength(1);
-    expect(chart).not.toHaveBeenCalled();
-    expect(historical).toHaveBeenCalledTimes(1);
+    expect(chart).toHaveBeenCalledTimes(1);
+    expect(chart).toHaveBeenCalledWith(
+      "AAPL",
+      expect.objectContaining({
+        interval: "1d",
+      }),
+    );
   });
 
   it("uses intraday chart data when available and filters incomplete candles", async () => {
-    const historical = jest.fn<ReturnType<YahooFinanceClient["historical"]>, Parameters<YahooFinanceClient["historical"]>>();
     const chart = jest.fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>()
       .mockResolvedValue({
         quotes: [
@@ -66,7 +71,7 @@ describe("fetchYahooMarketData", () => {
       timeframe: "15m",
       from: new Date("2026-03-10T00:00:00.000Z"),
       to: new Date("2026-03-11T00:00:00.000Z"),
-      client: { historical, chart },
+      client: { chart },
     });
 
     expect(result.symbol).toBe("MSFT");
@@ -83,13 +88,13 @@ describe("fetchYahooMarketData", () => {
       },
     ]);
     expect(chart).toHaveBeenCalledTimes(1);
-    expect(historical).not.toHaveBeenCalled();
   });
 
   it("filters malformed daily rows instead of surfacing the yahoo historical null-row error", async () => {
-    const historical = jest
-      .fn<ReturnType<YahooFinanceClient["historical"]>, Parameters<YahooFinanceClient["historical"]>>()
-      .mockResolvedValue([
+    const chart = jest
+      .fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>()
+      .mockResolvedValue({
+      quotes: [
         {
           date: new Date("2026-03-10T00:00:00.000Z"),
           open: 48.1,
@@ -106,15 +111,15 @@ describe("fetchYahooMarketData", () => {
           close: 49.1,
           volume: 1100000,
         },
-      ]);
-    const chart = jest.fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>();
+      ],
+    });
 
     const result = await fetchYahooMarketData({
       symbol: "ibit",
       timeframe: "1d",
       from: new Date("2026-03-01T00:00:00.000Z"),
       to: new Date("2026-03-30T00:00:00.000Z"),
-      client: { historical, chart },
+      client: { chart },
     });
 
     expect(result.symbol).toBe("IBIT");
@@ -130,13 +135,11 @@ describe("fetchYahooMarketData", () => {
         volume: 1500000,
       },
     ]);
-    expect(historical).toHaveBeenCalledWith(
+    expect(chart).toHaveBeenCalledWith(
       "IBIT",
       expect.objectContaining({
         interval: "1d",
       }),
-      { validateResult: false },
     );
-    expect(chart).not.toHaveBeenCalled();
   });
 });
