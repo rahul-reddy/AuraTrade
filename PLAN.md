@@ -52,7 +52,7 @@ File: `prisma/schema.prisma`
 - `@db.Decimal` for ALL financial values — never Float (IEEE 754 binary errors in money)
 - Every query scoped by userId — SaaS-ready from day 1
 - `Upload.fileHash` unique per user = whole-file dedup
-- `@@unique([accountId, execTime, symbol, side, qty, price])` on Execution = row-level dedup
+- `@@unique([accountId, execTime, symbol, side, qty, price, daySeq])` on Execution = row-level dedup (daySeq = 0-based intra-day sequence index for content-based dedup across overlapping uploads)
 - DailySnapshot pre-computed, rebuilt incrementally from fromDate (not full rebuild)
 - TradeContext stores pre-computed technical indicators per trade (for classification)
 
@@ -64,8 +64,8 @@ File: `prisma/schema.prisma`
 
 **Upload** — fileHash (SHA-256, unique per user for dedup), status, rowCounts, dateRange
 
-**Execution** — individual TOS fill: execTime, symbol, side, qty, price, netPrice, commission, posEffect, assetType
-- `@@unique([accountId, execTime, symbol, side, qty, price])` — row dedup
+**Execution** — individual TOS fill: execTime, symbol, side, qty, price, netPrice, commission, posEffect, assetType, daySeq
+- `@@unique([accountId, execTime, symbol, side, qty, price, daySeq])` — row dedup (daySeq = content-based intra-day sequence for cross-file dedup)
 
 **RoundTripTrade** — grouped open→close:
 - entryPrice/exitPrice (VWAP-weighted), netPnl, totalQty (peak position), durationSeconds
@@ -147,7 +147,7 @@ File: `src/lib/parser/tos-csv-parser.ts` — exports `parseSchwabCSV()`
   - `Sell` → LONG_CLOSE
   - `Sell Short` → SHORT_OPEN
   - `Journaled Shares` / empty symbol → skip
-- **execTime dedup**: `Execution.execTime = date + rowIndex milliseconds` (prevents collisions on same-day duplicate fills with identical price/qty)
+- **execTime dedup**: `Execution.execTime = pure midnight UTC date`. `daySeq Int` = 0-based occurrence index within `(accountId, execTime, symbol, side, qty, price)` group. Unique constraint includes `daySeq`. Same execution from two overlapping CSV files always gets same daySeq → correctly deduplicated. Migration: `20260313200000_add_execution_dayseq`.
 - **netPrice** = price (no separate NetPrice in this format; commission is separate)
 
 Pipeline: Strip BOM → PapaParse → classify Action → parse date (`M/d/yyyy`) → parse money (handles `$`, `($)`, commas, trailing spaces) → return `{ executions, skippedRows, assumptions, dateRange, symbols }`
@@ -449,10 +449,11 @@ Shows:
 
 ---
 
-## Parser Validation Checkpoint
-User will provide sample TOS CSV. At that point, verify:
-- Actual Exec Time format and timezone
-- Whether Qty is ever negative
-- Actual Side and Pos Effect string values
-- Where trade rows actually begin in the multi-section file
-- Any additional columns not in the spec
+## Parser Validation Results (complete — verified against real CSV 2026-03-13)
+- **Format**: Schwab/TDA Transaction History (NOT TOS Activity & Positions)
+- **Date**: `MM/DD/YYYY` or `M/D/YYYY` only — no intraday time. Row order = intra-day sequence.
+- **Commission**: explicit in `Fees & Comm` column. `(Price - NetPrice) × Qty` does NOT apply.
+- **Qty**: always positive. Side determined by Action field.
+- **Action values**: `Buy`, `Sell`, `Sell Short`, `Buy to Cover`, `Journaled Shares` (skip)
+- **2026 Schwab variant**: reverse-chronological (newest row first). Parser detects and reverses.
+- **Amount**: parentheses notation `($1,234.56)` for negative in Schwab variant.
