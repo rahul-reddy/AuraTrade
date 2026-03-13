@@ -186,6 +186,23 @@ export function parseSchwabCSV(rawContent: string): ParseResult {
     })
   }
 
+  // ── Detect reverse-chronological ordering (Schwab 2026 format) ────────
+  // The Schwab export lists transactions newest-to-oldest. Within the same
+  // date this means exits appear before entries, which breaks FIFO grouping.
+  // Detect by comparing the date of the first vs last parsed execution.
+  // If newer rows appear first, reverse the array and reassign rowIndex so
+  // that chronologically earlier fills always have a lower sort key.
+  if (executions.length > 1) {
+    const firstDate = executions[0].date.getTime()
+    const lastDate = executions[executions.length - 1].date.getTime()
+    if (firstDate > lastDate) {
+      // Reverse-chronological → flip and renumber
+      executions.reverse()
+      executions.forEach((ex, i) => { ex.rowIndex = i })
+      assumptions.push('A7: File is newest-to-oldest (Schwab format) — reversed for correct FIFO ordering')
+    }
+  }
+
   const timestamps = executions.map((e) => e.date.getTime())
   const dateRange =
     timestamps.length > 0

@@ -280,3 +280,49 @@ describe('real-world sample rows', () => {
     })
   })
 })
+
+// ─── 9. Reverse-chronological detection (Schwab 2026) ─────────────────
+
+describe('reverse-chronological file detection', () => {
+  test('Schwab newest-to-oldest: sell before buy in file → buy gets lower rowIndex after reversal', () => {
+    // Real Schwab pattern: sell (exit) appears first in file, buy (entry) appears after
+    // This means the trade happened chronologically as: buy → sell (a loss)
+    // but the file records it sell → buy (newest first)
+    const csv = makeSchawbCsv([
+      '3/11/2026,Sell,AMDL,GRANITESHARES 2X LONG AMD,500,"$12.65 ","$0.10 ","$6,324.90 "',  // appears first in file
+      '3/11/2026,Buy,AMDL,GRANITESHARES 2X LONG AMD,500,"$13.05 ",,"($6,524.95)"',          // appears second
+      '3/6/2026,Sell,ONDS,ONDAS INC,500,"$10.10 ","$0.10 ","$5,049.90 "',
+      '3/6/2026,Buy,ONDS,ONDAS INC,300,"$11.26 ",,"($3,376.50)"',
+    ])
+    // First row date (3/11) > last row date (3/6) → reverse-chronological detected
+    const { executions, assumptions } = parseSchwabCSV(csv)
+
+    // After reversal: oldest date (3/6) rows come first, then 3/11 rows
+    // Within 3/6: buy (was last in original) now has lower rowIndex than sell
+    // Within 3/11: buy (was second in original) now has lower rowIndex than sell
+    const amdlBuy  = executions.find((e) => e.symbol === 'AMDL' && e.posEffect === 'OPEN')!
+    const amdlSell = executions.find((e) => e.symbol === 'AMDL' && e.posEffect === 'CLOSE')!
+    expect(amdlBuy).toBeDefined()
+    expect(amdlSell).toBeDefined()
+    // Buy must sort before sell (lower rowIndex within same date)
+    expect(amdlBuy.rowIndex).toBeLessThan(amdlSell.rowIndex)
+
+    // Assumption A7 should be recorded
+    expect(assumptions.some((a) => a.includes('newest-to-oldest'))).toBe(true)
+  })
+
+  test('2022 TDA oldest-to-newest: buy before sell → no reversal applied', () => {
+    const csv = makeTdaCsv([
+      '"02/07/2022","Buy","BROS","desc","200","$60.25","","-$12050.00"',
+      '"02/07/2022","Sell","BROS","desc","200","$62.25","$0.08","$12449.92"',
+      '"02/08/2022","Buy","TNA","desc","100","$60.54","","-$6054.00"',
+    ])
+    // First date (02/07) <= last date (02/08) → chronological, no reversal
+    const { executions, assumptions } = parseSchwabCSV(csv)
+    const buy  = executions.find((e) => e.symbol === 'BROS' && e.posEffect === 'OPEN')!
+    const sell = executions.find((e) => e.symbol === 'BROS' && e.posEffect === 'CLOSE')!
+    // Buy should still have lower rowIndex than sell (original order preserved)
+    expect(buy.rowIndex).toBeLessThan(sell.rowIndex)
+    expect(assumptions.some((a) => a.includes('newest-to-oldest'))).toBe(false)
+  })
+})
