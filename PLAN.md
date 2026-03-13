@@ -223,7 +223,7 @@ Upload UI: react-dropzone drag-and-drop, CSV type validation, progress indicator
 ---
 
 ## Phase 6: Trades List Page
-Files: `src/app/(app)/trades/page.tsx`, `src/app/api/trades/route.ts`, `src/components/trades/TradesTable.tsx`
+Files: `src/app/(app)/trades/page.tsx`, `src/app/api/trades/route.ts`, `src/components/trades/TradesFilters.tsx`, `src/components/trades/TradesTable.tsx`, `src/app/(app)/trades/loading.tsx`, `src/app/(app)/trades/error.tsx`
 
 API: `GET /api/trades?accountId&symbol&direction&dateFrom&dateTo&status&setup&page&pageSize&sortBy&sortDir`
 
@@ -232,6 +232,10 @@ Response: paginated trades + summary stats over full filtered set (two Prisma qu
 Table columns: Symbol (→ chart), Direction badge, Entry/Exit Date, Entry/Exit Price, Qty, Net PnL (color-coded), R-Multiple (with est./defined indicator), Duration, Setup badge, Actions
 
 Filter state: URL search params (shareable/bookmarkable)
+
+- Support `setup` filter as a case-insensitive classification match
+- Support `pageSize` in both the page and API so bookmarked views preserve density
+- Add route-level loading and error UI for `/trades`
 
 CSV Export: `Papa.unparse()` on full filtered result set (all pages). Columns: entryDate, exitDate, entryPrice, exitPrice, qty, grossPnl, netPnl, fees, duration, direction, setup, rMultiple, notes.
 
@@ -271,6 +275,8 @@ Files: `src/app/(app)/chart/[symbol]/page.tsx`, `src/components/charts/Candlesti
 **Critical:** `"use client"` + `dynamic(() => import(...), { ssr: false })` — Lightweight Charts requires window
 
 **This is the hero feature — take the time to get it right.**
+
+Until Phase 8 is implemented, `/chart/[symbol]` may exist as a lightweight symbol-detail placeholder so trade links from Phase 6 never land on a 404.
 
 Features:
 - Multi-timeframe toggle: 1D, 1H, 15M, 5M, 1M (auto-fallback to daily if intraday unavailable)
