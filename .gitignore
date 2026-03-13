@@ -30,6 +30,9 @@
 # claude
 .claude/
 
+# codex
+.codex/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
