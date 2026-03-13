@@ -1,6 +1,6 @@
 # AuraTrade — Implementation Plan (v2)
 
-> Last updated: 2026-03-12
+> Last updated: 2026-03-13
 
 ## Context
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
@@ -242,11 +242,12 @@ CSV Export: `Papa.unparse()` on full filtered result set (all pages). Columns: e
 ---
 
 ## Phase 7: Market Data Integration
-Files: `src/lib/market-data/yahoo-client.ts`, `src/lib/market-data/market-data-cache.ts`
+Files: `src/lib/market-data/yahoo-client.ts`, `src/lib/market-data/market-data-cache.ts`, `src/app/api/market-data/route.ts`
 
 - Daily data: `historical()` — unlimited, no key
 - Intraday (1H, 15M, 5M, 1M): `chart()` with interval param — ~60 days of history
 - Historical intraday data never expires (immutable). Today's data: 1-hour staleness check.
+- `MarketDataCache.date` stores the candle timestamp (not `@db.Date`) so intraday rows can be cached distinctly
 - Chart UI fallback banner: "Intraday data not available for this date range. Showing daily." — never blank/error.
 
 API route: `GET /api/market-data?symbol&timeframe&from&to`
@@ -450,6 +451,8 @@ Shows:
 | `src/lib/engine/classifier.ts` | 11 |
 | `src/lib/engine/trade-enrichment.ts` | 7.5 |
 | `src/lib/market-data/yahoo-client.ts` | 7 |
+| `src/lib/market-data/market-data-cache.ts` | 7 |
+| `src/app/api/market-data/route.ts` | 7 |
 | `src/components/charts/CandlestickChart.tsx` | 8 |
 | `src/components/layout/AppSidebar.tsx` | 13 |
 
