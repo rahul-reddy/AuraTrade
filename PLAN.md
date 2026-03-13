@@ -129,51 +129,54 @@ const { userId } = session.user
 
 ---
 
-## Phase 3: TOS CSV Parser
-File: `src/lib/parser/tos-csv-parser.ts`
+## Phase 3: CSV Parser ✅ COMPLETE
+File: `src/lib/parser/tos-csv-parser.ts` — exports `parseSchwabCSV()`
 
-TOS headers: `Exec Time, Spread, Side, Qty, Pos Effect, Symbol, Exp, Strike, Type, Price, Net Price, Order Type`
+**Actual format: Schwab/TDA Transaction History** (NOT TOS Activity & Positions)
 
-### Flagged Assumptions (verify with real CSV)
-- Exec Time format: `MM/DD/YYYY HH:mm:ss` in Eastern Time → UTC via date-fns-tz
-- Qty always positive regardless of Side
-- Pos Effect values: `"TO OPEN"` → OPEN, `"TO CLOSE"` → CLOSE, `"AUTO"` → AUTO
-- TOS wraps trades in multi-section CSV — parser scans for section header, not row 1
-- Commission back-calculated: `(Price - NetPrice) × Qty` for **BOTH buys and sells** — TOS NetPrice is always net-of-fees (less favorable than raw Price regardless of side). **ASSUMPTION: verify against real CSV; adjust if sells behave differently.**
-  - Unit test: Buy `Price=$150.00, NetPrice=$149.93, Qty=100` → commission=$7.00; Sell same values → commission=$7.00
-- Equity filter: `Type.trim().toUpperCase() === 'STOCK'`
-- File may have UTF-8 BOM → strip with `.replace(/^\uFEFF/, '')`
+### Actual headers (two variants):
+- 2022 TDA: `"Date","Action","Symbol","Description","Quantity","Price","Fees & Comm","Amount"`
+- 2026 Schwab: same columns, unquoted, Amount uses `($1,234.56)` parentheses notation
 
-Pipeline: Strip BOM → PapaParse (header: true, dynamicTyping: false) → find section start → filter equities → normalize side/posEffect/symbol → parse numerics (strip commas) → parse dates → return `{ executions, skippedRows, assumptions, dateRange, symbols }`
+### Confirmed facts (verified against real CSV):
+- **Date only** — `MM/DD/YYYY` or `M/D/YYYY`. No time. Row order = intra-day sequence.
+- **Commission** is explicit in `Fees & Comm` column. Buys are `$0`. NOT `(Price - NetPrice) × Qty`.
+- **Action → side/posEffect/direction:**
+  - `Buy` + desc contains "to cover" → SHORT_CLOSE
+  - `Buy` (plain) → LONG_OPEN
+  - `Sell` → LONG_CLOSE
+  - `Sell Short` → SHORT_OPEN
+  - `Journaled Shares` / empty symbol → skip
+- **execTime dedup**: `Execution.execTime = date + rowIndex milliseconds` (prevents collisions on same-day duplicate fills with identical price/qty)
+- **netPrice** = price (no separate NetPrice in this format; commission is separate)
+
+Pipeline: Strip BOM → PapaParse → classify Action → parse date (`M/d/yyyy`) → parse money (handles `$`, `($)`, commas, trailing spaces) → return `{ executions, skippedRows, assumptions, dateRange, symbols }`
 
 ---
 
-## Phase 4: Trade Grouping Engine
-File: `src/lib/engine/trade-grouper.ts`
+## Phase 4: Trade Grouping Engine ✅ COMPLETE
+File: `src/lib/engine/trade-grouper.ts` — exports `groupTrades(executions)` → `{ trades, warnings }`
 
-Algorithm: FIFO position tracker per symbol
+Algorithm: FIFO position tracker per symbol, pure function.
 
 ```
-Sort executions ascending by execTime
+Sort: date ASC, rowIndex ASC (intra-day FIFO order preserved)
 For each execution:
-  If OPENING (or AUTO inferred as open):
-    Start or extend activeTrade for symbol
-    Push lot to FIFO queue
-  If CLOSING (or AUTO inferred as close):
-    Consume FIFO lots until closing qty satisfied
-    Add to activeTrade.closingFills
-    If netPosition == 0: finalize round trip, delete activeTrade
-    Else: partial close, trade continues
-At end: remaining activeTrades → mark isOpen=true
+  OPEN fill → push lot to fifoQueue, extend netPosition, track peakPosition
+  CLOSE fill → consume FIFO lots; netPosition=0 → finalize as closed round trip
+At end: remaining active positions → isOpen=true
 ```
 
-### VWAP Formulas (verified):
+### VWAP Formulas (verified, implemented):
 ```
 entryVWAP = Σ(price × qty) / Σ(qty)  [over all opening fills]
 exitVWAP  = Σ(price × qty) / Σ(qty)  [over all closing fills]
-grossPnl  = (exitVWAP - entryVWAP) × closedQty  [long]
-grossPnl  = (entryVWAP - exitVWAP) × closedQty  [short]
+grossPnl  = (exitVWAP - entryVWAP) × closedQty  [LONG]
+grossPnl  = (entryVWAP - exitVWAP) × closedQty  [SHORT]
 netPnl    = grossPnl - totalFees
+totalFees = Σ(commission) over ALL fills (opens + closes)
+totalQty  = peak open position size
+durationSeconds = (exitDate - entryDate) × 86400  [same-day = 0, intraday exact unknown]
 ```
 
 ### R-Multiple
@@ -181,7 +184,7 @@ netPnl    = grossPnl - totalFees
 - User can manually override per trade → recalculates rMultiple
 - UI indicator: italic "est." label (ATR-estimated) vs normal weight (user-defined)
 
-Edge cases: same-second partial fills, overnight positions, AUTO posEffect inference, direction conflicts → emit open trade and start fresh
+Edge cases handled: direction conflicts (warn + finalize-as-open + start fresh), orphaned closes (warn + skip), oversized closes (warn + consume all lots), partial closes (position continues).
 
 ---
 

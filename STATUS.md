@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 4 — Trade Grouping Engine (FIFO)**
+**Phase 5 — Upload Flow (two-phase commit)**
 
 ## Phase Checklist
 
@@ -13,7 +13,7 @@
 | 2 | Database schema (`prisma/schema.prisma`) | ✅ Done | Migration applied, all 12 tables created |
 | 2b | Auth plumbing (NextAuth v5, middleware, session) | ✅ Done | |
 | 3 | TOS CSV parser | ✅ Done | Schwab/TDA format (both 2022 TDA + 2026 Schwab variants). 23 unit tests passing. |
-| 4 | Trade grouping engine (FIFO) | Not started | |
+| 4 | Trade grouping engine (FIFO) | ✅ Done | FIFO grouper, VWAP, LONG/SHORT PnL, open positions, 17 tests passing. |
 | 5 | Upload flow (two-phase commit) | Not started | |
 | 6 | Trades list page | Not started | |
 | 7 | Market data integration (yahoo-finance2) | Not started | |
@@ -50,4 +50,6 @@
 - Docker container `auratrade-pg` running on port 5432, all 12 DB tables present.
 - `next build` passes clean, zero TypeScript errors.
 - Parser exports `parseSchwabCSV()` — handles both TDA (2022) and Schwab (2026) CSV variants.
-- **Next: Phase 4 — Trade Grouping Engine** (`src/lib/engine/trade-grouper.ts`)
+- Grouper exports `groupTrades(executions)` → `{ trades, warnings }`. Pure function, no DB calls.
+- execTime dedup strategy: rowIndex milliseconds offset applied at upload layer (prevents same-date duplicate Execution rows).
+- **Next: Phase 5 — Upload Flow** (`src/app/api/upload/route.ts` + upload page)
