@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 3 — TOS CSV Parser**
+**Phase 4 — Trade Grouping Engine (FIFO)**
 
 ## Phase Checklist
 
@@ -12,7 +12,7 @@
 | 1 | Project bootstrap (deps, shadcn, prisma init) | ✅ Done | |
 | 2 | Database schema (`prisma/schema.prisma`) | ✅ Done | Migration applied, all 12 tables created |
 | 2b | Auth plumbing (NextAuth v5, middleware, session) | ✅ Done | |
-| 3 | TOS CSV parser | Not started | Awaiting sample CSV from user for validation |
+| 3 | TOS CSV parser | ✅ Done | Schwab/TDA format (both 2022 TDA + 2026 Schwab variants). 23 unit tests passing. |
 | 4 | Trade grouping engine (FIFO) | Not started | |
 | 5 | Upload flow (two-phase commit) | Not started | |
 | 6 | Trades list page | Not started | |
@@ -32,19 +32,22 @@
 | 2026-03-12 | Commission formula corrected: `(Price - NetPrice) × Qty` for BOTH buys and sells. Verify against real TOS CSV. |
 | 2026-03-12 | Kelly functions (`kellyFull`, `kellyHalf`, `kellyQuarter`) live in `metrics.ts` only — no separate `kelly.ts`. |
 | 2026-03-12 | `create-next-app` already done (initial commit exists). Phase 1 starts from dep install. |
-| 2026-03-12 | Prisma v6 detected — uses `prisma.config.ts` for datasource URL, client outputs to `src/generated/prisma`. |
-| 2026-03-12 | shadcn v4 detected — `components.json` written manually (zinc base color). `src/lib/utils.ts` created manually. |
+| 2026-03-12 | **Prisma v7 → v6 downgrade**: v7 TS-native client (`provider="prisma-client"`) fails with Turbopack (`node:path` error). Downgraded to Prisma v6.19.2 (`prisma-client-js` + Node-API library engine). No adapter needed. |
+| 2026-03-12 | `prisma.config.ts` manages datasource URL for Prisma v6. Schema datasource block also has `url = env("DATABASE_URL")`. Client outputs to `src/generated/prisma`. |
+| 2026-03-12 | shadcn v4 — `components.json` written manually (zinc base color). `src/lib/utils.ts` created manually. shadcn init skipped (interactive prompts unbypassable). |
 | 2026-03-12 | Fonts: Inter + JetBrains Mono (replaced Geist). Dark-first zinc theme applied to `globals.css`. |
 | 2026-03-12 | `jest`, `@types/jest`, `ts-jest` installed. TypeScript clean (no errors). |
+| 2026-03-13 | Added `LogoutButton` to dashboard stub (top bar: email + sign out button). Auth flow fully verified: register → login → dashboard → logout. |
+| 2026-03-13 | User provided real TOS CSV sample for Phase 3 parser validation. File not yet read/parsed. |
+| 2026-03-13 | Phase 3 complete. CSV is Schwab/TDA Transaction History (NOT TOS Activity & Positions). Date-only (no time), commission explicit in "Fees & Comm", two format variants (2022 TDA + 2026 Schwab). Commission formula `(Price - NetPrice) × Qty` does NOT apply. |
 
 ## Pending User Actions
-- [ ] Provide sample TOS CSV export for parser validation (Phase 3)
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
-- [ ] Provide sample TOS CSV export for parser validation (Phase 3)
+- [x] ~~Provide sample TOS CSV export for parser validation~~ — received 2026-03-13
 
 ## Where We Stopped (2026-03-13)
-- Phases 1, 2, 2b all complete
-- Docker container `auratrade-pg` running on port 5432
-- Prisma v7 TS-native client in use — requires `@prisma/adapter-pg` (installed)
-- Build is clean (`next build` passes)
-- **Next: Phase 3 — TOS CSV Parser** (`src/lib/parser/tos-csv-parser.ts`)
+- Phases 1, 2, 2b, 3 complete.
+- Docker container `auratrade-pg` running on port 5432, all 12 DB tables present.
+- `next build` passes clean, zero TypeScript errors.
+- Parser exports `parseSchwabCSV()` — handles both TDA (2022) and Schwab (2026) CSV variants.
+- **Next: Phase 4 — Trade Grouping Engine** (`src/lib/engine/trade-grouper.ts`)
