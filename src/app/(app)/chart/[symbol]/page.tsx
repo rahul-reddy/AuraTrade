@@ -36,21 +36,34 @@ export default async function SymbolChartPage({
   const { symbol: rawSymbol } = await params
   const resolvedSearchParams = await searchParams
   const tradeId = getParam(resolvedSearchParams, 'tradeId')
+  const requestedAccountId = getParam(resolvedSearchParams, 'accountId')
   const symbol = decodeURIComponent(rawSymbol).toUpperCase()
 
-  const account = await prisma.tradingAccount.findFirst({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-  })
+  const account = requestedAccountId
+    ? await prisma.tradingAccount.findFirst({
+        where: { id: requestedAccountId, userId },
+      })
+    : await prisma.tradingAccount.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+      })
 
   if (!account) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
         <div className="text-center">
-          <p className="text-zinc-400 mb-3">No trading account found.</p>
-          <Link href="/upload" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
-            Upload a CSV to get started →
-          </Link>
+          <p className="text-zinc-400 mb-3">
+            {requestedAccountId ? 'Trading account not found.' : 'No trading account found.'}
+          </p>
+          {requestedAccountId ? (
+            <Link href="/trades" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
+              View your available accounts →
+            </Link>
+          ) : (
+            <Link href="/upload" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
+              Upload a CSV to get started →
+            </Link>
+          )}
         </div>
       </div>
     )

@@ -66,6 +66,12 @@ function parsePageSize(raw: string | undefined): number {
   return Math.min(Math.max(parsed, 25), MAX_PAGE_SIZE)
 }
 
+function parsePage(raw: string | undefined): number {
+  const parsed = Number.parseInt(raw ?? '', 10)
+  if (Number.isNaN(parsed)) return 1
+  return Math.max(parsed, 1)
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function TradesPage({
@@ -113,19 +119,12 @@ export default async function TradesPage({
     ? (rawSort as SortField)
     : 'entryTime'
   const sortDir = str(params, 'sortDir') === 'asc' ? ('asc' as const) : ('desc' as const)
-  const page = Math.max(1, parseInt(str(params, 'page') ?? '1', 10))
+  const requestedPage = parsePage(str(params, 'page'))
   const pageSize = parsePageSize(str(params, 'pageSize'))
 
   const where = buildWhere(account.id, params)
 
-  const [trades, totalCount, closedAgg, winAgg, lossAgg] = await Promise.all([
-    prisma.roundTripTrade.findMany({
-      where,
-      include: { classification: { select: { setup: true, confidence: true } } },
-      orderBy: { [sortBy]: sortDir },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
+  const [totalCount, closedAgg, winAgg, lossAgg] = await Promise.all([
     prisma.roundTripTrade.count({ where }),
     prisma.roundTripTrade.aggregate({
       where: { ...where, isOpen: false },
@@ -145,6 +144,14 @@ export default async function TradesPage({
   ])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const page = Math.min(requestedPage, totalPages)
+  const trades = await prisma.roundTripTrade.findMany({
+    where,
+    include: { classification: { select: { setup: true, confidence: true } } },
+    orderBy: { [sortBy]: sortDir },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  })
   const closedCount = closedAgg._count.id
   const winCount = winAgg._count.id
   const lossCount = lossAgg._count.id
@@ -284,7 +291,10 @@ export default async function TradesPage({
             </p>
             <p className="text-zinc-600 text-sm">
               {hasFilters ? (
-                <Link href="/trades" className="text-blue-400 hover:text-blue-300 transition-colors">
+                <Link
+                  href={`/trades?accountId=${account.id}`}
+                  className="text-blue-400 hover:text-blue-300 transition-colors"
+                >
                   Clear all filters
                 </Link>
               ) : (

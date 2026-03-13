@@ -16,6 +16,12 @@ function parsePageSize(raw: string | null): number {
   return Math.min(Math.max(parsed, 25), MAX_PAGE_SIZE)
 }
 
+function parsePage(raw: string | null): number {
+  const parsed = Number.parseInt(raw ?? '', 10)
+  if (Number.isNaN(parsed)) return 1
+  return Math.max(parsed, 1)
+}
+
 function buildWhere(
   accountId: string,
   params: URLSearchParams,
@@ -124,17 +130,10 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Paginated JSON response ──────────────────────────────────────────
-    const page = Math.max(1, parseInt(params.get('page') ?? '1', 10))
+    const requestedPage = parsePage(params.get('page'))
     const pageSize = parsePageSize(params.get('pageSize'))
 
-    const [trades, totalCount, closedAgg, winAgg, lossAgg] = await Promise.all([
-      prisma.roundTripTrade.findMany({
-        where,
-        include: { classification: { select: { setup: true, confidence: true } } },
-        orderBy: { [sortBy]: sortDir },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
+    const [totalCount, closedAgg, winAgg, lossAgg] = await Promise.all([
       prisma.roundTripTrade.count({ where }),
       prisma.roundTripTrade.aggregate({
         where: { ...where, isOpen: false },
@@ -152,6 +151,15 @@ export async function GET(req: NextRequest) {
         _count: { id: true },
       }),
     ])
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const page = Math.min(requestedPage, totalPages)
+    const trades = await prisma.roundTripTrade.findMany({
+      where,
+      include: { classification: { select: { setup: true, confidence: true } } },
+      orderBy: { [sortBy]: sortDir },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    })
 
     const closedCount = closedAgg._count.id
     const winCount = winAgg._count.id
@@ -182,7 +190,7 @@ export async function GET(req: NextRequest) {
         page,
         pageSize,
         total: totalCount,
-        totalPages: Math.ceil(totalCount / pageSize),
+        totalPages,
       },
       summary: {
         totalTrades: totalCount,

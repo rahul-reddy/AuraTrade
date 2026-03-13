@@ -63,7 +63,10 @@ function buildTradesHref(
 }
 
 function buildChartHref(trade: TradeRow): string {
-  const params = new URLSearchParams({ tradeId: trade.id })
+  const params = new URLSearchParams({
+    tradeId: trade.id,
+    accountId: trade.accountId,
+  })
   params.set('from', trade.entryTime.toISOString().split('T')[0])
   params.set('to', (trade.exitTime ?? trade.entryTime).toISOString().split('T')[0])
   return `/chart/${encodeURIComponent(trade.symbol)}?${params.toString()}`
