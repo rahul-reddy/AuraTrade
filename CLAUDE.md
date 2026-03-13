@@ -14,6 +14,7 @@ Professional trading analytics platform for a high-frequency discretionary equit
 Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should look and feel like a $50/month product.
 
 ## Always Read First
+- `AGENTS.md` — shared coordination workflow for Claude and Codex
 - `PLAN.md` — full 14-phase implementation plan with formulas, schema, and build order
 - `STATUS.md` — current phase, what's done, what's blocked, pending user actions
 
