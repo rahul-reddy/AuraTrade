@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 5 — Upload Flow (two-phase commit)**
+**Phase 6 — Trades List Page**
 
 ## Phase Checklist
 
@@ -14,7 +14,7 @@
 | 2b | Auth plumbing (NextAuth v5, middleware, session) | ✅ Done | |
 | 3 | TOS CSV parser | ✅ Done | Schwab/TDA format (both 2022 TDA + 2026 Schwab variants). 23 unit tests passing. |
 | 4 | Trade grouping engine (FIFO) | ✅ Done | FIFO grouper, VWAP, LONG/SHORT PnL, open positions, 17 tests passing. |
-| 5 | Upload flow (two-phase commit) | Not started | |
+| 5 | Upload flow (two-phase commit) | ✅ Done | Dropzone UI, parse preview, confirm writes to DB. Full trade rebuild on confirm. |
 | 6 | Trades list page | Not started | |
 | 7 | Market data integration (yahoo-finance2) | Not started | |
 | 7.5 | Trade context enrichment pipeline | Not started | |
@@ -52,4 +52,8 @@
 - Parser exports `parseSchwabCSV()` — handles both TDA (2022) and Schwab (2026) CSV variants.
 - Grouper exports `groupTrades(executions)` → `{ trades, warnings }`. Pure function, no DB calls.
 - execTime dedup strategy: rowIndex milliseconds offset applied at upload layer (prevents same-date duplicate Execution rows).
-- **Next: Phase 5 — Upload Flow** (`src/app/api/upload/route.ts` + upload page)
+- Phase 5 complete. Upload page at `/upload`. Two API routes: POST /api/upload (parse+preview) and POST /api/upload/[id]/confirm (write to DB).
+- Confirm step: upserts executions, rebuilds ALL RoundTripTrades from scratch (safe for overlapping re-uploads).
+- execTime stored as date + rowIndex ms (preserves FIFO order, prevents duplicate row collisions).
+- Toaster added to root layout (sonner, dark theme).
+- **Next: Phase 6 — Trades List Page** (`src/app/(app)/trades/page.tsx`)
