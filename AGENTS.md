@@ -36,7 +36,7 @@ When starting work:
 
 ## Branch And PR Workflow
 
-Do not do meaningful feature work directly on `master`.
+Do not do meaningful feature work directly on `main`.
 
 Preferred branch naming:
 - `feat/phase-7-market-data`
@@ -45,7 +45,7 @@ Preferred branch naming:
 - `docs/sync-project-state`
 
 Workflow:
-1. Start from updated `master`
+1. Start from updated `main`
 2. Create a short-lived feature branch
 3. Implement the change on that branch
 4. Run tester duties locally before any commit; for user-facing changes this includes Playwright
@@ -53,7 +53,7 @@ Workflow:
 6. Update docs if project reality changed
 7. Commit only after tester duties pass
 8. Push the branch
-9. Open a PR into `master`
+9. Open a PR into `main`
 10. Let CodeRabbit review the PR
 11. Address findings, rerun tests, and merge only after reviewer + tester passes are satisfied
 

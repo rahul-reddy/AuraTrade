@@ -34,7 +34,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 12. **Every data point must be explorable** — click a metric → see underlying trades; click a trade → see it on the chart
 13. **Git commit after every meaningful unit of work** with a descriptive message, but only after the relevant tester pass is complete; for user-facing changes this includes Playwright unless a blocker is explicitly called out
 14. **Desktop-first** — traders use wide monitors; responsive is secondary
-15. **Do meaningful feature work on a short-lived branch, not directly on `master`** — merge through a PR after tester + reviewer passes
+15. **Do meaningful feature work on a short-lived branch, not directly on `main`** — merge through a PR after tester + reviewer passes
 
 ## Tech Decisions (already made, don't revisit)
 - Market data: `yahoo-finance2` only (no API key needed)
