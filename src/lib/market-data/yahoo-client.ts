@@ -32,7 +32,16 @@ export interface FetchYahooMarketDataResult {
   fallbackMessage: string | null;
 }
 
-type HistoricalRow = {
+type LooseHistoricalRow = {
+  date?: unknown;
+  open?: unknown;
+  high?: unknown;
+  low?: unknown;
+  close?: unknown;
+  volume?: unknown;
+};
+
+type CompleteHistoricalRow = {
   date: Date;
   open: number;
   high: number;
@@ -57,7 +66,8 @@ export interface YahooFinanceClient {
   historical(
     symbol: string,
     options: { period1: Date; period2: Date; interval: HistoricalInterval },
-  ): Promise<HistoricalRow[]>;
+    moduleOptions?: { validateResult?: boolean },
+  ): Promise<unknown>;
   chart(
     symbol: string,
     options: {
@@ -132,15 +142,28 @@ export function resolvePreferredMarketDataTimeframe(
   return shouldFallbackToDaily(timeframe, from, to) ? "1d" : timeframe;
 }
 
-function normalizeHistoricalRows(rows: HistoricalRow[]): MarketDataCandle[] {
+function isCompleteHistoricalRow(row: LooseHistoricalRow): row is CompleteHistoricalRow {
+  return row.date instanceof Date
+    && typeof row.open === "number"
+    && Number.isFinite(row.open)
+    && typeof row.high === "number"
+    && Number.isFinite(row.high)
+    && typeof row.low === "number"
+    && Number.isFinite(row.low)
+    && typeof row.close === "number"
+    && Number.isFinite(row.close)
+    && typeof row.volume === "number"
+    && Number.isFinite(row.volume);
+}
+
+function normalizeLooseHistoricalRows(rows: unknown): MarketDataCandle[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
   return rows
-    .filter((row) => {
-      return Number.isFinite(row.open)
-        && Number.isFinite(row.high)
-        && Number.isFinite(row.low)
-        && Number.isFinite(row.close)
-        && Number.isFinite(row.volume);
-    })
+    .filter((row): row is LooseHistoricalRow => typeof row === "object" && row !== null)
+    .filter(isCompleteHistoricalRow)
     .map((row) => ({
       time: row.date.toISOString(),
       open: row.open,
@@ -178,13 +201,17 @@ async function fetchDailyCandles(
   from: Date,
   to: Date,
 ): Promise<MarketDataCandle[]> {
-  const rows = await client.historical(symbol, {
-    period1: from,
-    period2: to,
-    interval: "1d",
-  });
+  const rows = await client.historical(
+    symbol,
+    {
+      period1: from,
+      period2: to,
+      interval: "1d",
+    },
+    { validateResult: false },
+  );
 
-  return normalizeHistoricalRows(rows);
+  return normalizeLooseHistoricalRows(rows);
 }
 
 async function fetchIntradayCandles(

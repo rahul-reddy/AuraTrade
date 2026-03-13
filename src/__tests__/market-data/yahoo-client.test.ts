@@ -85,4 +85,58 @@ describe("fetchYahooMarketData", () => {
     expect(chart).toHaveBeenCalledTimes(1);
     expect(historical).not.toHaveBeenCalled();
   });
+
+  it("filters malformed daily rows instead of surfacing the yahoo historical null-row error", async () => {
+    const historical = jest
+      .fn<ReturnType<YahooFinanceClient["historical"]>, Parameters<YahooFinanceClient["historical"]>>()
+      .mockResolvedValue([
+        {
+          date: new Date("2026-03-10T00:00:00.000Z"),
+          open: 48.1,
+          high: 49.2,
+          low: 47.9,
+          close: 48.7,
+          volume: 1500000,
+        },
+        {
+          date: new Date("2026-03-11T00:00:00.000Z"),
+          open: null,
+          high: 49.5,
+          low: 48.4,
+          close: 49.1,
+          volume: 1100000,
+        },
+      ]);
+    const chart = jest.fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>();
+
+    const result = await fetchYahooMarketData({
+      symbol: "ibit",
+      timeframe: "1d",
+      from: new Date("2026-03-01T00:00:00.000Z"),
+      to: new Date("2026-03-30T00:00:00.000Z"),
+      client: { historical, chart },
+    });
+
+    expect(result.symbol).toBe("IBIT");
+    expect(result.effectiveTimeframe).toBe("1d");
+    expect(result.fallbackMessage).toBeNull();
+    expect(result.candles).toEqual([
+      {
+        time: "2026-03-10T00:00:00.000Z",
+        open: 48.1,
+        high: 49.2,
+        low: 47.9,
+        close: 48.7,
+        volume: 1500000,
+      },
+    ]);
+    expect(historical).toHaveBeenCalledWith(
+      "IBIT",
+      expect.objectContaining({
+        interval: "1d",
+      }),
+      { validateResult: false },
+    );
+    expect(chart).not.toHaveBeenCalled();
+  });
 });
