@@ -59,6 +59,14 @@ Rules:
 - The builder should address findings, rerun relevant checks, and only then treat the work as ready
 - If true subagents are unavailable, emulate this with a fresh agent/chat using the same handoff notes
 
+## Doc Sync Commands
+
+Use the matching command file for doc synchronization:
+- Claude: `.claude/commands/sync-docs.md`
+- Codex: `.codex/commands/sync-docs.md`
+
+These command files should stay functionally aligned so both agents maintain the same project truth.
+
 ## Handoff Notes
 
 When handing off between agents, include:
