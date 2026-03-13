@@ -39,13 +39,25 @@ When finishing work:
 - Update `CLAUDE.md` only when a standing rule, tech decision, or key file map changed
 - Report any build, lint, test, or runtime blockers that remain
 
-## Doc Sync Commands
+## Local Agent Tooling
 
-Use the matching command file for doc synchronization:
-- Claude: `.claude/commands/sync-docs.md`
-- Codex: `.codex/commands/sync-docs.md`
+Local agent command files may exist in agent-specific config folders, but they are intentionally
+kept out of git. Do not rely on repo-committed command files as the source of truth.
 
-These command files should stay functionally aligned so both agents maintain the same project truth.
+If local command workflows are updated, mirror them across agents outside the repo and keep this
+file focused on the shared process rather than local tooling paths.
+
+## Peer Review Workflow
+
+Use a two-agent workflow for non-trivial work when possible:
+- Builder agent: implements the change, runs checks, and prepares a concise handoff
+- Reviewer agent: performs an independent review of the diff and changed files, with findings first
+
+Rules:
+- The reviewer should not be primed with the intended answer or a desired approval outcome
+- The reviewer should focus on bugs, regressions, auth/data-scope mistakes, missing tests, broken navigation, and stale docs
+- The builder should address findings, rerun relevant checks, and only then treat the work as ready
+- If true subagents are unavailable, emulate this with a fresh agent/chat using the same handoff notes
 
 ## Handoff Notes
 
