@@ -324,6 +324,65 @@ describe('runEnrichment', () => {
     })
   })
 
+  it('fetches candle history across the full symbol trade span instead of only the latest trade window', async () => {
+    const symbolCandles = makeCandles(1200, {
+      startDate: new Date('2020-01-01T00:00:00.000Z'),
+      basePrice: 100,
+      trend: 0.2,
+    })
+    const spyCandles = makeCandles(1200, {
+      startDate: new Date('2020-01-01T00:00:00.000Z'),
+      basePrice: 300,
+      trend: 0.3,
+    })
+
+    const fetchDailyHistory = jest.fn(async (symbol: string, startDate: Date, endDate: Date) => {
+      if (symbol === 'SPY') {
+        return spyCandles
+      }
+      expect(startDate.toISOString()).toBe('2019-09-19T00:00:00.000Z')
+      expect(endDate.toISOString()).toBe('2022-09-06T00:00:00.000Z')
+      return symbolCandles
+    })
+
+    const db = {
+      roundTripTrade: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'trade-old',
+            symbol: 'AAPL',
+            entryTime: new Date('2020-10-23T00:00:00.000Z'),
+            initialRisk: null,
+          },
+          {
+            id: 'trade-new',
+            symbol: 'AAPL',
+            entryTime: new Date('2022-09-01T00:00:00.000Z'),
+            initialRisk: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue(undefined),
+      },
+      tradeContext: {
+        upsert: jest.fn().mockResolvedValue(undefined),
+      },
+    } as unknown as PrismaClient
+
+    const dataSource: EnrichmentDataSource = {
+      fetchDailyHistory,
+      fetchEarningsDates: async () => [],
+    }
+
+    const progress = await runEnrichment('acct-span', db, dataSource)
+
+    expect(progress.tradesEnriched).toBe(2)
+    expect(fetchDailyHistory).toHaveBeenCalledWith(
+      'AAPL',
+      new Date('2019-09-19T00:00:00.000Z'),
+      new Date('2022-09-06T00:00:00.000Z'),
+    )
+  })
+
   it('queues a rerun when startEnrichment is called during an active job', async () => {
     let releaseFirstRun: (() => void) | null = null
     const firstRun = new Promise<[] | never[]>((resolve) => {
