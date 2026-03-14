@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 7.5 — Trade Context Enrichment Pipeline**
+**Phase 8 — Interactive Chart (Hero Feature)**
 
 ## Phase Checklist
 
@@ -17,7 +17,7 @@
 | 5 | Upload flow (two-phase commit) | ✅ Done | Dropzone UI, parse preview, confirm writes to DB. Full trade rebuild on confirm. |
 | 6 | Trades list page | ✅ Done | Server-rendered trades page, API filters, CSV export, extracted table component, loading/error states |
 | 7 | Market data integration (yahoo-finance2) | ✅ Done | Yahoo client, cache layer, authenticated API route, symbol-page market data preview, loading/error states |
-| 7.5 | Trade context enrichment pipeline | Not started | |
+| 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 19 new tests (68 total). |
 | 8 | Interactive chart (Lightweight Charts) | Not started | Hero feature |
 | 9 | Performance metrics engine (Kelly, formulas) | Not started | All formulas verified before implementation |
 | 10 | Dashboard | Not started | |
@@ -69,4 +69,6 @@
 - Phase 6 complete. `/trades` now has URL-synced filters, sortable columns, page-size control, CSV export, loading/error states, and a non-404 symbol detail target at `/chart/[symbol]`.
 - Phase 7 complete. `/api/market-data` now serves cached Yahoo candles, `MarketDataCache` stores timestamped intraday rows, and `/chart/[symbol]` now has a real market-data preview with timeframe switching and fallback/error states ahead of the Phase 8 interactive chart.
 - Verification: `npx tsc --noEmit` passes, `npx jest --runInBand` passes (48 tests), targeted ESLint passes on the modified Phase 7 files, and `npx playwright test` passes with 3 local smoke tests including the chart market-data flow.
-- **Next: Phase 7.5 — Trade Context Enrichment Pipeline** (`src/lib/engine/trade-enrichment.ts`)
+- Phase 7.5 complete. `src/lib/engine/trade-enrichment.ts` computes SMA20/50/200, EMA20, ATR14, RSI14, ADX14, Bollinger Bands, 52w range, gap %, SPY market regime, and nearest earnings per trade. `POST /api/enrich` triggers async enrichment; `GET /api/enrich` polls progress. Upload page shows live enrichment banner with progress bar after import.
+- 19 new tests — all 68 tests passing. `npx tsc --noEmit` clean.
+- **Next: Phase 8 — Interactive Chart** (`src/app/(app)/chart/[symbol]/page.tsx`)
