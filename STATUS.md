@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 8 — Interactive Chart (Hero Feature)**
+**Phase 9 — Performance Metrics Engine**
 
 ## Phase Checklist
 
@@ -18,7 +18,7 @@
 | 6 | Trades list page | ✅ Done | Server-rendered trades page, API filters, CSV export, extracted table component, loading/error states |
 | 7 | Market data integration (yahoo-finance2) | ✅ Done | Yahoo client, cache layer, authenticated API route, symbol-page market data preview, loading/error states |
 | 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 23 tests in the enrichment suite; 75 total project tests after the review follow-up, market-data fallback fix, and full-span enrichment fix. |
-| 8 | Interactive chart (Lightweight Charts) | Not started | Hero feature |
+| 8 | Interactive chart (Lightweight Charts) | ✅ Done | Candlestick chart, trade markers, price lines, auto-TF zoom, OHLCV panel, trade sidebar |
 | 9 | Performance metrics engine (Kelly, formulas) | Not started | All formulas verified before implementation |
 | 10 | Dashboard | Not started | |
 | 11 | Trade classification engine | Not started | |
@@ -74,26 +74,27 @@
 - **Market data** (`src/lib/market-data/`): Yahoo daily + intraday, DB cache with staleness logic, `GET /api/market-data`, preview UI at `/chart/[symbol]` (placeholder for Phase 8).
 - **Enrichment** (`src/lib/engine/trade-enrichment.ts`): SMA20/50/200, EMA20, ATR14, RSI14, ADX14, BBands, 52w range, gap %, SPY regime, earnings. `POST /api/enrich` triggers; `GET /api/enrich` polls. Upload page shows live progress bar.
 
-### Key implementation facts for Phase 8
-- `/chart/[symbol]` currently exists as a **placeholder** (market-data candle preview). Phase 8 replaces it with the full Lightweight Charts interactive chart.
-- `TradeContext` rows are now being populated by enrichment — ATR14 and regime data is available for chart annotations.
-- Market data is cached in `MarketDataCache` with `symbol + date + timeframe` unique key. Use `getMarketData()` from `src/lib/market-data/market-data-cache.ts` — do not call Yahoo directly from UI code.
-- Lightweight Charts **must** be loaded with `dynamic(() => import(...), { ssr: false })` — it requires `window`.
+### Phase 8 — complete (2026-03-14)
 
-### Known build issues (pre-existing, not introduced in Phase 7.5)
+**Files created:**
+- `src/components/charts/CandlestickChart.tsx` — LWC v5 client chart (loaded ssr:false). Candlestick series, trade fill markers (arrowUp/arrowDown, size scales with qty), OHLCV crosshair info panel, entry/exit price lines for focused trade, auto-timeframe switch on zoom (debounced 700ms), responsive via ResizeObserver. Timeframe buttons: 1D/1H/15M/5M/1M with manual + auto-switch.
+- `src/components/charts/ChartWorkspace.tsx` — client wrapper managing focusTradeId state. Two-column layout: 256px sidebar (trade list, click to zoom) + flex-1 chart. Header bar with symbol, round-trip count, Net P&L, win rate, closed/open counts.
+- `src/app/(app)/chart/[symbol]/page.tsx` — rewritten server component. Fetches trades with executions (fills) + classification. Computes date range spanning all trades + padding. Fetches initial daily candles via `getMarketData()`. Serializes Decimal/Date to plain JS for client.
+- `src/app/(app)/chart/[symbol]/loading.tsx` — updated skeleton to match two-column layout.
+
+**Known build issues (pre-existing, not introduced in Phase 8):**
 - `next build` fails: auth middleware imports Prisma into the edge runtime.
 - `npm run lint` fails: ESLint scans `src/generated/prisma`.
-- Both are pre-existing. Do not fix during Phase 8 unless they block it.
 
 ### Verification state
 - `npx tsc --noEmit` — clean
 - `npx jest --runInBand` — 75 tests passing
-- `npm run test:e2e` — 3 Playwright smoke tests passing
-- Branch: `claude/catch-up-next-step-NadfA` — pushed, up to date
+- Branch: `claude/catch-up-next-step-NadfA`
 
-### Next: Phase 8 — Interactive Chart
-Target files:
-- `src/app/(app)/chart/[symbol]/page.tsx` — replace placeholder with full chart page
-- `src/components/charts/CandlestickChart.tsx` — new component (use client + ssr:false)
+### Next: Phase 9 — Performance Metrics Engine
+Target file: `src/lib/engine/metrics.ts`
 
-See PLAN.md Phase 8 for the full feature list (trade markers, position shading, annotations, auto-timeframe switch on zoom, TradingView-style crosshair, trade list sidebar).
+Key formulas (from PLAN.md, must be verified before implementation):
+- Kelly criterion: `f* = winRate - (lossRate / payoffRatio)`
+- Profit factor, expectancy, Sharpe approx, max drawdown
+- API route: `GET /api/metrics?accountId&dateFrom&dateTo`
