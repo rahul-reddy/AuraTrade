@@ -41,6 +41,7 @@ interface EnrichmentState {
   enriched: number
   tradesEnriched: number
   errorCount: number
+  message?: string
 }
 
 type Phase =
@@ -307,7 +308,9 @@ function EnrichmentBanner({ enrichment }: { enrichment: EnrichmentState }) {
     return (
       <div className="flex items-center gap-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-sm">
         <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
-        <span className="text-yellow-300">Context enrichment failed. Trades are still imported.</span>
+        <span className="text-yellow-300">
+          {enrichment.message ?? 'Context enrichment failed. Trades are still imported.'}
+        </span>
       </div>
     )
   }
@@ -402,6 +405,7 @@ const IDLE_ENRICHMENT: EnrichmentState = {
   enriched: 0,
   tradesEnriched: 0,
   errorCount: 0,
+  message: undefined,
 }
 
 export default function UploadPage() {
@@ -467,7 +471,7 @@ export default function UploadPage() {
         totalTrades: data.totalTrades,
         openPositions: data.openPositions,
         estimatedPnl: data.estimatedPnl,
-        enrichment: { status: 'starting', total: 0, enriched: 0, tradesEnriched: 0, errorCount: 0 },
+        enrichment: { status: 'starting', total: 0, enriched: 0, tradesEnriched: 0, errorCount: 0, message: undefined },
       }
       setPhase(successState)
 
@@ -477,7 +481,14 @@ export default function UploadPage() {
         if (!triggerRes.ok) {
           setPhase((prev) =>
             prev.kind === 'success'
-              ? { ...prev, enrichment: { ...prev.enrichment, status: 'error' } }
+              ? {
+                  ...prev,
+                  enrichment: {
+                    ...prev.enrichment,
+                    status: 'error',
+                    message: 'Context enrichment could not be started. Trades are still imported.',
+                  },
+                }
               : prev,
           )
           return
@@ -487,7 +498,21 @@ export default function UploadPage() {
         const poll = async () => {
           try {
             const statusRes = await fetch('/api/enrich')
-            if (!statusRes.ok) return
+            if (!statusRes.ok) {
+              setPhase((prev) =>
+                prev.kind === 'success'
+                  ? {
+                      ...prev,
+                      enrichment: {
+                        ...prev.enrichment,
+                        status: 'error',
+                        message: `Enrichment status check failed (${statusRes.status}). Trades are still imported.`,
+                      },
+                    }
+                  : prev,
+              )
+              return
+            }
             const statusData = (await statusRes.json()) as {
               status: string
               total: number
@@ -504,14 +529,29 @@ export default function UploadPage() {
                 enriched: statusData.enriched ?? 0,
                 tradesEnriched: statusData.tradesEnriched ?? 0,
                 errorCount: statusData.errorCount ?? 0,
+                message: undefined,
               }
               return { ...prev, enrichment: nextEnrichment }
             })
             if (!statusData.done) {
               setTimeout(() => void poll(), 2000)
             }
-          } catch {
-            // polling failure is non-fatal
+          } catch (error) {
+            const message = error instanceof Error
+              ? error.message
+              : 'Unknown network error'
+            setPhase((prev) =>
+              prev.kind === 'success'
+                ? {
+                    ...prev,
+                    enrichment: {
+                      ...prev.enrichment,
+                      status: 'error',
+                      message: `Enrichment polling failed: ${message}. Trades are still imported.`,
+                    },
+                  }
+                : prev,
+            )
           }
         }
 

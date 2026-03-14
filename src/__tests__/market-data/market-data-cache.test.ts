@@ -172,6 +172,48 @@ describe("getMarketData", () => {
     );
   });
 
+  it("prefers daily cache for stale intraday lookback requests", async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      makeCacheRow({
+        time: "2022-02-06T00:00:00.000Z",
+        fetchedAt: "2026-03-13T15:00:00.000Z",
+        timeframe: "1d",
+      }),
+    ]);
+    const upsert = jest.fn();
+    const fetcher = jest.fn();
+
+    const result = await getMarketData(
+      {
+        symbol: "AAPL",
+        timeframe: "1h",
+        from: new Date("2022-02-05T00:00:00.000Z"),
+        to: new Date("2022-02-07T00:00:00.000Z"),
+      },
+      {
+        prismaClient: {
+          marketDataCache: { findMany, upsert },
+        },
+        now: () => new Date("2026-03-13T15:30:00.000Z"),
+        fetcher,
+      },
+    );
+
+    expect(result.source).toBe("cache");
+    expect(result.effectiveTimeframe).toBe("1d");
+    expect(result.fallbackMessage).toBe(
+      "Intraday data not available for this date range. Showing daily.",
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          timeframe: "1d",
+        }),
+      }),
+    );
+  });
+
   it("falls back to stale cache when live refresh fails", async () => {
     const findMany = jest.fn().mockResolvedValue([
       makeCacheRow({

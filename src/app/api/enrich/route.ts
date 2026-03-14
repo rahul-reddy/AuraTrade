@@ -1,6 +1,6 @@
 /**
- * POST /api/enrich       — trigger async enrichment for the user's account
- * GET  /api/enrich/status — poll enrichment progress
+ * POST /api/enrich — trigger async enrichment for the user's account
+ * GET  /api/enrich — poll enrichment progress
  *
  * Both routes are authenticated. Enrichment runs per-account.
  */

@@ -17,7 +17,7 @@
 | 5 | Upload flow (two-phase commit) | ✅ Done | Dropzone UI, parse preview, confirm writes to DB. Full trade rebuild on confirm. |
 | 6 | Trades list page | ✅ Done | Server-rendered trades page, API filters, CSV export, extracted table component, loading/error states |
 | 7 | Market data integration (yahoo-finance2) | ✅ Done | Yahoo client, cache layer, authenticated API route, symbol-page market data preview, loading/error states |
-| 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 19 new tests (68 total). |
+| 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 22 tests in the enrichment suite; 74 total project tests after the review follow-up and market-data fallback fix. |
 | 8 | Interactive chart (Lightweight Charts) | Not started | Hero feature |
 | 9 | Performance metrics engine (Kelly, formulas) | Not started | All formulas verified before implementation |
 | 10 | Dashboard | Not started | |
@@ -52,7 +52,11 @@
 | 2026-03-13 | Market data cache schema corrected for intraday support: `MarketDataCache.date` now stores candle timestamps (migration `20260313212628_market_data_cache_timestamps`) instead of `@db.Date`, which previously could only store one row per day. |
 | 2026-03-13 | `next build` is currently NOT clean: Next.js 16 middleware/proxy edge runtime still imports Prisma via auth middleware. Full-project lint also still fails because ESLint scans `src/generated/prisma`. |
 | 2026-03-14 | Phase 7.5 complete. `trade-enrichment.ts` computes all technical context at trade entry date. ADX(14) requires 28 data points minimum (not 20) — `computeIndicators` returns null if idx < 28. Enrichment is fire-and-forget; progress tracked in module-level Map (suitable for local dev, replace with DB-backed job queue for SaaS). `POST /api/enrich` triggers, `GET /api/enrich` polls. Upload page shows live progress bar and completion banner. |
-| 2026-03-14 | Note: Playwright smoke tests were NOT re-run for Phase 7.5 (enrichment is a background async flow, no new routes that require navigation tests). tsc + jest (68 tests) confirmed clean. |
+| 2026-03-14 | Note: Playwright smoke tests were NOT re-run for the initial Phase 7.5 implementation pass (enrichment is a background async flow, no new routes that require navigation tests). tsc + jest (68 tests at that point) confirmed clean. |
+| 2026-03-14 | Review follow-up for Phase 7.5: enrichment now resolves nearest earnings per trade entry date from a shared per-symbol earnings calendar fetch, and ATR-derived `initialRisk` also sets `riskSource = "ATR"` so the existing trades UI can show the planned estimated-risk indicator. |
+| 2026-03-14 | Review follow-up: `/upload` enrichment polling now surfaces non-OK / network failures as a terminal enrichment error instead of silently stalling, `startEnrichment()` queues a rerun when called during an active job, and `/api/enrich` route docs now match the real mounted GET path. |
+| 2026-03-14 | Market-data fallback fix: old intraday chart requests now fall back to daily candles when the requested window is outside Yahoo's intraday lookback, which restores the chart preview smoke test for historical trades. |
+| 2026-03-14 | Re-ran the full local verification after review fixes: `npx tsc --noEmit`, `npx jest --runInBand` (74 tests), and `npm run test:e2e` (3 Playwright smoke tests) all pass. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -82,8 +86,8 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 68 tests passing
-- `npx playwright test` — 3 smoke tests passing (as of Phase 7, not re-run in 7.5)
+- `npx jest --runInBand` — 74 tests passing
+- `npm run test:e2e` — 3 Playwright smoke tests passing
 - Branch: `claude/catch-up-next-step-NadfA` — pushed, up to date
 
 ### Next: Phase 8 — Interactive Chart

@@ -2,8 +2,14 @@ import {
   findDateIndex,
   computeIndicators,
   classifyMarketRegime,
+  getEnrichmentProgress,
+  resolveNearestEarnings,
+  runEnrichment,
+  startEnrichment,
   type DailyCandle,
+  type EnrichmentDataSource,
 } from '@/lib/engine/trade-enrichment'
+import type { PrismaClient } from '@/generated/prisma'
 
 // ─── helpers ──────────────────────────────────────────────────────────
 
@@ -207,5 +213,155 @@ describe('classifyMarketRegime', () => {
   it('returns CHOPPY when spy candles array is empty', () => {
     const target = new Date('2023-06-01T00:00:00.000Z')
     expect(classifyMarketRegime([], target)).toBe('CHOPPY')
+  })
+})
+
+// ─── resolveNearestEarnings ───────────────────────────────────────────
+
+describe('resolveNearestEarnings', () => {
+  it('returns null fields when the earnings calendar is empty', () => {
+    expect(resolveNearestEarnings([], new Date('2023-06-01T00:00:00.000Z'))).toEqual({
+      nearestEarningsDate: null,
+      daysToEarnings: null,
+    })
+  })
+
+  it('uses the nearest earnings date for each trade entry date', () => {
+    const earningsDates = [
+      new Date('2023-03-15T00:00:00.000Z'),
+      new Date('2023-08-15T00:00:00.000Z'),
+    ]
+
+    expect(
+      resolveNearestEarnings(earningsDates, new Date('2023-03-10T00:00:00.000Z')),
+    ).toEqual({
+      nearestEarningsDate: new Date('2023-03-15T00:00:00.000Z'),
+      daysToEarnings: 5,
+    })
+
+    expect(
+      resolveNearestEarnings(earningsDates, new Date('2023-09-01T00:00:00.000Z')),
+    ).toEqual({
+      nearestEarningsDate: new Date('2023-08-15T00:00:00.000Z'),
+      daysToEarnings: -17,
+    })
+  })
+})
+
+// ─── runEnrichment ────────────────────────────────────────────────────
+
+describe('runEnrichment', () => {
+  it('derives earnings per trade date and tags ATR-based initial risk', async () => {
+    const symbolCandles = makeCandles(320, {
+      startDate: new Date('2023-01-01T00:00:00.000Z'),
+      basePrice: 100,
+      trend: 0.5,
+    })
+    const spyCandles = makeCandles(320, {
+      startDate: new Date('2023-01-01T00:00:00.000Z'),
+      basePrice: 400,
+      trend: 1,
+    })
+
+    const tradeContextUpsert = jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(undefined)
+    const roundTripTradeUpdate = jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(undefined)
+
+    const db = {
+      roundTripTrade: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'trade-1',
+            symbol: 'AAPL',
+            entryTime: new Date('2023-03-10T00:00:00.000Z'),
+            initialRisk: null,
+          },
+          {
+            id: 'trade-2',
+            symbol: 'AAPL',
+            entryTime: new Date('2023-09-01T00:00:00.000Z'),
+            initialRisk: 2.5,
+          },
+        ]),
+        update: roundTripTradeUpdate,
+      },
+      tradeContext: {
+        upsert: tradeContextUpsert,
+      },
+    } as unknown as PrismaClient
+
+    const dataSource: EnrichmentDataSource = {
+      fetchDailyHistory: async (symbol) => (symbol === 'SPY' ? spyCandles : symbolCandles),
+      fetchEarningsDates: async () => [
+        new Date('2023-03-15T00:00:00.000Z'),
+        new Date('2023-08-15T00:00:00.000Z'),
+      ],
+    }
+
+    const progress = await runEnrichment('acct-1', db, dataSource)
+
+    expect(progress.done).toBe(true)
+    expect(progress.tradesEnriched).toBe(2)
+    expect(tradeContextUpsert).toHaveBeenCalledTimes(2)
+
+    const firstUpsertArg = tradeContextUpsert.mock.calls[0][0] as {
+      update: { daysToEarnings?: number; nearestEarningsDate?: Date }
+    }
+    const secondUpsertArg = tradeContextUpsert.mock.calls[1][0] as {
+      update: { daysToEarnings?: number; nearestEarningsDate?: Date }
+    }
+
+    expect(firstUpsertArg.update.nearestEarningsDate?.toISOString()).toBe('2023-03-15T00:00:00.000Z')
+    expect(firstUpsertArg.update.daysToEarnings).toBe(5)
+    expect(secondUpsertArg.update.nearestEarningsDate?.toISOString()).toBe('2023-08-15T00:00:00.000Z')
+    expect(secondUpsertArg.update.daysToEarnings).toBe(-17)
+
+    expect(roundTripTradeUpdate).toHaveBeenCalledTimes(1)
+    expect(roundTripTradeUpdate).toHaveBeenCalledWith({
+      where: { id: 'trade-1' },
+      data: expect.objectContaining({
+        riskSource: 'ATR',
+      }),
+    })
+  })
+
+  it('queues a rerun when startEnrichment is called during an active job', async () => {
+    let releaseFirstRun: (() => void) | null = null
+    const firstRun = new Promise<[] | never[]>((resolve) => {
+      releaseFirstRun = () => resolve([])
+    })
+
+    const findMany = jest
+      .fn<Promise<[]>, []>()
+      .mockImplementationOnce(() => firstRun as Promise<[]>)
+      .mockResolvedValue([])
+
+    const db = {
+      roundTripTrade: {
+        findMany,
+        update: jest.fn().mockResolvedValue(undefined),
+      },
+      tradeContext: {
+        upsert: jest.fn().mockResolvedValue(undefined),
+      },
+    } as unknown as PrismaClient
+
+    const dataSource: EnrichmentDataSource = {
+      fetchDailyHistory: async () => [],
+      fetchEarningsDates: async () => [],
+    }
+
+    startEnrichment('acct-rerun', db, dataSource)
+    await Promise.resolve()
+
+    startEnrichment('acct-rerun', db, dataSource)
+    expect(getEnrichmentProgress('acct-rerun')?.rerunRequested).toBe(true)
+
+    expect(releaseFirstRun).not.toBeNull()
+    releaseFirstRun!()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(findMany).toHaveBeenCalledTimes(2)
+    expect(getEnrichmentProgress('acct-rerun')?.done).toBe(true)
   })
 })

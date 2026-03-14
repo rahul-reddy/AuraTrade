@@ -55,6 +55,12 @@ export interface EnrichmentProgress {
   errorCount: number
   startedAt: Date
   finishedAt?: Date
+  rerunRequested?: boolean
+}
+
+export interface EnrichmentDataSource {
+  fetchDailyHistory(symbol: string, endDate: Date): Promise<DailyCandle[]>
+  fetchEarningsDates(symbol: string): Promise<Date[]>
 }
 
 // ─── in-process progress store ────────────────────────────────────────
@@ -117,6 +123,11 @@ async function fetchDailyHistory(symbol: string, endDate: Date): Promise<DailyCa
       close: q.close as number,
     }))
     .sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+async function fetchEarningsDates(symbol: string): Promise<Date[]> {
+  const summary = await yahoo.quoteSummary(symbol, { modules: ['calendarEvents'] })
+  return summary.calendarEvents?.earnings?.earningsDate ?? []
 }
 
 /**
@@ -253,44 +264,45 @@ export function classifyMarketRegime(
  * Find nearest earnings date to `entryDate` and return days-to-earnings
  * (negative = earnings already passed, positive = upcoming).
  */
-async function fetchNearestEarnings(
-  symbol: string,
+export function resolveNearestEarnings(
+  earningsDates: Date[],
   entryDate: Date,
-): Promise<{ nearestEarningsDate: Date | null; daysToEarnings: number | null }> {
-  try {
-    const summary = await yahoo.quoteSummary(symbol, { modules: ['calendarEvents'] })
-    const earningsDates: Date[] = summary.calendarEvents?.earnings?.earningsDate ?? []
-
-    if (earningsDates.length === 0) {
-      return { nearestEarningsDate: null, daysToEarnings: null }
-    }
-
-    // Find nearest by absolute distance to entryDate
-    const entryMs = entryDate.getTime()
-    let nearest = earningsDates[0]
-    let minDiff = Math.abs(earningsDates[0].getTime() - entryMs)
-
-    for (const d of earningsDates) {
-      const diff = Math.abs(d.getTime() - entryMs)
-      if (diff < minDiff) {
-        minDiff = diff
-        nearest = d
-      }
-    }
-
-    const daysToEarnings = Math.round((nearest.getTime() - entryMs) / (24 * 60 * 60 * 1000))
-    return { nearestEarningsDate: nearest, daysToEarnings }
-  } catch {
-    // earnings data is optional — don't fail the enrichment
+): { nearestEarningsDate: Date | null; daysToEarnings: number | null } {
+  if (earningsDates.length === 0) {
     return { nearestEarningsDate: null, daysToEarnings: null }
   }
+
+  const entryMs = entryDate.getTime()
+  let nearest = earningsDates[0]
+  let minDiff = Math.abs(earningsDates[0].getTime() - entryMs)
+
+  for (const d of earningsDates) {
+    const diff = Math.abs(d.getTime() - entryMs)
+    if (diff < minDiff) {
+      minDiff = diff
+      nearest = d
+    }
+  }
+
+  const daysToEarnings = Math.round((nearest.getTime() - entryMs) / (24 * 60 * 60 * 1000))
+  return { nearestEarningsDate: nearest, daysToEarnings }
+}
+
+const defaultDataSource: EnrichmentDataSource = {
+  fetchDailyHistory,
+  fetchEarningsDates,
 }
 
 // ─── main enrichment runner ───────────────────────────────────────────
 
-async function runEnrichmentJob(accountId: string, db: PrismaClient): Promise<void> {
+async function runEnrichmentJob(
+  accountId: string,
+  db: PrismaClient,
+  dataSource: EnrichmentDataSource,
+): Promise<void> {
   const progress = activeJobs.get(accountId)
   if (!progress) return
+  progress.rerunRequested = false
 
   try {
     // Load all closed trades for this account (open trades have no exit, less useful)
@@ -329,7 +341,7 @@ async function runEnrichmentJob(accountId: string, db: PrismaClient): Promise<vo
 
     let spyCandles: DailyCandle[] = []
     try {
-      spyCandles = await fetchDailyHistory('SPY', spyEnd)
+      spyCandles = await dataSource.fetchDailyHistory('SPY', spyEnd)
     } catch {
       // SPY fetch failure → all regimes become CHOPPY (graceful degradation)
     }
@@ -348,27 +360,16 @@ async function runEnrichmentJob(accountId: string, db: PrismaClient): Promise<vo
 
       let candles: DailyCandle[] = []
       try {
-        candles = await fetchDailyHistory(symbol, fetchEnd)
+        candles = await dataSource.fetchDailyHistory(symbol, fetchEnd)
       } catch {
         progress.errorCount++
         progress.enriched++
         continue
       }
 
-      // Earnings (one call per symbol, shared across all trades of that symbol)
-      const earningsByEntryDate = new Map<
-        string,
-        { nearestEarningsDate: Date | null; daysToEarnings: number | null }
-      >()
-      // We'll fetch earnings once per symbol and reuse for all its trades
-      let earningsResult: { nearestEarningsDate: Date | null; daysToEarnings: number | null } =
-        { nearestEarningsDate: null, daysToEarnings: null }
+      let earningsDates: Date[] = []
       try {
-        earningsResult = await fetchNearestEarnings(symbol, symbolTrades[0].entryTime)
-        // Cache for all entries of this symbol (earnings dates don't change per entry)
-        for (const t of symbolTrades) {
-          earningsByEntryDate.set(t.id, earningsResult)
-        }
+        earningsDates = await dataSource.fetchEarningsDates(symbol)
       } catch {
         // earnings optional
       }
@@ -379,7 +380,7 @@ async function runEnrichmentJob(accountId: string, db: PrismaClient): Promise<vo
         if (indicators == null) continue
 
         const regime = classifyMarketRegime(spyCandles, trade.entryTime)
-        const earnings = earningsByEntryDate.get(trade.id) ?? earningsResult
+        const earnings = resolveNearestEarnings(earningsDates, trade.entryTime)
 
         await db.tradeContext.upsert({
           where: { tradeId: trade.id },
@@ -427,7 +428,7 @@ async function runEnrichmentJob(accountId: string, db: PrismaClient): Promise<vo
         if (trade.initialRisk == null) {
           await db.roundTripTrade.update({
             where: { id: trade.id },
-            data: { initialRisk: indicators.atr14 * 1.5 },
+            data: { initialRisk: indicators.atr14 * 1.5, riskSource: 'ATR' },
           })
         }
 
@@ -442,6 +443,10 @@ async function runEnrichmentJob(accountId: string, db: PrismaClient): Promise<vo
   } finally {
     progress.done = true
     progress.finishedAt = new Date()
+    if (progress.rerunRequested) {
+      progress.rerunRequested = false
+      startEnrichment(accountId, db, dataSource)
+    }
   }
 }
 
@@ -453,9 +458,16 @@ async function runEnrichmentJob(accountId: string, db: PrismaClient): Promise<vo
  *
  * If enrichment is already running for this account, this is a no-op.
  */
-export function startEnrichment(accountId: string, db: PrismaClient = defaultPrisma): void {
+export function startEnrichment(
+  accountId: string,
+  db: PrismaClient = defaultPrisma,
+  dataSource: EnrichmentDataSource = defaultDataSource,
+): void {
   const existing = activeJobs.get(accountId)
-  if (existing && !existing.done) return // already running
+  if (existing && !existing.done) {
+    existing.rerunRequested = true
+    return
+  }
 
   const progress: EnrichmentProgress = {
     accountId,
@@ -465,17 +477,22 @@ export function startEnrichment(accountId: string, db: PrismaClient = defaultPri
     done: false,
     errorCount: 0,
     startedAt: new Date(),
+    rerunRequested: false,
   }
   activeJobs.set(accountId, progress)
 
   // Fire-and-forget — intentionally not awaited
-  void runEnrichmentJob(accountId, db)
+  void runEnrichmentJob(accountId, db, dataSource)
 }
 
 /**
  * Run enrichment synchronously (awaitable). Used in tests.
  */
-export async function runEnrichment(accountId: string, db: PrismaClient = defaultPrisma): Promise<EnrichmentProgress> {
+export async function runEnrichment(
+  accountId: string,
+  db: PrismaClient = defaultPrisma,
+  dataSource: EnrichmentDataSource = defaultDataSource,
+): Promise<EnrichmentProgress> {
   const progress: EnrichmentProgress = {
     accountId,
     total: 0,
@@ -484,8 +501,9 @@ export async function runEnrichment(accountId: string, db: PrismaClient = defaul
     done: false,
     errorCount: 0,
     startedAt: new Date(),
+    rerunRequested: false,
   }
   activeJobs.set(accountId, progress)
-  await runEnrichmentJob(accountId, db)
+  await runEnrichmentJob(accountId, db, dataSource)
   return progress
 }
