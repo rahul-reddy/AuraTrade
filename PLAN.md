@@ -254,17 +254,43 @@ API route: `GET /api/market-data?symbol&timeframe&from&to`
 
 ---
 
-## Phase 7.5: Trade Context Enrichment Pipeline
-File: `src/lib/engine/trade-enrichment.ts`
+## Phase 7.5: Trade Context Enrichment Pipeline ✅ COMPLETE
+Files: `src/lib/engine/trade-enrichment.ts`, `src/app/api/enrich/route.ts`
 
-Runs async after upload confirmation. Progress indicator: "Enriching trade context... 12/47 symbols"
+Runs async after upload confirmation. Progress bar on upload success screen: "Enriching trade context… X/Y symbols".
 
-Per traded symbol, at each trade's entry date:
-- Fetch 1 year of daily OHLCV (yahoo-finance2)
-- Compute via `technicalindicators`: SMA 20/50/200, EMA 20, ATR 14, RSI 14, ADX 14, Bollinger Bands (20, 2)
-- Derive: 52-week high/low, previous day's close, gap % `((open - prevClose) / prevClose)`
-- Market regime: classify SPY trend for that date (TRENDING_UP/DOWN/CHOPPY)
-- Fetch earnings dates via `yahoo-finance2.quoteSummary()` → nearestEarningsDate, daysToEarnings
+### Implementation details (as-built):
+
+**Per symbol:** fetches 400 calendar days of daily OHLCV (not 365 — needs buffer for SMA200 + ADX warmup).
+
+**Indicators computed at each trade's entry date** (`computeIndicators(candles, entryDate)`):
+- Finds the last trading day at or before `entryDate` in the cached series
+- **Minimum input:** index ≥ 28 (ADX(14) requires 28 data points to produce its first value — not 20)
+- SMA 20/50/200, EMA 20 — `technicalindicators` SMA/EMA
+- ATR 14 — `technicalindicators` ATR (high/low/close inputs)
+- RSI 14 — `technicalindicators` RSI
+- ADX 14 — `technicalindicators` ADX → `.adx` field (also has `.pdi`, `.mdi`)
+- Bollinger Bands (20, 2σ) — `technicalindicators` BollingerBands → `.upper`, `.lower`
+- 52w high/low: max/min over `candles[idx-251..idx]`
+- prevClose: `candles[idx-1].close`
+- gapPercent: `(open[idx] - prevClose) / prevClose`
+- SMA50/200 fall back to SMA20 if insufficient data rather than returning null
+
+**Market regime** (`classifyMarketRegime(spyCandles, entryDate)`):
+- SPY data fetched once per enrichment run (up to latest entry date)
+- TRENDING_UP: SPY close > SMA20 > SMA50
+- TRENDING_DOWN: SPY close < SMA20 < SMA50
+- CHOPPY: otherwise (including when SPY fetch fails — graceful degradation)
+
+**Earnings:** `yahoo.quoteSummary(symbol, { modules: ['calendarEvents'] })` → `.calendarEvents.earnings.earningsDate[]`. Nearest date by absolute distance to entryDate. Failure is silently ignored (optional data).
+
+**Post-upsert:** sets `RoundTripTrade.initialRisk = 1.5 × ATR14` when `initialRisk` is null.
+
+**Progress tracking:** module-level `Map<accountId, EnrichmentProgress>` (in-process, reset on server restart). For SaaS: replace with DB-backed job queue.
+
+**API:**
+- `POST /api/enrich` — triggers `startEnrichment(accountId)` (fire-and-forget), returns `{ started, accountId }`
+- `GET /api/enrich` — returns `{ status, total, enriched, tradesEnriched, done, errorCount }`
 
 Classifier in Phase 11 reads from this pre-computed TradeContext — no on-the-fly fetching.
 
