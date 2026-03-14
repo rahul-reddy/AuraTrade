@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 7.5 — Trade Context Enrichment Pipeline**
+**Phase 8 — Interactive Chart (Hero Feature)**
 
 ## Phase Checklist
 
@@ -17,7 +17,7 @@
 | 5 | Upload flow (two-phase commit) | ✅ Done | Dropzone UI, parse preview, confirm writes to DB. Full trade rebuild on confirm. |
 | 6 | Trades list page | ✅ Done | Server-rendered trades page, API filters, CSV export, extracted table component, loading/error states |
 | 7 | Market data integration (yahoo-finance2) | ✅ Done | Yahoo client, cache layer, authenticated API route, symbol-page market data preview, loading/error states |
-| 7.5 | Trade context enrichment pipeline | Not started | |
+| 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 23 tests in the enrichment suite; 75 total project tests after the review follow-up, market-data fallback fix, and full-span enrichment fix. |
 | 8 | Interactive chart (Lightweight Charts) | Not started | Hero feature |
 | 9 | Performance metrics engine (Kelly, formulas) | Not started | All formulas verified before implementation |
 | 10 | Dashboard | Not started | |
@@ -51,22 +51,49 @@
 | 2026-03-13 | Phase 7 complete. Added `src/lib/market-data/yahoo-client.ts`, `src/lib/market-data/market-data-cache.ts`, and authenticated `GET /api/market-data`. The symbol page at `/chart/[symbol]` now shows timeframe-switched candle previews with fallback messaging, plus route-level loading/error states. |
 | 2026-03-13 | Market data cache schema corrected for intraday support: `MarketDataCache.date` now stores candle timestamps (migration `20260313212628_market_data_cache_timestamps`) instead of `@db.Date`, which previously could only store one row per day. |
 | 2026-03-13 | `next build` is currently NOT clean: Next.js 16 middleware/proxy edge runtime still imports Prisma via auth middleware. Full-project lint also still fails because ESLint scans `src/generated/prisma`. |
+| 2026-03-14 | Phase 7.5 complete. `trade-enrichment.ts` computes all technical context at trade entry date. ADX(14) requires 28 data points minimum (not 20) — `computeIndicators` returns null if idx < 28. Enrichment is fire-and-forget; progress tracked in module-level Map (suitable for local dev, replace with DB-backed job queue for SaaS). `POST /api/enrich` triggers, `GET /api/enrich` polls. Upload page shows live progress bar and completion banner. |
+| 2026-03-14 | Note: Playwright smoke tests were NOT re-run for the initial Phase 7.5 implementation pass (enrichment is a background async flow, no new routes that require navigation tests). tsc + jest (68 tests at that point) confirmed clean. |
+| 2026-03-14 | Review follow-up for Phase 7.5: enrichment now resolves nearest earnings per trade entry date from a shared per-symbol earnings calendar fetch, and ATR-derived `initialRisk` also sets `riskSource = "ATR"` so the existing trades UI can show the planned estimated-risk indicator. |
+| 2026-03-14 | Review follow-up: `/upload` enrichment polling now surfaces non-OK / network failures as a terminal enrichment error instead of silently stalling, `startEnrichment()` queues a rerun when called during an active job, and `/api/enrich` route docs now match the real mounted GET path. |
+| 2026-03-14 | Market-data fallback fix: old intraday chart requests now fall back to daily candles when the requested window is outside Yahoo's intraday lookback, which restores the chart preview smoke test for historical trades. |
+| 2026-03-14 | Enrichment history-span fix: symbol and SPY daily fetches now cover the earliest-to-latest trade range (plus warmup buffer) so older trades in multi-year accounts are not silently skipped during enrichment. |
+| 2026-03-14 | Re-ran local verification after the review fixes: `npx tsc --noEmit` and `npx jest --runInBand` (75 tests) pass. `npm run test:e2e` already passed earlier in the same review-follow-up pass and was not re-run after the final non-UI enrichment-span fix. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
 - [x] ~~Provide sample TOS CSV export for parser validation~~ — received 2026-03-13
 
-## Where We Stopped (2026-03-13)
-- Phases 1, 2, 2b, 3, 4, 5, 6, and 7 complete.
-- Docker container `auratrade-pg` running on port 5432, all 12 DB tables present.
-- `npx tsc --noEmit` passes. `next build` still fails because auth middleware pulls Prisma into the edge runtime. Full-project `npm run lint` still fails because generated Prisma client files under `src/generated/prisma` are linted.
-- Parser exports `parseSchwabCSV()` — handles both TDA (2022) and Schwab (2026) CSV variants.
-- Grouper exports `groupTrades(executions)` → `{ trades, warnings }`. Pure function, no DB calls.
-- Phase 5 complete. Upload page at `/upload`. Two API routes: POST /api/upload (parse+preview) and POST /api/upload/[id]/confirm (write to DB).
-- Confirm step: upserts executions, rebuilds ALL RoundTripTrades from scratch (safe for overlapping re-uploads).
-- execTime = pure midnight UTC date. daySeq = content-based intra-day sequence for dedup + FIFO ordering.
-- Toaster added to root layout (sonner, dark theme).
-- Phase 6 complete. `/trades` now has URL-synced filters, sortable columns, page-size control, CSV export, loading/error states, and a non-404 symbol detail target at `/chart/[symbol]`.
-- Phase 7 complete. `/api/market-data` now serves cached Yahoo candles, `MarketDataCache` stores timestamped intraday rows, and `/chart/[symbol]` now has a real market-data preview with timeframe switching and fallback/error states ahead of the Phase 8 interactive chart.
-- Verification: `npx tsc --noEmit` passes, `npx jest --runInBand` passes (48 tests), targeted ESLint passes on the modified Phase 7 files, and `npx playwright test` passes with 3 local smoke tests including the chart market-data flow.
-- **Next: Phase 7.5 — Trade Context Enrichment Pipeline** (`src/lib/engine/trade-enrichment.ts`)
+## Where We Stopped (2026-03-14)
+
+### What's complete
+- **Phases 1–7.5 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
+- **Parser** (`src/lib/parser/tos-csv-parser.ts`): handles both TDA 2022 and Schwab 2026 CSV variants, auto-detects reverse-chronological order, daySeq dedup.
+- **Grouper** (`src/lib/engine/trade-grouper.ts`): FIFO VWAP grouper, pure function, no DB calls.
+- **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm.
+- **Trades list** (`/trades`, `/api/trades`): URL-synced filters, sortable columns, page-size, CSV export, loading/error states.
+- **Market data** (`src/lib/market-data/`): Yahoo daily + intraday, DB cache with staleness logic, `GET /api/market-data`, preview UI at `/chart/[symbol]` (placeholder for Phase 8).
+- **Enrichment** (`src/lib/engine/trade-enrichment.ts`): SMA20/50/200, EMA20, ATR14, RSI14, ADX14, BBands, 52w range, gap %, SPY regime, earnings. `POST /api/enrich` triggers; `GET /api/enrich` polls. Upload page shows live progress bar.
+
+### Key implementation facts for Phase 8
+- `/chart/[symbol]` currently exists as a **placeholder** (market-data candle preview). Phase 8 replaces it with the full Lightweight Charts interactive chart.
+- `TradeContext` rows are now being populated by enrichment — ATR14 and regime data is available for chart annotations.
+- Market data is cached in `MarketDataCache` with `symbol + date + timeframe` unique key. Use `getMarketData()` from `src/lib/market-data/market-data-cache.ts` — do not call Yahoo directly from UI code.
+- Lightweight Charts **must** be loaded with `dynamic(() => import(...), { ssr: false })` — it requires `window`.
+
+### Known build issues (pre-existing, not introduced in Phase 7.5)
+- `next build` fails: auth middleware imports Prisma into the edge runtime.
+- `npm run lint` fails: ESLint scans `src/generated/prisma`.
+- Both are pre-existing. Do not fix during Phase 8 unless they block it.
+
+### Verification state
+- `npx tsc --noEmit` — clean
+- `npx jest --runInBand` — 75 tests passing
+- `npm run test:e2e` — 3 Playwright smoke tests passing
+- Branch: `claude/catch-up-next-step-NadfA` — pushed, up to date
+
+### Next: Phase 8 — Interactive Chart
+Target files:
+- `src/app/(app)/chart/[symbol]/page.tsx` — replace placeholder with full chart page
+- `src/components/charts/CandlestickChart.tsx` — new component (use client + ssr:false)
+
+See PLAN.md Phase 8 for the full feature list (trade markers, position shading, annotations, auto-timeframe switch on zoom, TradingView-style crosshair, trade list sidebar).

@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   TrendingUp,
   TrendingDown,
+  Cpu,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,12 +35,21 @@ interface UploadSummary {
   assumptions: string[]
 }
 
+interface EnrichmentState {
+  status: 'idle' | 'starting' | 'running' | 'done' | 'error'
+  total: number
+  enriched: number
+  tradesEnriched: number
+  errorCount: number
+  message?: string
+}
+
 type Phase =
   | { kind: 'idle' }
   | { kind: 'analyzing' }
   | { kind: 'preview'; uploadId: string; accountId: string; summary: UploadSummary; file: File }
   | { kind: 'confirming'; uploadId: string; accountId: string; file: File; summary: UploadSummary }
-  | { kind: 'success'; newExecCount: number; totalTrades: number; openPositions: number; estimatedPnl: number }
+  | { kind: 'success'; newExecCount: number; totalTrades: number; openPositions: number; estimatedPnl: number; enrichment: EnrichmentState }
   | { kind: 'error'; message: string }
 
 // ─── helper components ────────────────────────────────────────────────
@@ -277,17 +287,74 @@ function PreviewCard({
 
 // ─── success card ─────────────────────────────────────────────────────
 
+function EnrichmentBanner({ enrichment }: { enrichment: EnrichmentState }) {
+  if (enrichment.status === 'idle') return null
+
+  if (enrichment.status === 'done') {
+    return (
+      <div className="flex items-center gap-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-3 text-sm">
+        <Cpu className="w-4 h-4 text-blue-400 shrink-0" />
+        <span className="text-blue-300">
+          Context enriched — {enrichment.tradesEnriched} trades updated with technical indicators.
+          {enrichment.errorCount > 0 && (
+            <span className="text-yellow-400 ml-1">({enrichment.errorCount} symbols skipped)</span>
+          )}
+        </span>
+      </div>
+    )
+  }
+
+  if (enrichment.status === 'error') {
+    return (
+      <div className="flex items-center gap-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-sm">
+        <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+        <span className="text-yellow-300">
+          {enrichment.message ?? 'Context enrichment failed. Trades are still imported.'}
+        </span>
+      </div>
+    )
+  }
+
+  const pct = enrichment.total > 0
+    ? Math.round((enrichment.enriched / enrichment.total) * 100)
+    : 0
+
+  return (
+    <div className="w-full space-y-2">
+      <div className="flex items-center gap-2.5 text-sm text-zinc-400">
+        <span className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin shrink-0" />
+        <span>
+          Enriching trade context…{' '}
+          {enrichment.total > 0
+            ? `${enrichment.enriched} / ${enrichment.total} symbols`
+            : 'starting'}
+        </span>
+      </div>
+      {enrichment.total > 0 && (
+        <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-blue-500 rounded-full transition-all duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SuccessCard({
   newExecCount,
   totalTrades,
   openPositions,
   estimatedPnl,
+  enrichment,
   onReset,
 }: {
   newExecCount: number
   totalTrades: number
   openPositions: number
   estimatedPnl: number
+  enrichment: EnrichmentState
   onReset: () => void
 }) {
   return (
@@ -316,6 +383,7 @@ function SuccessCard({
               }
             />
           </div>
+          <EnrichmentBanner enrichment={enrichment} />
           <Button
             onClick={onReset}
             variant="outline"
@@ -330,6 +398,15 @@ function SuccessCard({
 }
 
 // ─── main page ────────────────────────────────────────────────────────
+
+const IDLE_ENRICHMENT: EnrichmentState = {
+  status: 'idle',
+  total: 0,
+  enriched: 0,
+  tradesEnriched: 0,
+  errorCount: 0,
+  message: undefined,
+}
 
 export default function UploadPage() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
@@ -387,13 +464,101 @@ export default function UploadPage() {
       }
 
       toast.success('Trades imported successfully')
-      setPhase({
+
+      const successState: Phase = {
         kind: 'success',
         newExecCount: data.newExecCount,
         totalTrades: data.totalTrades,
         openPositions: data.openPositions,
         estimatedPnl: data.estimatedPnl,
-      })
+        enrichment: { status: 'starting', total: 0, enriched: 0, tradesEnriched: 0, errorCount: 0, message: undefined },
+      }
+      setPhase(successState)
+
+      // Trigger enrichment then poll for progress
+      try {
+        const triggerRes = await fetch('/api/enrich', { method: 'POST' })
+        if (!triggerRes.ok) {
+          setPhase((prev) =>
+            prev.kind === 'success'
+              ? {
+                  ...prev,
+                  enrichment: {
+                    ...prev.enrichment,
+                    status: 'error',
+                    message: 'Context enrichment could not be started. Trades are still imported.',
+                  },
+                }
+              : prev,
+          )
+          return
+        }
+
+        // Poll every 2 seconds until done
+        const poll = async () => {
+          try {
+            const statusRes = await fetch('/api/enrich')
+            if (!statusRes.ok) {
+              setPhase((prev) =>
+                prev.kind === 'success'
+                  ? {
+                      ...prev,
+                      enrichment: {
+                        ...prev.enrichment,
+                        status: 'error',
+                        message: `Enrichment status check failed (${statusRes.status}). Trades are still imported.`,
+                      },
+                    }
+                  : prev,
+              )
+              return
+            }
+            const statusData = (await statusRes.json()) as {
+              status: string
+              total: number
+              enriched: number
+              tradesEnriched: number
+              done: boolean
+              errorCount: number
+            }
+            setPhase((prev) => {
+              if (prev.kind !== 'success') return prev
+              const nextEnrichment: EnrichmentState = {
+                status: statusData.done ? 'done' : 'running',
+                total: statusData.total ?? 0,
+                enriched: statusData.enriched ?? 0,
+                tradesEnriched: statusData.tradesEnriched ?? 0,
+                errorCount: statusData.errorCount ?? 0,
+                message: undefined,
+              }
+              return { ...prev, enrichment: nextEnrichment }
+            })
+            if (!statusData.done) {
+              setTimeout(() => void poll(), 2000)
+            }
+          } catch (error) {
+            const message = error instanceof Error
+              ? error.message
+              : 'Unknown network error'
+            setPhase((prev) =>
+              prev.kind === 'success'
+                ? {
+                    ...prev,
+                    enrichment: {
+                      ...prev.enrichment,
+                      status: 'error',
+                      message: `Enrichment polling failed: ${message}. Trades are still imported.`,
+                    },
+                  }
+                : prev,
+            )
+          }
+        }
+
+        setTimeout(() => void poll(), 1500)
+      } catch {
+        // enrichment trigger failure is non-fatal — trades are already imported
+      }
     } catch {
       setPhase({ kind: 'error', message: 'Network error during import.' })
     }
@@ -456,6 +621,7 @@ export default function UploadPage() {
             totalTrades={phase.totalTrades}
             openPositions={phase.openPositions}
             estimatedPnl={phase.estimatedPnl}
+            enrichment={phase.enrichment}
             onReset={reset}
           />
         )}

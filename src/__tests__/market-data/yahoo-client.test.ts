@@ -43,6 +43,45 @@ describe("fetchYahooMarketData", () => {
     );
   });
 
+  it("falls back to daily candles when the intraday request is outside Yahoo's lookback window", async () => {
+    const chart = jest.fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>()
+      .mockResolvedValue({
+        quotes: [
+          {
+            date: new Date("2022-02-06T00:00:00.000Z"),
+            open: 60,
+            high: 63,
+            low: 59.5,
+            close: 62,
+            volume: 900000,
+          },
+        ],
+      });
+
+    const result = await fetchYahooMarketData({
+      symbol: "bros",
+      timeframe: "1h",
+      from: new Date("2022-02-05T00:00:00.000Z"),
+      to: new Date("2022-02-07T00:00:00.000Z"),
+      now: new Date("2026-03-14T00:00:00.000Z"),
+      client: { chart },
+    });
+
+    expect(result.symbol).toBe("BROS");
+    expect(result.requestedTimeframe).toBe("1h");
+    expect(result.effectiveTimeframe).toBe("1d");
+    expect(result.fallbackMessage).toBe(
+      "Intraday data not available for this date range. Showing daily.",
+    );
+    expect(chart).toHaveBeenCalledTimes(1);
+    expect(chart).toHaveBeenCalledWith(
+      "BROS",
+      expect.objectContaining({
+        interval: "1d",
+      }),
+    );
+  });
+
   it("uses intraday chart data when available and filters incomplete candles", async () => {
     const chart = jest.fn<ReturnType<YahooFinanceClient["chart"]>, Parameters<YahooFinanceClient["chart"]>>()
       .mockResolvedValue({
