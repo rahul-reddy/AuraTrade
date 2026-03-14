@@ -17,7 +17,7 @@
 | 5 | Upload flow (two-phase commit) | ✅ Done | Dropzone UI, parse preview, confirm writes to DB. Full trade rebuild on confirm. |
 | 6 | Trades list page | ✅ Done | Server-rendered trades page, API filters, CSV export, extracted table component, loading/error states |
 | 7 | Market data integration (yahoo-finance2) | ✅ Done | Yahoo client, cache layer, authenticated API route, symbol-page market data preview, loading/error states |
-| 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 22 tests in the enrichment suite; 74 total project tests after the review follow-up and market-data fallback fix. |
+| 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 23 tests in the enrichment suite; 75 total project tests after the review follow-up, market-data fallback fix, and full-span enrichment fix. |
 | 8 | Interactive chart (Lightweight Charts) | Not started | Hero feature |
 | 9 | Performance metrics engine (Kelly, formulas) | Not started | All formulas verified before implementation |
 | 10 | Dashboard | Not started | |
@@ -56,7 +56,8 @@
 | 2026-03-14 | Review follow-up for Phase 7.5: enrichment now resolves nearest earnings per trade entry date from a shared per-symbol earnings calendar fetch, and ATR-derived `initialRisk` also sets `riskSource = "ATR"` so the existing trades UI can show the planned estimated-risk indicator. |
 | 2026-03-14 | Review follow-up: `/upload` enrichment polling now surfaces non-OK / network failures as a terminal enrichment error instead of silently stalling, `startEnrichment()` queues a rerun when called during an active job, and `/api/enrich` route docs now match the real mounted GET path. |
 | 2026-03-14 | Market-data fallback fix: old intraday chart requests now fall back to daily candles when the requested window is outside Yahoo's intraday lookback, which restores the chart preview smoke test for historical trades. |
-| 2026-03-14 | Re-ran the full local verification after review fixes: `npx tsc --noEmit`, `npx jest --runInBand` (74 tests), and `npm run test:e2e` (3 Playwright smoke tests) all pass. |
+| 2026-03-14 | Enrichment history-span fix: symbol and SPY daily fetches now cover the earliest-to-latest trade range (plus warmup buffer) so older trades in multi-year accounts are not silently skipped during enrichment. |
+| 2026-03-14 | Re-ran local verification after the review fixes: `npx tsc --noEmit` and `npx jest --runInBand` (75 tests) pass. `npm run test:e2e` already passed earlier in the same review-follow-up pass and was not re-run after the final non-UI enrichment-span fix. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -86,7 +87,7 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 74 tests passing
+- `npx jest --runInBand` — 75 tests passing
 - `npm run test:e2e` — 3 Playwright smoke tests passing
 - Branch: `claude/catch-up-next-step-NadfA` — pushed, up to date
 

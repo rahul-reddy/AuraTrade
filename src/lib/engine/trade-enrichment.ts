@@ -1,7 +1,8 @@
 /**
  * Phase 7.5 — Trade Context Enrichment Pipeline
  *
- * For each round-trip trade, fetches 1 year of daily OHLCV for the traded symbol
+ * For each round-trip trade, fetches daily OHLCV across the full trade span for
+ * the traded symbol (plus warmup buffer)
  * and computes technical context (SMA/EMA/ATR/RSI/ADX/BBands, 52w range, gap %,
  * market regime via SPY, nearest earnings date) at the trade's entry date.
  *
@@ -59,7 +60,7 @@ export interface EnrichmentProgress {
 }
 
 export interface EnrichmentDataSource {
-  fetchDailyHistory(symbol: string, endDate: Date): Promise<DailyCandle[]>
+  fetchDailyHistory(symbol: string, startDate: Date, endDate: Date): Promise<DailyCandle[]>
   fetchEarningsDates(symbol: string): Promise<Date[]>
 }
 
@@ -94,16 +95,12 @@ const yahoo = new YahooFinance() as unknown as {
 // ─── helpers ──────────────────────────────────────────────────────────
 
 /**
- * Fetch 1 year of daily OHLCV ending at `endDate` for `symbol`.
+ * Fetch daily OHLCV from `startDate` through `endDate` for `symbol`.
  * Returns candles sorted ascending by date.
  */
-async function fetchDailyHistory(symbol: string, endDate: Date): Promise<DailyCandle[]> {
-  const from = new Date(endDate)
-  // 400 calendar days = ~280 trading days — enough for SMA200 + 52w range
-  from.setDate(from.getDate() - 400)
-
+async function fetchDailyHistory(symbol: string, startDate: Date, endDate: Date): Promise<DailyCandle[]> {
   const result = await yahoo.chart(symbol, {
-    period1: from,
+    period1: startDate,
     period2: endDate,
     interval: '1d',
     includePrePost: false,
@@ -335,13 +332,19 @@ async function runEnrichmentJob(
       (max, t) => (t.entryTime > max ? t.entryTime : max),
       trades[0].entryTime,
     )
+    const earliestEntry = trades.reduce(
+      (min, t) => (t.entryTime < min ? t.entryTime : min),
+      trades[0].entryTime,
+    )
     // Add a few days of buffer for the latest entry
     const spyEnd = new Date(latestEntry)
     spyEnd.setDate(spyEnd.getDate() + 5)
+    const spyStart = new Date(earliestEntry)
+    spyStart.setDate(spyStart.getDate() - 400)
 
     let spyCandles: DailyCandle[] = []
     try {
-      spyCandles = await dataSource.fetchDailyHistory('SPY', spyEnd)
+      spyCandles = await dataSource.fetchDailyHistory('SPY', spyStart, spyEnd)
     } catch {
       // SPY fetch failure → all regimes become CHOPPY (graceful degradation)
     }
@@ -355,12 +358,18 @@ async function runEnrichmentJob(
         (max, t) => (t.entryTime > max ? t.entryTime : max),
         symbolTrades[0].entryTime,
       )
+      const symbolEarliest = symbolTrades.reduce(
+        (min, t) => (t.entryTime < min ? t.entryTime : min),
+        symbolTrades[0].entryTime,
+      )
+      const fetchStart = new Date(symbolEarliest)
+      fetchStart.setDate(fetchStart.getDate() - 400)
       const fetchEnd = new Date(symbolLatest)
       fetchEnd.setDate(fetchEnd.getDate() + 5)
 
       let candles: DailyCandle[] = []
       try {
-        candles = await dataSource.fetchDailyHistory(symbol, fetchEnd)
+        candles = await dataSource.fetchDailyHistory(symbol, fetchStart, fetchEnd)
       } catch {
         progress.errorCount++
         progress.enriched++
