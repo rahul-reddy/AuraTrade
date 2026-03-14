@@ -60,6 +60,7 @@ const yahooFinance = new YahooFinance() as unknown as YahooFinanceClient;
 
 const INTRADAY_TIMEFRAMES = new Set<MarketDataTimeframe>(["1h", "15m", "5m", "1m"]);
 const MAX_INTRADAY_RANGE_DAYS = 60;
+const MAX_INTRADAY_LOOKBACK_DAYS = 730;
 
 export function isMarketDataTimeframe(value: string): value is MarketDataTimeframe {
   return SUPPORTED_TIMEFRAMES.includes(value as MarketDataTimeframe);
@@ -101,21 +102,28 @@ function shouldFallbackToDaily(
   timeframe: MarketDataTimeframe,
   from: Date,
   to: Date,
+  now: Date,
 ): boolean {
   if (!INTRADAY_TIMEFRAMES.has(timeframe)) {
     return false;
   }
 
   const rangeMs = Math.max(to.getTime() - from.getTime(), 0);
-  return rangeMs > MAX_INTRADAY_RANGE_DAYS * 24 * 60 * 60 * 1000;
+  if (rangeMs > MAX_INTRADAY_RANGE_DAYS * 24 * 60 * 60 * 1000) {
+    return true;
+  }
+
+  const lookbackMs = Math.max(now.getTime() - to.getTime(), 0);
+  return lookbackMs > MAX_INTRADAY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 }
 
 export function resolvePreferredMarketDataTimeframe(
   timeframe: MarketDataTimeframe,
   from: Date,
   to: Date,
+  now: Date = new Date(),
 ): MarketDataTimeframe {
-  return shouldFallbackToDaily(timeframe, from, to) ? "1d" : timeframe;
+  return shouldFallbackToDaily(timeframe, from, to, now) ? "1d" : timeframe;
 }
 
 function normalizeChartRows(rows: ChartQuoteRow[]): MarketDataCandle[] {
@@ -179,12 +187,13 @@ export async function fetchYahooMarketData(
   const { timeframe, from, to } = options;
   const symbol = normalizeMarketDataSymbol(options.symbol);
   const client = options.client ?? yahooFinance;
+  const now = options.now ?? new Date();
 
   if (from.getTime() > to.getTime()) {
     throw new Error("market_data_invalid_range");
   }
 
-  if (shouldFallbackToDaily(timeframe, from, to)) {
+  if (shouldFallbackToDaily(timeframe, from, to, now)) {
     return {
       symbol,
       requestedTimeframe: timeframe,

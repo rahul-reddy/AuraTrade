@@ -198,6 +198,7 @@ export async function getMarketData(
     options.timeframe,
     options.from,
     options.to,
+    now,
   );
 
   const cachedRows = await prismaClient.marketDataCache.findMany({
