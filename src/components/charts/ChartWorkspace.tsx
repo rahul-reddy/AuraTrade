@@ -108,7 +108,7 @@ export default function ChartWorkspace({
           <div className="flex items-center gap-2">
             <span className="text-white font-bold text-lg font-mono tracking-tight">{symbol}</span>
             <span className="text-zinc-600 text-xs">
-              {trades.length} round {trades.length === 1 ? "trip" : "trips"}
+              {closedTrades.length} round {closedTrades.length === 1 ? "trip" : "trips"}
             </span>
           </div>
         </div>

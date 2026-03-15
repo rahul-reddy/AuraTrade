@@ -29,7 +29,7 @@
 ## Decisions & Notes Log
 | Date | Note |
 |---|---|
-| 2026-03-12 | Commission formula corrected: `(Price - NetPrice) × Qty` for BOTH buys and sells. Verify against real TOS CSV. |
+| 2026-03-12 | ~~Commission formula: `(Price - NetPrice) × Qty`~~ — superseded by 2026-03-13 finding. Read from `Fees & Comm` column directly. |
 | 2026-03-12 | Kelly functions (`kellyFull`, `kellyHalf`, `kellyQuarter`) live in `metrics.ts` only — no separate `kelly.ts`. |
 | 2026-03-12 | `create-next-app` already done (initial commit exists). Phase 1 starts from dep install. |
 | 2026-03-12 | **Prisma v7 → v6 downgrade**: v7 TS-native client (`provider="prisma-client"`) fails with Turbopack (`node:path` error). Downgraded to Prisma v6.19.2 (`prisma-client-js` + Node-API library engine). No adapter needed. |

@@ -83,7 +83,6 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
       qty: ex.qty.toNumber(),
       price: ex.price.toNumber(),
       time: ex.execTime.toISOString(),
-      posEffect: ex.posEffect,
     })),
   }));
 
@@ -111,11 +110,14 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
 
   let initialCandles: Awaited<ReturnType<typeof getMarketData>>["candles"] = [];
   let initialFallbackMessage: string | null = null;
+  // #8 fix: use the server's effectiveTimeframe (may differ from "1d" due to fallback logic)
+  let initialEffectiveTimeframe: import("@/lib/market-data/yahoo-client").MarketDataTimeframe = "1d";
 
   try {
     const md = await getMarketData({ symbol, timeframe: "1d", from, to });
     initialCandles = md.candles;
     initialFallbackMessage = md.fallbackMessage;
+    initialEffectiveTimeframe = md.effectiveTimeframe;
   } catch {
     // No market data available: chart renders empty, client can retry via TF buttons
   }
@@ -138,7 +140,7 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
       accountId={account.id}
       trades={trades}
       initialCandles={initialCandles}
-      initialTimeframe="1d"
+      initialTimeframe={initialEffectiveTimeframe}
       initialFallbackMessage={initialFallbackMessage}
       initialFocusTradeId={focusTradeId}
       totalNetPnl={totalNetPnl}
