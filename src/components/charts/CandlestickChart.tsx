@@ -22,7 +22,6 @@ export interface ChartFill {
   qty: number;
   price: number;
   time: string; // ISO date
-  posEffect: string;
 }
 
 export interface ChartTrade {
@@ -67,6 +66,15 @@ const TIMEFRAME_LABELS: Record<MarketDataTimeframe, string> = {
   "1m": "1M",
 };
 
+/** Duration of one candle bar in milliseconds per timeframe. Used for volume lookup. */
+const TF_DURATION_MS: Record<MarketDataTimeframe, number> = {
+  "1d": 86_400_000,
+  "1h": 3_600_000,
+  "15m": 900_000,
+  "5m": 300_000,
+  "1m": 60_000,
+};
+
 function toUTCTimestamp(isoString: string): UTCTimestamp {
   return Math.floor(new Date(isoString).getTime() / 1000) as UTCTimestamp;
 }
@@ -80,22 +88,36 @@ function getPreferredTimeframe(visibleDays: number): MarketDataTimeframe {
   return "1d";
 }
 
-/** Build LWC markers from trade fills. Size scales with qty relative to maxQty. */
+/**
+ * Build LWC markers from trade fills. Size scales with qty relative to maxQty.
+ *
+ * Color semantics:
+ *   green  = opening a long position (BUY)
+ *   red    = opening a short position (SELL_SHORT)
+ *   amber  = closing any position (SELL, BUY_TO_COVER)
+ *
+ * This prevents BUY_TO_COVER from appearing identical to a long entry.
+ */
 function buildMarkers(trades: ChartTrade[], maxQty: number): SeriesMarker<Time>[] {
   const markers: SeriesMarker<Time>[] = [];
 
   for (const trade of trades) {
     for (const fill of trade.fills) {
-      const isBuy = fill.side === "BUY" || fill.side === "BUY_TO_COVER";
+      const isBuyAction = fill.side === "BUY" || fill.side === "BUY_TO_COVER";
+      const isOpen = fill.side === "BUY" || fill.side === "SELL_SHORT";
       const relSize = maxQty > 0 ? fill.qty / maxQty : 1;
       const markerSize = Math.max(1, Math.round(relSize * 3));
 
+      // Entry fills: green (long open) or red (short open)
+      // Exit fills: amber for both long-close and short-close
+      const color = isOpen ? (isBuyAction ? "#22c55e" : "#ef4444") : "#f59e0b";
+
       markers.push({
         time: toUTCTimestamp(fill.time),
-        position: isBuy ? "belowBar" : "aboveBar",
-        color: isBuy ? "#22c55e" : "#ef4444",
-        shape: isBuy ? "arrowUp" : "arrowDown",
-        text: `${isBuy ? "+" : "−"}${fill.qty}@${fill.price.toFixed(2)}`,
+        position: isBuyAction ? "belowBar" : "aboveBar",
+        color,
+        shape: isBuyAction ? "arrowUp" : "arrowDown",
+        text: `${isBuyAction ? "+" : "−"}${fill.qty}@${fill.price.toFixed(2)}`,
         size: markerSize,
       });
     }
@@ -140,10 +162,16 @@ export default function CandlestickChart({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [hoveredOhlcv, setHoveredOhlcv] = useState<OhlcPoint | null>(null);
 
-  const maxQty = useMemo(
-    () => Math.max(...trades.flatMap((t) => t.fills.map((f) => f.qty)), 1),
-    [trades],
-  );
+  // #3 fix: use reduce instead of spread to avoid call-stack overflow on large fill arrays
+  const maxQty = useMemo(() => {
+    let max = 1;
+    for (const t of trades) {
+      for (const f of t.fills) {
+        if (f.qty > max) max = f.qty;
+      }
+    }
+    return max;
+  }, [trades]);
 
   // ─── Fetch candles from API ─────────────────────────────────────────────────
 
@@ -203,13 +231,23 @@ export default function CandlestickChart({
 
       if (!result) {
         setFetchError("Failed to fetch market data");
+        // Still update TF state to reflect the user's explicit choice
+        currentTfRef.current = tf;
+        setTimeframe(tf);
         return;
       }
 
       if (!seriesRef.current || !chartRef.current) return;
 
       const { candles, effectiveTf, fallback } = result;
-      if (candles.length === 0) return;
+
+      // #2 fix: zero candles is a meaningful failure — surface it and update TF state
+      if (candles.length === 0) {
+        setFetchError("No data available for this timeframe");
+        currentTfRef.current = tf;
+        setTimeframe(tf);
+        return;
+      }
 
       candlesRef.current = candles;
       currentTfRef.current = effectiveTf;
@@ -311,8 +349,10 @@ export default function CandlestickChart({
         return;
       }
       const tMs = (param.time as number) * 1000;
+      // #9 fix: use per-timeframe tolerance instead of a hardcoded 60s
+      const tolerance = TF_DURATION_MS[currentTfRef.current] ?? 86_400_000;
       const candle = candlesRef.current.find(
-        (c) => Math.abs(new Date(c.time).getTime() - tMs) < 60_001,
+        (c) => Math.abs(new Date(c.time).getTime() - tMs) <= tolerance,
       );
       setHoveredOhlcv({
         time: new Date(tMs).toISOString(),
@@ -364,10 +404,39 @@ export default function CandlestickChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once — chart is controlled imperatively via refs
 
-  // ─── Zoom to focused trade ──────────────────────────────────────────────────
+  // ─── Zoom to focused trade (or zoom out to all-trades view on deselect) ─────
 
   useEffect(() => {
-    if (!chartRef.current || !focusTradeId) return;
+    if (!chartRef.current) return;
+
+    if (!focusTradeId) {
+      // #13 fix: deselecting a trade zooms out to the full symbol view
+      if (trades.length > 0) {
+        // Use reduce to avoid Math.min/max spread stack overflow on large arrays (#3)
+        const earliestMs = trades.reduce(
+          (min, t) => Math.min(min, new Date(t.entryTime).getTime()),
+          Infinity,
+        );
+        const latestMs = trades.reduce(
+          (max, t) => Math.max(max, t.exitTime ? new Date(t.exitTime).getTime() : Date.now()),
+          -Infinity,
+        );
+        const spanMs = Math.max(latestMs - earliestMs, 30 * 86_400_000);
+        const padMs = spanMs * 0.15;
+        try {
+          chartRef.current.timeScale().setVisibleRange({
+            from: toUTCTimestamp(new Date(earliestMs - padMs).toISOString()),
+            to: toUTCTimestamp(new Date(latestMs + padMs).toISOString()),
+          });
+        } catch {
+          chartRef.current.timeScale().fitContent();
+        }
+      } else {
+        chartRef.current.timeScale().fitContent();
+      }
+      return;
+    }
+
     const trade = trades.find((t) => t.id === focusTradeId);
     if (!trade) return;
 
@@ -402,6 +471,7 @@ export default function CandlestickChart({
       title: `Entry ${trade.direction}`,
     });
 
+    // #11 fix: use $ prefix and remove no-op /1 division
     const exitLine =
       trade.exitPrice != null
         ? seriesRef.current.createPriceLine({
@@ -410,7 +480,7 @@ export default function CandlestickChart({
             lineWidth: 1,
             lineStyle: 2,
             axisLabelVisible: true,
-            title: `Exit ${(trade.netPnl ?? 0) >= 0 ? "+" : ""}${((trade.netPnl ?? 0) / 1).toFixed(0)}`,
+            title: `Exit ${(trade.netPnl ?? 0) >= 0 ? "+$" : "-$"}${Math.abs(trade.netPnl ?? 0).toFixed(0)}`,
           })
         : null;
 
