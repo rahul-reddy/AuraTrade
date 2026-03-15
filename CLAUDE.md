@@ -64,6 +64,9 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/lib/market-data/yahoo-client.ts` | Market data fetching |
 | `src/lib/market-data/market-data-cache.ts` | Market data cache + staleness logic |
 | `src/app/api/market-data/route.ts` | Authenticated market data API |
+| `src/components/charts/CandlestickChart.tsx` | LWC v5 chart component (ssr:false) |
+| `src/components/charts/ChartWorkspace.tsx` | Chart page client wrapper (focusTradeId, sidebar) |
+| `src/lib/format.ts` | Shared display formatters — import from here, never duplicate locally |
 
 ## Docker DB Command (run when Docker Desktop is open)
 ```bash
