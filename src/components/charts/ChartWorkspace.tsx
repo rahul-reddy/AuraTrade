@@ -4,57 +4,48 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ChartTrade } from "@/components/charts/CandlestickChart";
 import type { MarketDataCandle, MarketDataTimeframe } from "@/lib/market-data/yahoo-client";
+import { formatCurrency, formatDuration, formatDate as formatDateShared } from "@/lib/format";
+
+// ─── Local thin wrapper: ISO string → shared formatDate (takes Date) ──────────
+
+function formatDate(isoString: string): string {
+  return formatDateShared(new Date(isoString));
+}
+
+// ─── Skeleton shown while the Lightweight Charts bundle loads ─────────────────
+
+const SKELETON_HEIGHTS = [40, 65, 55, 75, 45, 80, 60, 70, 50, 85, 65, 45, 70, 55, 80, 60];
+
+function ChartLoadingSkeleton() {
+  return (
+    <div className="flex-1 flex flex-col bg-zinc-950">
+      {/* Toolbar skeleton */}
+      <div className="h-10 border-b border-zinc-800 flex items-center gap-2 px-3 shrink-0">
+        {SKELETON_HEIGHTS.slice(0, 5).map((_, i) => (
+          <Skeleton key={i} className="h-6 w-10 bg-zinc-800" />
+        ))}
+      </div>
+      {/* Candlestick bar skeletons */}
+      <div className="flex-1 flex items-end gap-1 px-8 pb-8">
+        {SKELETON_HEIGHTS.map((h, i) => (
+          <Skeleton key={i} className="flex-1 bg-zinc-800 rounded-sm" style={{ height: `${h}%` }} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Load with ssr:false — Lightweight Charts requires window
 const DynamicCandlestickChart = dynamic(
   () => import("@/components/charts/CandlestickChart"),
   {
     ssr: false,
-    loading: () => (
-      <div className="flex-1 flex items-center justify-center bg-zinc-950">
-        <div className="text-center">
-          <div className="w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mx-auto mb-3" />
-          <p className="text-zinc-600 text-xs font-mono">Loading chart…</p>
-        </div>
-      </div>
-    ),
+    loading: () => <ChartLoadingSkeleton />,
   },
 );
-
-// ─── Helper formatters (duplicated locally to avoid server-only imports) ──────
-
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatPnl(pnl: number | null): string {
-  if (pnl == null) return "—";
-  const abs = Math.abs(pnl).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  if (pnl > 0) return `+$${abs}`;
-  if (pnl < 0) return `-$${abs}`;
-  return `$${abs}`;
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "—";
-  if (seconds === 0) return "intraday";
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return h > 0 ? `${d}d ${h}h` : `${d}d`;
-  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  if (m > 0) return `${m}m`;
-  return "< 1m";
-}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -118,7 +109,7 @@ export default function ChartWorkspace({
           <div className="text-center">
             <div className="text-zinc-600 text-[10px] uppercase tracking-wider mb-0.5">Net P&L</div>
             <div className={totalNetPnl >= 0 ? "text-green-400 font-semibold" : "text-red-400 font-semibold"}>
-              {formatPnl(totalNetPnl)}
+              {formatCurrency(totalNetPnl)}
             </div>
           </div>
           <div className="text-center">
@@ -202,7 +193,7 @@ export default function ChartWorkspace({
                                 : "text-zinc-500"
                           }`}
                         >
-                          {formatPnl(pnl)}
+                          {formatCurrency(pnl)}
                         </span>
                       )}
                     </div>
