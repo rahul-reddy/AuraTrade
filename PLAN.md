@@ -1,6 +1,6 @@
 # AuraTrade — Implementation Plan (v2)
 
-> Last updated: 2026-03-13
+> Last updated: 2026-03-15
 
 ## Context
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
@@ -296,26 +296,24 @@ Classifier in Phase 11 reads from this pre-computed TradeContext — no on-the-f
 
 ---
 
-## Phase 8: Interactive Chart (Hero Feature)
-Files: `src/app/(app)/chart/[symbol]/page.tsx`, `src/components/charts/CandlestickChart.tsx`
+## Phase 8: Interactive Chart (Hero Feature) ✅ COMPLETE
 
-**Critical:** `"use client"` + `dynamic(() => import(...), { ssr: false })` — Lightweight Charts requires window
+**Three-layer architecture** (critical — Lightweight Charts requires window):
+1. `src/app/(app)/chart/[symbol]/page.tsx` — server component: fetches trades + market data, serializes Decimal/Date to plain JS
+2. `src/components/charts/ChartWorkspace.tsx` — `"use client"` wrapper: manages `focusTradeId` state, two-column layout (256px sidebar + flex-1 chart), header stats
+3. `src/components/charts/CandlestickChart.tsx` — loaded via `dynamic(() => import(...), { ssr: false })`: actual LWC v5 chart
 
-**This is the hero feature — take the time to get it right.**
+**As-built features:**
+- Multi-timeframe toggle: 1D/1H/15M/5M/1M buttons — manual or auto-switch on zoom (debounced 700ms via `subscribeVisibleLogicalRangeChange`)
+- Auto-TF fallback: intraday requests outside Yahoo's ~60-day lookback fall back to daily with amber banner
+- **Trade fill markers** (color semantics confirmed after review): green arrowUp = long open (BUY), red arrowDown = short open (SELL_SHORT), amber = all closes (SELL, BUY_TO_COVER). Size scales with qty/maxQty via reduce (no spread).
+- OHLCV crosshair info panel: volume lookup uses per-timeframe tolerance (86_400_000ms for 1d)
+- Entry/exit price lines for focused trade: blue dashed entry, green/red dashed exit with `$`-prefixed P&L
+- Focus zoom: click sidebar trade → zoom to trade window with 50% padding; deselect → zoom out to full history
+- Responsive via ResizeObserver
+- Loading/error states: skeleton loaders (candlestick bar shapes), never spinners; fetch errors and zero-candle results surface inline
 
-Until Phase 8 is implemented, `/chart/[symbol]` may exist as a lightweight symbol-detail placeholder so trade links from Phase 6 never land on a 404.
-
-Features:
-- Multi-timeframe toggle: 1D, 1H, 15M, 5M, 1M (auto-fallback to daily if intraday unavailable)
-- **Auto-timeframe switch on zoom**: as user zooms from daily → intraday range, automatically switch to the appropriate timeframe and fetch data
-- Trade markers: green up-triangle (BUY), red down-triangle (SELL), size scales with qty relative to max position size
-- Hover tooltip: side, qty, price, time, running P&L at that point
-- Position shading: background tint entry→exit, green/red opacity proportional to position size
-- Annotations: text labels ("Open +500sh @$142.30", "Add +200sh @$140.10", "Trim -300sh @$145.00", "Close -400sh @$146.20")
-- **TradingView-style crosshair**: standard crosshair + info panel showing OHLCV + current position info on hover
-- Auto-navigate from trade list: click trade → chart frames that symbol + time range with padding
-- Trade list sidebar: all round-trips for the symbol, click to zoom to that trade's window
-- Smooth zoom: monthly view down to 1-minute candles
+**Shared formatters:** `src/lib/format.ts` — `formatCurrency`, `formatDuration`, `formatDate`. All display components import from here; no local duplicates.
 
 ---
 
@@ -479,7 +477,9 @@ Shows:
 | `src/lib/market-data/yahoo-client.ts` | 7 |
 | `src/lib/market-data/market-data-cache.ts` | 7 |
 | `src/app/api/market-data/route.ts` | 7 |
-| `src/components/charts/CandlestickChart.tsx` | 8 |
+| `src/components/charts/CandlestickChart.tsx` | 8 — LWC v5 chart (ssr:false) |
+| `src/components/charts/ChartWorkspace.tsx` | 8 — client state wrapper (focusTradeId, sidebar) |
+| `src/lib/format.ts` | shared display formatters (formatCurrency, formatDuration, formatDate) |
 | `src/components/layout/AppSidebar.tsx` | 13 |
 
 ---
