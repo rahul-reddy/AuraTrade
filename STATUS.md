@@ -58,38 +58,45 @@
 | 2026-03-14 | Market-data fallback fix: old intraday chart requests now fall back to daily candles when the requested window is outside Yahoo's intraday lookback, which restores the chart preview smoke test for historical trades. |
 | 2026-03-14 | Enrichment history-span fix: symbol and SPY daily fetches now cover the earliest-to-latest trade range (plus warmup buffer) so older trades in multi-year accounts are not silently skipped during enrichment. |
 | 2026-03-14 | Re-ran local verification after the review fixes: `npx tsc --noEmit` and `npx jest --runInBand` (75 tests) pass. `npm run test:e2e` already passed earlier in the same review-follow-up pass and was not re-run after the final non-UI enrichment-span fix. |
+| 2026-03-15 | Phase 8 peer-review pass (11 findings fixed on branch `fix/phase-8-review-findings`): `Math.max(...spread)` → `reduce`, SHORT trade marker color semantics (green=long open, red=short open, amber=all closes), crosshair volume tolerance made timeframe-aware, zero-candle/fetch-failure paths update TF state + show error, deselect-trade zooms out to full history, "round trips" count uses closedTrades, exit price line shows `$`-prefixed P&L, `initialTimeframe` uses server `effectiveTimeframe`, `posEffect` dropped from ChartFill wire format, conflicting commission note removed from STATUS.md, Playwright spec asserts TF switch via fallback message. |
+| 2026-03-15 | CodeRabbit follow-up (6 findings fixed, same PR): volume display handles 0/small volumes (`—` for 0, raw integer for <1000), `Math.min/max` spread in page.tsx date-range replaced with reduce, empty catch block now logs dev-mode warning, spinners in `loading.tsx` and `ChartWorkspace` dynamic fallback replaced with candlestick bar skeletons (CLAUDE.md rule: skeleton loaders not spinners), duplicate local formatters removed from ChartWorkspace — now imports `formatCurrency`/`formatDuration`/`formatDate` from `src/lib/format.ts`. |
+| 2026-03-15 | Branch workflow violation noted: Phase 8 was committed directly to `main` without Playwright pass or PR. Corrected in the review-fix PR. `gh` CLI path confirmed: `C:\Program Files\GitHub CLI\gh.exe` (not on bash PATH, use full path). |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
 - [x] ~~Provide sample TOS CSV export for parser validation~~ — received 2026-03-13
 
-## Where We Stopped (2026-03-14)
+## Where We Stopped (2026-03-15)
 
 ### What's complete
-- **Phases 1–7.5 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
+- **Phases 1–8 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
 - **Parser** (`src/lib/parser/tos-csv-parser.ts`): handles both TDA 2022 and Schwab 2026 CSV variants, auto-detects reverse-chronological order, daySeq dedup.
 - **Grouper** (`src/lib/engine/trade-grouper.ts`): FIFO VWAP grouper, pure function, no DB calls.
 - **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm.
 - **Trades list** (`/trades`, `/api/trades`): URL-synced filters, sortable columns, page-size, CSV export, loading/error states.
-- **Market data** (`src/lib/market-data/`): Yahoo daily + intraday, DB cache with staleness logic, `GET /api/market-data`, preview UI at `/chart/[symbol]` (placeholder for Phase 8).
+- **Market data** (`src/lib/market-data/`): Yahoo daily + intraday, DB cache with staleness logic, `GET /api/market-data`.
 - **Enrichment** (`src/lib/engine/trade-enrichment.ts`): SMA20/50/200, EMA20, ATR14, RSI14, ADX14, BBands, 52w range, gap %, SPY regime, earnings. `POST /api/enrich` triggers; `GET /api/enrich` polls. Upload page shows live progress bar.
+- **Interactive chart** (`/chart/[symbol]`): LWC v5 candlestick chart, fill markers, price lines, auto-TF zoom, OHLCV crosshair panel, trade sidebar with focus/zoom. Fully reviewed (peer-review + CodeRabbit).
 
-### Phase 8 — complete (2026-03-14)
+### Phase 8 — complete and reviewed (2026-03-15)
 
-**Files created:**
-- `src/components/charts/CandlestickChart.tsx` — LWC v5 client chart (loaded ssr:false). Candlestick series, trade fill markers (arrowUp/arrowDown, size scales with qty), OHLCV crosshair info panel, entry/exit price lines for focused trade, auto-timeframe switch on zoom (debounced 700ms), responsive via ResizeObserver. Timeframe buttons: 1D/1H/15M/5M/1M with manual + auto-switch.
-- `src/components/charts/ChartWorkspace.tsx` — client wrapper managing focusTradeId state. Two-column layout: 256px sidebar (trade list, click to zoom) + flex-1 chart. Header bar with symbol, round-trip count, Net P&L, win rate, closed/open counts.
-- `src/app/(app)/chart/[symbol]/page.tsx` — rewritten server component. Fetches trades with executions (fills) + classification. Computes date range spanning all trades + padding. Fetches initial daily candles via `getMarketData()`. Serializes Decimal/Date to plain JS for client.
-- `src/app/(app)/chart/[symbol]/loading.tsx` — updated skeleton to match two-column layout.
+**Files (final state after review):**
+- `src/components/charts/CandlestickChart.tsx` — LWC v5 chart (ssr:false). Marker color semantics: green=long open (BUY), red=short open (SELL_SHORT), amber=all closes. Volume crosshair uses per-TF tolerance. Deselect zooms out to full history via `reduce`-based min/max.
+- `src/components/charts/ChartWorkspace.tsx` — client state wrapper (focusTradeId). Imports shared formatters from `src/lib/format.ts`. Dynamic import fallback is a candlestick skeleton (not spinner).
+- `src/app/(app)/chart/[symbol]/page.tsx` — server component. Date-range uses reduce (no spread). Dev-mode warning on market data fetch failure.
+- `src/app/(app)/chart/[symbol]/loading.tsx` — candlestick bar skeleton (not spinner).
 
-**Known build issues (pre-existing, not introduced in Phase 8):**
+**Open PR:** `fix/phase-8-review-findings` — passes tsc, jest 75/75, playwright 3/3.
+
+**Known build issues (pre-existing):**
 - `next build` fails: auth middleware imports Prisma into the edge runtime.
 - `npm run lint` fails: ESLint scans `src/generated/prisma`.
 
 ### Verification state
 - `npx tsc --noEmit` — clean
 - `npx jest --runInBand` — 75 tests passing
-- Branch: `claude/catch-up-next-step-NadfA`
+- `npx playwright test` — 3/3 passing
+- Branch: `fix/phase-8-review-findings` (open PR, awaiting merge)
 
 ### Next: Phase 9 — Performance Metrics Engine
 Target file: `src/lib/engine/metrics.ts`
