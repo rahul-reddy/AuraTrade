@@ -92,10 +92,14 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
   let to: Date;
 
   if (rawTrades.length > 0) {
-    const entryTimes = rawTrades.map((t) => t.entryTime.getTime());
-    const exitTimes = rawTrades.map((t) => t.exitTime?.getTime() ?? Date.now());
-    const earliest = Math.min(...entryTimes);
-    const latest = Math.max(...exitTimes);
+    const earliest = rawTrades.reduce(
+      (min, t) => Math.min(min, t.entryTime.getTime()),
+      Infinity,
+    );
+    const latest = rawTrades.reduce(
+      (max, t) => Math.max(max, t.exitTime?.getTime() ?? Date.now()),
+      -Infinity,
+    );
     const spanMs = Math.max(latest - earliest, 30 * 86_400_000);
     const padMs = Math.max(spanMs * 0.3, 30 * 86_400_000);
     from = new Date(earliest - padMs);
@@ -118,8 +122,11 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
     initialCandles = md.candles;
     initialFallbackMessage = md.fallbackMessage;
     initialEffectiveTimeframe = md.effectiveTimeframe;
-  } catch {
+  } catch (err) {
     // No market data available: chart renders empty, client can retry via TF buttons
+    if (process.env.NODE_ENV === "development") {
+      console.warn(`[SymbolChartPage] Failed to fetch initial candles for ${symbol}:`, err);
+    }
   }
 
   // ── Header stats ──────────────────────────────────────────────────────────

@@ -531,9 +531,13 @@ export default function CandlestickChart({
               </span>
               <span className="text-zinc-700">·</span>
               <span className="text-zinc-500">
-                {hoveredOhlcv.volume >= 1_000_000
-                  ? `${(hoveredOhlcv.volume / 1_000_000).toFixed(2)}M`
-                  : `${(hoveredOhlcv.volume / 1_000).toFixed(0)}K`}
+                {hoveredOhlcv.volume === 0
+                  ? "—"
+                  : hoveredOhlcv.volume >= 1_000_000
+                    ? `${(hoveredOhlcv.volume / 1_000_000).toFixed(2)}M`
+                    : hoveredOhlcv.volume >= 1_000
+                      ? `${(hoveredOhlcv.volume / 1_000).toFixed(0)}K`
+                      : hoveredOhlcv.volume.toLocaleString()}
               </span>
             </>
           ) : (

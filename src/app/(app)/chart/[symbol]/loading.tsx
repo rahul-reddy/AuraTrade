@@ -44,12 +44,11 @@ export default function SymbolChartLoading() {
               <Skeleton key={i} className="h-6 w-10 bg-zinc-800" />
             ))}
           </div>
-          {/* Chart body skeleton */}
-          <div className="flex-1 bg-zinc-950 flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-6 h-6 rounded-full border-2 border-blue-500/40 border-t-blue-500 animate-spin mx-auto mb-3" />
-              <p className="text-zinc-700 text-xs font-mono">Loading chart data…</p>
-            </div>
+          {/* Chart body skeleton — candlestick bar shapes */}
+          <div className="flex-1 bg-zinc-950 flex items-end gap-1 px-8 pb-8">
+            {[40, 65, 55, 75, 45, 80, 60, 70, 50, 85, 65, 45, 70, 55, 80, 60].map((h, i) => (
+              <Skeleton key={i} className="flex-1 bg-zinc-800 rounded-sm" style={{ height: `${h}%` }} />
+            ))}
           </div>
         </div>
       </div>
