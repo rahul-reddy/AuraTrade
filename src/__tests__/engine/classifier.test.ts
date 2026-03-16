@@ -41,10 +41,18 @@ function makeContext(overrides: Partial<ClassifierContext> = {}): ClassifierCont
 
 function makeExecutions(overrides: Partial<ClassifierExecution>[] = []): ClassifierExecution[] {
   return [
-    { posEffect: 'OPEN', side: 'BUY', price: 100, qty: 100, daySeq: 0 },
+    {
+      posEffect: 'OPEN',
+      side: 'BUY',
+      execTime: new Date('2023-01-01T00:00:00.000Z'),
+      price: 100,
+      qty: 100,
+      daySeq: 0,
+    },
     ...overrides.map((override, index) => ({
       posEffect: 'OPEN' as const,
       side: 'BUY' as const,
+      execTime: new Date(`2023-01-0${index + 2}T00:00:00.000Z`),
       price: 100,
       qty: 50,
       daySeq: index + 1,
@@ -143,8 +151,8 @@ describe('calculateSetupScores', () => {
   it('recognizes average-down behavior from worsening opening fills', () => {
     const trade = makeTrade()
     const executions = makeExecutions([
-      { price: 98, qty: 50 },
-      { price: 95, qty: 50 },
+      { execTime: new Date('2023-01-02T00:00:00.000Z'), price: 98, qty: 50 },
+      { execTime: new Date('2023-01-03T00:00:00.000Z'), price: 95, qty: 50 },
     ])
 
     const scores = calculateSetupScores(trade, makeContext(), executions)
@@ -223,11 +231,110 @@ describe('classifyTrade', () => {
     })
 
     const result = classifyTrade(trade, context, [
-      { posEffect: 'OPEN', side: 'SELL_SHORT', price: 100, qty: 100, daySeq: 0 },
+      {
+        posEffect: 'OPEN',
+        side: 'SELL_SHORT',
+        execTime: new Date('2023-01-01T00:00:00.000Z'),
+        price: 100,
+        qty: 100,
+        daySeq: 0,
+      },
     ])
 
     expect(result.setup).toBe('OTHER')
     expect(result.secondarySetup).toBeNull()
     expect(result.confidence).toBeLessThanOrEqual(50)
+  })
+
+  it('uses exact threshold math for breakout ATR scoring', () => {
+    const trade = makeTrade({ entryPrice: 100 })
+    const baseContext = makeContext({
+      highN52w: 101,
+      rsi14: 64,
+      marketRegime: 'TRENDING_UP',
+    })
+
+    const atThreshold = calculateSetupScores(
+      trade,
+      { ...baseContext, atr14: 4 },
+      makeExecutions(),
+    )
+    const justAboveThreshold = calculateSetupScores(
+      trade,
+      { ...baseContext, atr14: 4.004 },
+      makeExecutions(),
+    )
+
+    expect(atThreshold.scores.BREAKOUT.score).toBe(100)
+    expect(justAboveThreshold.scores.BREAKOUT.score).toBe(85)
+  })
+
+  it('requires a score of at least 55 to avoid the OTHER fallback', () => {
+    const executions = makeExecutions()
+    const belowThreshold = classifyTrade(
+      makeTrade({ entryPrice: 90 }),
+      makeContext({
+        sma20: 92,
+        sma50: 91,
+        sma200: 90,
+        ema20: 91,
+        atr14: 4,
+        rsi14: 65,
+        highN52w: 130,
+        bbLower: 90.5,
+        marketRegime: 'CHOPPY',
+      }),
+      executions,
+    )
+    const atThreshold = classifyTrade(
+      makeTrade({ durationSeconds: 2 * 60 * 60 }),
+      makeContext({
+        sma20: 101,
+        sma50: 100,
+        sma200: 99,
+        ema20: 120,
+        atr14: 6,
+        rsi14: 70,
+        highN52w: 130,
+        bbUpper: 130,
+        bbLower: 80,
+        marketRegime: 'CHOPPY',
+      }),
+      executions,
+    )
+
+    expect(belowThreshold.setup).toBe('OTHER')
+    expect(belowThreshold.confidence).toBe(50)
+    expect(atThreshold.setup).toBe('SCALP')
+    expect(atThreshold.confidence).toBe(55)
+  })
+
+  it('only assigns a secondary setup when the second score is at least 55', () => {
+    const trade = makeTrade({ durationSeconds: 0, entryPrice: 100 })
+    const withSecondary = classifyTrade(
+      trade,
+      makeContext({
+        highN52w: 101,
+        atr14: 1.4,
+        rsi14: 63,
+        gapPercent: 0.03,
+        marketRegime: 'TRENDING_UP',
+      }),
+      makeExecutions(),
+    )
+    const withoutSecondary = classifyTrade(
+      trade,
+      makeContext({
+        highN52w: 101,
+        atr14: 1.4,
+        rsi14: 63,
+        gapPercent: 0.019,
+        marketRegime: 'TRENDING_UP',
+      }),
+      makeExecutions(),
+    )
+
+    expect(withSecondary.secondarySetup).toBe('GAP_PLAY')
+    expect(withoutSecondary.secondarySetup).toBeNull()
   })
 })

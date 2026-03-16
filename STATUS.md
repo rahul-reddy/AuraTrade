@@ -71,6 +71,7 @@
 | 2026-03-16 | Phase 11 complete on branch `feat/phase-11-classifier`: added `src/lib/engine/classifier.ts` with rule-based scoring for BREAKOUT / PULLBACK / MEAN_REVERSION / MOMENTUM / REVERSAL / AVERAGE_DOWN / SCALP / GAP_PLAY / EARNINGS_PLAY plus `OTHER` fallback, and wired `runEnrichment()` to upsert `TradeClassification` alongside `TradeContext`. |
 | 2026-03-16 | Classification limitation decision: because Schwab/TDA exports are date-only, same-day trades are tagged as `SCALP` candidates from `durationSeconds === 0` rather than precise intraday timing. Treat `SCALP` as a probabilistic style tag, especially when paired with a stronger primary setup. |
 | 2026-03-16 | Phase 11 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 107/107 passing after adding `src/__tests__/engine/classifier.test.ts`, and `npm run test:e2e` 4/4 passing. |
+| 2026-03-16 | PR review follow-up for Phase 11: classifier scoring now keeps raw unrounded inputs for threshold checks, AVERAGE_DOWN ordering uses `execTime` + `daySeq` instead of `daySeq` alone, `secondarySetup` is cleared with `null` when removed on reclassification, and boundary-score tests were added for the 55-point primary cutoff and exact score weights. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (110/110), and `npm run test:e2e` (4/4). |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -97,7 +98,7 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 107 tests passing
+- `npx jest --runInBand` — 110 tests passing
 - `npm run test:e2e` — 4/4 passing on 2026-03-16
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
 - Branch: `feat/phase-11-classifier`
