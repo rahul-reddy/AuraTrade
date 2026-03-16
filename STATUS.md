@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 11 — Trade Classification Engine**
+**Phase 12 — Edge Analysis & Style Profile**
 
 ## Phase Checklist
 
@@ -21,7 +21,7 @@
 | 8 | Interactive chart (Lightweight Charts) | ✅ Done | Candlestick chart, trade markers, price lines, auto-TF zoom, OHLCV panel, trade sidebar |
 | 9 | Performance metrics engine (Kelly, formulas) | ✅ Done | Pure `metrics.ts`, authenticated `GET /api/metrics`, 9 unit tests. Daily performance series is currently derived from closed-trade exit dates rather than `DailySnapshot` rows. |
 | 10 | Dashboard | ✅ Done | Query-backed dashboard UI, chart-ready `/api/dashboard`, loading/error states, sector breakdown, and explicit hour-of-day limitation for date-only Schwab exports. |
-| 11 | Trade classification engine | Not started | |
+| 11 | Trade classification engine | ✅ Done | Pure `classifier.ts`, classification upserts during enrichment, 11 unit tests. Same-day `SCALP` tagging is treated as a date-only export candidate, not literal intraday timestamp truth. |
 | 12 | Edge analysis & style profile | Not started | |
 | 13 | App shell & auth UI polish | Not started | |
 | 14 | Data integrity page + settings | Not started | |
@@ -68,6 +68,9 @@
 | 2026-03-16 | Phase 10 complete on branch `feat/phase-10-dashboard`: added `src/app/api/dashboard/route.ts` for chart-ready dashboard data, `src/lib/dashboard/dashboard-data.ts` for pure dashboard aggregates, TanStack Query provider wiring in `src/app/layout.tsx`, and `src/components/dashboard/DashboardClient.tsx` with summary cards, equity/drawdown, histogram + normal overlay, rolling win rate, day-of-week, heatmap, scatter charts, Kelly widget, and sector breakdown. |
 | 2026-03-16 | Dashboard limitation decision: hour-of-day analysis is intentionally surfaced as unavailable because the Schwab/TDA Transaction History export is date-only. We show the limitation explicitly instead of fabricating intraday buckets. |
 | 2026-03-16 | Phase 10 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 96/96 passing, `npm run test:e2e` 4/4 passing after adding `playwright/dashboard.spec.ts` and updating the auth-nav smoke test for the new no-account dashboard empty state. |
+| 2026-03-16 | Phase 11 complete on branch `feat/phase-11-classifier`: added `src/lib/engine/classifier.ts` with rule-based scoring for BREAKOUT / PULLBACK / MEAN_REVERSION / MOMENTUM / REVERSAL / AVERAGE_DOWN / SCALP / GAP_PLAY / EARNINGS_PLAY plus `OTHER` fallback, and wired `runEnrichment()` to upsert `TradeClassification` alongside `TradeContext`. |
+| 2026-03-16 | Classification limitation decision: because Schwab/TDA exports are date-only, same-day trades are tagged as `SCALP` candidates from `durationSeconds === 0` rather than precise intraday timing. Treat `SCALP` as a probabilistic style tag, especially when paired with a stronger primary setup. |
+| 2026-03-16 | Phase 11 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 107/107 passing after adding `src/__tests__/engine/classifier.test.ts`, and `npm run test:e2e` 4/4 passing. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -76,7 +79,7 @@
 ## Where We Stopped (2026-03-16)
 
 ### What's complete
-- **Phases 1–10 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
+- **Phases 1–11 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
 - **Parser** (`src/lib/parser/tos-csv-parser.ts`): handles both TDA 2022 and Schwab 2026 CSV variants, auto-detects reverse-chronological order, daySeq dedup.
 - **Grouper** (`src/lib/engine/trade-grouper.ts`): FIFO VWAP grouper, pure function, no DB calls.
 - **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm.
@@ -86,6 +89,7 @@
 - **Interactive chart** (`/chart/[symbol]`): LWC v5 candlestick chart, fill markers, price lines, auto-TF zoom, OHLCV crosshair panel, trade sidebar with focus/zoom. Fully reviewed (peer-review + CodeRabbit).
 - **Performance metrics** (`src/lib/engine/metrics.ts`, `/api/metrics`): pure metrics engine with Kelly/full-half-quarter, profit factor, expectancy, Sharpe approximation, max drawdown, and close-date daily P&L aggregation for dashboard-ready time series.
 - **Dashboard** (`/dashboard`, `/api/dashboard`): TanStack Query-backed analytics page with summary cards, equity/drawdown, distribution + normal overlay, rolling win rate, day-of-week, monthly heatmap, Kelly widget, size/duration scatterplots, sector breakdown, and explicit hour-of-day unavailability for date-only source data.
+- **Trade classification** (`src/lib/engine/classifier.ts`): rule-based setup engine assigns primary/secondary tags plus confidence and score breakdown during enrichment. Existing trades UI and chart sidebar now show real setup labels once enrichment has run.
 
 **Known build issues (pre-existing):**
 - `next build` fails: auth middleware imports Prisma into the edge runtime.
@@ -93,15 +97,16 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 96 tests passing
+- `npx jest --runInBand` — 107 tests passing
 - `npm run test:e2e` — 4/4 passing on 2026-03-16
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
-- Branch: `feat/phase-10-dashboard`
+- Branch: `feat/phase-11-classifier`
 
-### Next: Phase 11 — Trade Classification Engine
-Target file: `src/lib/engine/classifier.ts`
+### Next: Phase 12 — Edge Analysis & Style Profile
+Target file: `src/lib/engine/edge-analysis.ts`
 
-Available inputs after Phase 10:
-- `TradeContext` enrichment is already in place from Phase 7.5
-- `metrics.ts` and `/api/dashboard` now expose stable performance context for downstream classification summaries
-- Dashboard explicitly documents the date-only broker limitation, so classifier signals should continue to avoid intraday-time assumptions unless a richer data source is added
+Available inputs after Phase 11:
+- `TradeContext` enrichment is already in place from Phase 7.5 and now refreshes `TradeClassification` in the same pass
+- `metrics.ts` and `/api/dashboard` expose stable realized-performance context for downstream edge summaries
+- Trades and chart views already surface the primary setup tag, so Phase 12 can aggregate existing classifications rather than inventing a parallel setup taxonomy
+- Dashboard still documents the date-only broker limitation, so any future time-of-day edge analysis must keep treating `SCALP` as an inferred candidate label unless richer source data is added

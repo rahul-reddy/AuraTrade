@@ -395,6 +395,10 @@ Rule-based scoring (0–100 per category), reads from pre-computed TradeContext 
 
 Assign top 1–2 categories per trade, store with confidence score.
 
+Implementation note:
+- Because the Schwab/TDA export is date-only, `SCALP` is inferred as a same-day / very-short-hold candidate from `durationSeconds`, not from literal intraday timestamps. Treat it as a probabilistic style tag rather than a precise sub-hour measurement.
+- Classification is populated during the existing enrichment pass so `TradeContext` and `TradeClassification` stay in sync.
+
 ---
 
 ## Phase 12: Edge Analysis & Style Profile
