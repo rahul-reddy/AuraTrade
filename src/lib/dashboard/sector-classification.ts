@@ -38,6 +38,8 @@ export async function getSectorInfo(symbol: string): Promise<SectorInfo> {
     sectorCache.set(normalized, { data, fetchedAt: Date.now() })
     return data
   } catch {
-    return { sector: null, industry: null }
+    const data = { sector: null, industry: null }
+    sectorCache.set(normalized, { data, fetchedAt: Date.now() })
+    return data
   }
 }

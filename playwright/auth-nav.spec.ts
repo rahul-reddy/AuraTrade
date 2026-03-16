@@ -33,7 +33,7 @@ test("user can register, sign in, and navigate core authenticated pages", async 
   await expect(page.getByRole("heading", { name: "Import Trades" })).toBeVisible();
 
   await page.goto("/trades");
-  await expect(page).toHaveURL(/\/trades/);
+  await expect(page).toHaveURL(/\/trades$/);
   await expect(page.getByText("No trading account found.")).toBeVisible();
 
   await page.goto("/dashboard");

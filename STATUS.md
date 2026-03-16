@@ -76,7 +76,7 @@
 ## Where We Stopped (2026-03-16)
 
 ### What's complete
-- **Phases 1–8 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
+- **Phases 1–10 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
 - **Parser** (`src/lib/parser/tos-csv-parser.ts`): handles both TDA 2022 and Schwab 2026 CSV variants, auto-detects reverse-chronological order, daySeq dedup.
 - **Grouper** (`src/lib/engine/trade-grouper.ts`): FIFO VWAP grouper, pure function, no DB calls.
 - **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm.

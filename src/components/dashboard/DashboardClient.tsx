@@ -11,6 +11,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -78,6 +79,7 @@ function ChartTooltip({
   active,
   payload,
   label,
+  formatValue,
 }: {
   active?: boolean
   payload?: Array<{
@@ -88,6 +90,16 @@ function ChartTooltip({
     payload?: Record<string, unknown>
   }>
   label?: string | number
+  formatValue?: (
+    value: number | string,
+    entry: {
+      color?: string
+      dataKey?: string
+      name?: string
+      value?: number | string
+      payload?: Record<string, unknown>
+    },
+  ) => string
 }) {
   if (!active || !payload || payload.length === 0) return null
 
@@ -103,7 +115,13 @@ function ChartTooltip({
             />
             <span className="text-zinc-400">{entry.name ?? entry.dataKey}</span>
             <span className="font-mono text-zinc-100">
-              {typeof entry.value === 'number' ? formatCurrency(entry.value) : String(entry.value)}
+              {entry.value != null
+                ? formatValue
+                  ? formatValue(entry.value, entry)
+                  : typeof entry.value === 'number'
+                    ? formatCurrency(entry.value)
+                    : String(entry.value)
+                : '—'}
             </span>
           </div>
         ))}
@@ -285,14 +303,17 @@ export default function DashboardClient({
   }
 
   const equityCurve = (() => {
-    let peak = 0
+    let peakEquity = data.account.startingBalance
     return data.dailySeries.map((point) => {
-      peak = Math.max(peak, point.cumulativePnl)
+      const equity = data.account.startingBalance + point.cumulativePnl
+      peakEquity = Math.max(peakEquity, equity)
+      const drawdown = peakEquity - equity
+
       return {
         date: point.date,
         cumulativePnl: point.cumulativePnl,
-        drawdown: peak - point.cumulativePnl,
-        drawdownPct: peak > 0 ? ((peak - point.cumulativePnl) / peak) * 100 : 0,
+        drawdown,
+        drawdownPct: peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0,
       }
     })
   })()
@@ -498,7 +519,17 @@ export default function DashboardClient({
                         tick={{ fill: '#a1a1aa', fontSize: 12 }}
                         tickFormatter={(value: number) => `${value.toFixed(0)}%`}
                       />
-                      <Tooltip content={<ChartTooltip />} />
+                      <Tooltip
+                        content={
+                          <ChartTooltip
+                            formatValue={(value, entry) =>
+                              entry.dataKey === 'drawdownPct'
+                                ? `${Number(value).toFixed(2)}%`
+                                : formatCurrency(Number(value))
+                            }
+                          />
+                        }
+                      />
                       <Legend />
                       <ReferenceLine y={0} yAxisId="left" stroke="#52525b" />
                       <Area
@@ -559,11 +590,23 @@ export default function DashboardClient({
               >
                 <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={insights.pnlDistribution}>
+                    <ComposedChart data={insights.pnlDistribution}>
                       <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="midpoint" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
                       <YAxis tick={{ fill: '#a1a1aa', fontSize: 12 }} />
-                      <Tooltip content={<ChartTooltip />} />
+                      <Tooltip
+                        content={
+                          <ChartTooltip
+                            formatValue={(value) =>
+                              typeof value === 'number'
+                                ? Number.isInteger(value)
+                                  ? value.toLocaleString('en-US')
+                                  : value.toFixed(2)
+                                : String(value)
+                            }
+                          />
+                        }
+                      />
                       <Legend />
                       <Bar dataKey="count" name="Trades" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                       <Line
@@ -574,7 +617,7 @@ export default function DashboardClient({
                         strokeWidth={2}
                         dot={false}
                       />
-                    </BarChart>
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </Panel>
@@ -591,7 +634,13 @@ export default function DashboardClient({
                       <XAxis dataKey="tradeNumber" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
                       <YAxis tick={{ fill: '#a1a1aa', fontSize: 12 }} domain={[0, 100]} />
                       <Tooltip
-                        content={<ChartTooltip />}
+                        content={
+                          <ChartTooltip
+                            formatValue={(value) =>
+                              typeof value === 'number' ? `${value.toFixed(1)}%` : String(value)
+                            }
+                          />
+                        }
                         labelFormatter={(label) => `Trade #${label}`}
                       />
                       <ReferenceLine y={50} stroke="#52525b" strokeDasharray="4 4" />
@@ -619,7 +668,19 @@ export default function DashboardClient({
                       <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="day" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
                       <YAxis tick={{ fill: '#a1a1aa', fontSize: 12 }} />
-                      <Tooltip content={<ChartTooltip />} />
+                      <Tooltip
+                        content={
+                          <ChartTooltip
+                            formatValue={(value, entry) =>
+                              entry.dataKey === 'pnl'
+                                ? formatCurrency(Number(value))
+                                : typeof value === 'number'
+                                  ? value.toLocaleString('en-US')
+                                  : String(value)
+                            }
+                          />
+                        }
+                      />
                       <Bar dataKey="pnl" name="P&L" radius={[6, 6, 0, 0]}>
                         {insights.dayOfWeek.map((entry) => (
                           <Cell key={entry.day} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />
@@ -646,7 +707,19 @@ export default function DashboardClient({
                         tick={{ fill: '#a1a1aa', fontSize: 12 }}
                         width={100}
                       />
-                      <Tooltip content={<ChartTooltip />} />
+                      <Tooltip
+                        content={
+                          <ChartTooltip
+                            formatValue={(value, entry) =>
+                              entry.dataKey === 'pnl'
+                                ? formatCurrency(Number(value))
+                                : typeof value === 'number'
+                                  ? value.toLocaleString('en-US')
+                                  : String(value)
+                            }
+                          />
+                        }
+                      />
                       <Bar dataKey="pnl" name="P&L" radius={[0, 6, 6, 0]}>
                         {insights.sectorBreakdown.slice(0, 6).map((entry) => (
                           <Cell key={entry.sector} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />
@@ -710,7 +783,21 @@ export default function DashboardClient({
                         tick={{ fill: '#a1a1aa', fontSize: 12 }}
                         tickFormatter={(value: number) => formatCurrency(value)}
                       />
-                      <Tooltip content={<ChartTooltip />} cursor={{ strokeDasharray: '4 4' }} />
+                      <Tooltip
+                        content={
+                          <ChartTooltip
+                            formatValue={(value, entry) => {
+                              if (entry.dataKey === 'x') {
+                                return insights.avgPositionSizeFraction != null
+                                  ? `${Number(value).toFixed(2)}%`
+                                  : formatCurrency(Number(value), { signed: false })
+                              }
+                              return formatCurrency(Number(value))
+                            }}
+                          />
+                        }
+                        cursor={{ strokeDasharray: '4 4' }}
+                      />
                       <ReferenceLine y={0} stroke="#52525b" />
                       <Scatter name="Trades" data={insights.sizeScatter} fill="#3b82f6" />
                     </ScatterChart>
@@ -741,7 +828,18 @@ export default function DashboardClient({
                         tick={{ fill: '#a1a1aa', fontSize: 12 }}
                         tickFormatter={(value: number) => formatCurrency(value)}
                       />
-                      <Tooltip content={<ChartTooltip />} cursor={{ strokeDasharray: '4 4' }} />
+                      <Tooltip
+                        content={
+                          <ChartTooltip
+                            formatValue={(value, entry) =>
+                              entry.dataKey === 'x'
+                                ? formatDuration(Number(value))
+                                : formatCurrency(Number(value))
+                            }
+                          />
+                        }
+                        cursor={{ strokeDasharray: '4 4' }}
+                      />
                       <ReferenceLine y={0} stroke="#52525b" />
                       <Scatter name="Trades" data={insights.durationScatter} fill="#22c55e" />
                     </ScatterChart>
