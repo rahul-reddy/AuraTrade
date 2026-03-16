@@ -264,6 +264,7 @@ describe('runEnrichment', () => {
     })
 
     const tradeContextUpsert = jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(undefined)
+    const tradeClassificationUpsert = jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(undefined)
     const roundTripTradeUpdate = jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(undefined)
 
     const db = {
@@ -272,20 +273,35 @@ describe('runEnrichment', () => {
           {
             id: 'trade-1',
             symbol: 'AAPL',
+            direction: 'LONG',
+            entryPrice: { toNumber: () => 100 },
+            totalQty: { toNumber: () => 100 },
             entryTime: new Date('2023-03-10T00:00:00.000Z'),
+            durationSeconds: 0,
+            isOpen: false,
             initialRisk: null,
+            executions: [{ posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 100 }, qty: { toNumber: () => 100 }, daySeq: 0 }],
           },
           {
             id: 'trade-2',
             symbol: 'AAPL',
+            direction: 'LONG',
+            entryPrice: { toNumber: () => 120 },
+            totalQty: { toNumber: () => 50 },
             entryTime: new Date('2023-09-01T00:00:00.000Z'),
+            durationSeconds: 2 * 24 * 60 * 60,
+            isOpen: false,
             initialRisk: 2.5,
+            executions: [{ posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 120 }, qty: { toNumber: () => 50 }, daySeq: 0 }],
           },
         ]),
         update: roundTripTradeUpdate,
       },
       tradeContext: {
         upsert: tradeContextUpsert,
+      },
+      tradeClassification: {
+        upsert: tradeClassificationUpsert,
       },
     } as unknown as PrismaClient
 
@@ -302,6 +318,7 @@ describe('runEnrichment', () => {
     expect(progress.done).toBe(true)
     expect(progress.tradesEnriched).toBe(2)
     expect(tradeContextUpsert).toHaveBeenCalledTimes(2)
+    expect(tradeClassificationUpsert).toHaveBeenCalledTimes(2)
 
     const firstUpsertArg = tradeContextUpsert.mock.calls[0][0] as {
       update: { daysToEarnings?: number; nearestEarningsDate?: Date }
@@ -351,19 +368,34 @@ describe('runEnrichment', () => {
           {
             id: 'trade-old',
             symbol: 'AAPL',
+            direction: 'LONG',
+            entryPrice: { toNumber: () => 100 },
+            totalQty: { toNumber: () => 100 },
             entryTime: new Date('2020-10-23T00:00:00.000Z'),
+            durationSeconds: 0,
+            isOpen: false,
             initialRisk: null,
+            executions: [{ posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 100 }, qty: { toNumber: () => 100 }, daySeq: 0 }],
           },
           {
             id: 'trade-new',
             symbol: 'AAPL',
+            direction: 'LONG',
+            entryPrice: { toNumber: () => 130 },
+            totalQty: { toNumber: () => 100 },
             entryTime: new Date('2022-09-01T00:00:00.000Z'),
+            durationSeconds: 0,
+            isOpen: false,
             initialRisk: null,
+            executions: [{ posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 130 }, qty: { toNumber: () => 100 }, daySeq: 0 }],
           },
         ]),
         update: jest.fn().mockResolvedValue(undefined),
       },
       tradeContext: {
+        upsert: jest.fn().mockResolvedValue(undefined),
+      },
+      tradeClassification: {
         upsert: jest.fn().mockResolvedValue(undefined),
       },
     } as unknown as PrismaClient
@@ -400,6 +432,9 @@ describe('runEnrichment', () => {
         update: jest.fn().mockResolvedValue(undefined),
       },
       tradeContext: {
+        upsert: jest.fn().mockResolvedValue(undefined),
+      },
+      tradeClassification: {
         upsert: jest.fn().mockResolvedValue(undefined),
       },
     } as unknown as PrismaClient

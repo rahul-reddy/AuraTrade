@@ -16,7 +16,13 @@
 import YahooFinance from 'yahoo-finance2'
 import { SMA, EMA, ATR, RSI, ADX, BollingerBands } from 'technicalindicators'
 import { prisma as defaultPrisma } from '@/lib/prisma'
-import type { PrismaClient } from '@/generated/prisma'
+import type { Prisma, PrismaClient } from '@/generated/prisma'
+import {
+  classifyTrade,
+  type ClassifierContext,
+  type ClassifierExecution,
+  type ClassifierTrade,
+} from '@/lib/engine/classifier'
 
 // ─── types ────────────────────────────────────────────────────────────
 
@@ -307,7 +313,27 @@ async function runEnrichmentJob(
     // open positions, but open trades may have incomplete data.
     const trades = await db.roundTripTrade.findMany({
       where: { accountId },
-      select: { id: true, symbol: true, entryTime: true, initialRisk: true },
+      select: {
+        id: true,
+        symbol: true,
+        direction: true,
+        entryPrice: true,
+        totalQty: true,
+        entryTime: true,
+        durationSeconds: true,
+        isOpen: true,
+        initialRisk: true,
+        executions: {
+          select: {
+            posEffect: true,
+            side: true,
+            price: true,
+            qty: true,
+            daySeq: true,
+          },
+          orderBy: { daySeq: 'asc' },
+        },
+      },
     })
 
     if (trades.length === 0) {
@@ -430,6 +456,62 @@ async function runEnrichmentJob(
             nearestEarningsDate: earnings.nearestEarningsDate ?? undefined,
             daysToEarnings: earnings.daysToEarnings ?? undefined,
             marketRegime: regime,
+          },
+        })
+
+        const classificationTrade: ClassifierTrade = {
+          id: trade.id,
+          symbol: trade.symbol,
+          direction: trade.direction,
+          entryPrice: trade.entryPrice.toNumber(),
+          totalQty: trade.totalQty.toNumber(),
+          durationSeconds: trade.durationSeconds,
+          isOpen: trade.isOpen,
+        }
+        const classificationContext: ClassifierContext = {
+          sma20: indicators.sma20,
+          sma50: indicators.sma50,
+          sma200: indicators.sma200,
+          ema20: indicators.ema20,
+          atr14: indicators.atr14,
+          rsi14: indicators.rsi14,
+          adx14: indicators.adx14,
+          bbUpper: indicators.bbUpper,
+          bbLower: indicators.bbLower,
+          highN52w: indicators.highN52w,
+          lowN52w: indicators.lowN52w,
+          gapPercent: indicators.gapPercent,
+          daysToEarnings: earnings.daysToEarnings,
+          marketRegime: regime,
+        }
+        const classificationExecutions: ClassifierExecution[] = trade.executions.map((execution) => ({
+          posEffect: execution.posEffect,
+          side: execution.side,
+          price: execution.price.toNumber(),
+          qty: execution.qty.toNumber(),
+          daySeq: execution.daySeq,
+        }))
+        const classification = classifyTrade(
+          classificationTrade,
+          classificationContext,
+          classificationExecutions,
+        )
+
+        await db.tradeClassification.upsert({
+          where: { tradeId: trade.id },
+          update: {
+            setup: classification.setup,
+            confidence: classification.confidence,
+            secondarySetup: classification.secondarySetup ?? undefined,
+            scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
+            classifiedAt: new Date(),
+          },
+          create: {
+            tradeId: trade.id,
+            setup: classification.setup,
+            confidence: classification.confidence,
+            secondarySetup: classification.secondarySetup ?? undefined,
+            scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
           },
         })
 
