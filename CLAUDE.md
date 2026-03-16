@@ -60,6 +60,8 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/lib/engine/trade-grouper.ts` | FIFO trade grouping |
 | `src/components/trades/TradesTable.tsx` | Trades list table + pagination UI |
 | `src/lib/engine/metrics.ts` | All metrics + Kelly (Phase 9) |
+| `src/app/api/dashboard/route.ts` | Dashboard data API (Phase 10) |
+| `src/components/dashboard/DashboardClient.tsx` | Dashboard charts + summary UI |
 | `src/lib/engine/classifier.ts` | Trade classification (Phase 11) |
 | `src/lib/market-data/yahoo-client.ts` | Market data fetching |
 | `src/lib/market-data/market-data-cache.ts` | Market data cache + staleness logic |
