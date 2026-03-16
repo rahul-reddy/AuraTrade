@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 9 — Performance Metrics Engine**
+**Phase 10 — Dashboard**
 
 ## Phase Checklist
 
@@ -19,7 +19,7 @@
 | 7 | Market data integration (yahoo-finance2) | ✅ Done | Yahoo client, cache layer, authenticated API route, symbol-page market data preview, loading/error states |
 | 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 23 tests in the enrichment suite; 75 total project tests after the review follow-up, market-data fallback fix, and full-span enrichment fix. |
 | 8 | Interactive chart (Lightweight Charts) | ✅ Done | Candlestick chart, trade markers, price lines, auto-TF zoom, OHLCV panel, trade sidebar |
-| 9 | Performance metrics engine (Kelly, formulas) | Not started | All formulas verified before implementation |
+| 9 | Performance metrics engine (Kelly, formulas) | ✅ Done | Pure `metrics.ts`, authenticated `GET /api/metrics`, 9 unit tests. Daily performance series is currently derived from closed-trade exit dates rather than `DailySnapshot` rows. |
 | 10 | Dashboard | Not started | |
 | 11 | Trade classification engine | Not started | |
 | 12 | Edge analysis & style profile | Not started | |
@@ -61,12 +61,14 @@
 | 2026-03-15 | Phase 8 peer-review pass (11 findings fixed on branch `fix/phase-8-review-findings`): `Math.max(...spread)` → `reduce`, SHORT trade marker color semantics (green=long open, red=short open, amber=all closes), crosshair volume tolerance made timeframe-aware, zero-candle/fetch-failure paths update TF state + show error, deselect-trade zooms out to full history, "round trips" count uses closedTrades, exit price line shows `$`-prefixed P&L, `initialTimeframe` uses server `effectiveTimeframe`, `posEffect` dropped from ChartFill wire format, conflicting commission note removed from STATUS.md, Playwright spec asserts TF switch via fallback message. |
 | 2026-03-15 | CodeRabbit follow-up (6 findings fixed, same PR): volume display handles 0/small volumes (`—` for 0, raw integer for <1000), `Math.min/max` spread in page.tsx date-range replaced with reduce, empty catch block now logs dev-mode warning, spinners in `loading.tsx` and `ChartWorkspace` dynamic fallback replaced with candlestick bar skeletons (CLAUDE.md rule: skeleton loaders not spinners), duplicate local formatters removed from ChartWorkspace — now imports `formatCurrency`/`formatDuration`/`formatDate` from `src/lib/format.ts`. |
 | 2026-03-15 | Branch workflow violation noted: Phase 8 was committed directly to `main` without Playwright pass or PR. Corrected in the review-fix PR. `gh` CLI path confirmed: `C:\Program Files\GitHub CLI\gh.exe` (not on bash PATH, use full path). |
+| 2026-03-16 | Phase 9 complete on branch `feat/phase-9-metrics-engine`: added `src/lib/engine/metrics.ts` with pure win-rate / PF / expectancy / Sharpe / max-drawdown / Kelly helpers plus `buildDailyPerformanceSeries()` and `calculatePerformanceMetrics()`. Added authenticated `GET /api/metrics` scoped by user/account and filtered by `exitTime` for realized-performance windows. |
+| 2026-03-16 | Phase 9 verification: `npx tsc --noEmit` clean, targeted metrics suite 9/9 passing, full `npx jest --runInBand` now 84/84 passing. Playwright was not re-run because this pass only added a backend route + pure calculation layer. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
 - [x] ~~Provide sample TOS CSV export for parser validation~~ — received 2026-03-13
 
-## Where We Stopped (2026-03-15)
+## Where We Stopped (2026-03-16)
 
 ### What's complete
 - **Phases 1–8 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
@@ -77,6 +79,7 @@
 - **Market data** (`src/lib/market-data/`): Yahoo daily + intraday, DB cache with staleness logic, `GET /api/market-data`.
 - **Enrichment** (`src/lib/engine/trade-enrichment.ts`): SMA20/50/200, EMA20, ATR14, RSI14, ADX14, BBands, 52w range, gap %, SPY regime, earnings. `POST /api/enrich` triggers; `GET /api/enrich` polls. Upload page shows live progress bar.
 - **Interactive chart** (`/chart/[symbol]`): LWC v5 candlestick chart, fill markers, price lines, auto-TF zoom, OHLCV crosshair panel, trade sidebar with focus/zoom. Fully reviewed (peer-review + CodeRabbit).
+- **Performance metrics** (`src/lib/engine/metrics.ts`, `/api/metrics`): pure metrics engine with Kelly/full-half-quarter, profit factor, expectancy, Sharpe approximation, max drawdown, and close-date daily P&L aggregation for dashboard-ready time series.
 
 ### Phase 8 — complete and reviewed (2026-03-15)
 
@@ -94,14 +97,14 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 75 tests passing
-- `npx playwright test` — 3/3 passing
-- Branch: `fix/phase-8-review-findings` (open PR, awaiting merge)
+- `npx jest --runInBand` — 84 tests passing
+- `npx playwright test` — 3/3 passing from the prior user-facing pass; not re-run for Phase 9 because no UI changed
+- Branch: `feat/phase-9-metrics-engine`
 
-### Next: Phase 9 — Performance Metrics Engine
-Target file: `src/lib/engine/metrics.ts`
+### Next: Phase 10 — Dashboard
+Target file: `src/app/(app)/dashboard/page.tsx`
 
-Key formulas (from PLAN.md, must be verified before implementation):
-- Kelly criterion: `f* = winRate - (lossRate / payoffRatio)`
-- Profit factor, expectancy, Sharpe approx, max drawdown
-- API route: `GET /api/metrics?accountId&dateFrom&dateTo`
+Available inputs after Phase 9:
+- Metrics API: `GET /api/metrics?accountId&dateFrom&dateTo&symbol`
+- Daily series is already returned for dashboard charting, derived from realized trade exits
+- Kelly/full-half-quarter, PF, expectancy, Sharpe approx, and max drawdown are implemented and unit tested
