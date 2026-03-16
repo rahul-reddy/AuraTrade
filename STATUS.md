@@ -62,7 +62,8 @@
 | 2026-03-15 | CodeRabbit follow-up (6 findings fixed, same PR): volume display handles 0/small volumes (`—` for 0, raw integer for <1000), `Math.min/max` spread in page.tsx date-range replaced with reduce, empty catch block now logs dev-mode warning, spinners in `loading.tsx` and `ChartWorkspace` dynamic fallback replaced with candlestick bar skeletons (CLAUDE.md rule: skeleton loaders not spinners), duplicate local formatters removed from ChartWorkspace — now imports `formatCurrency`/`formatDuration`/`formatDate` from `src/lib/format.ts`. |
 | 2026-03-15 | Branch workflow violation noted: Phase 8 was committed directly to `main` without Playwright pass or PR. Corrected in the review-fix PR. `gh` CLI path confirmed: `C:\Program Files\GitHub CLI\gh.exe` (not on bash PATH, use full path). |
 | 2026-03-16 | Phase 9 complete on branch `feat/phase-9-metrics-engine`: added `src/lib/engine/metrics.ts` with pure win-rate / PF / expectancy / Sharpe / max-drawdown / Kelly helpers plus `buildDailyPerformanceSeries()` and `calculatePerformanceMetrics()`. Added authenticated `GET /api/metrics` scoped by user/account and filtered by `exitTime` for realized-performance windows. |
-| 2026-03-16 | Phase 9 verification: `npx tsc --noEmit` clean, targeted metrics suite 9/9 passing, full `npx jest --runInBand` now 84/84 passing. Playwright was not re-run because this pass only added a backend route + pure calculation layer. |
+| 2026-03-16 | Phase 9 verification: `npx tsc --noEmit` clean, targeted metrics suite 9/9 passing, full `npx jest --runInBand` now 84/84 passing. |
+| 2026-03-16 | Merge-gate follow-up for Phase 9: `npm run test:e2e` re-run on branch `feat/phase-9-metrics-engine` and passed 3/3. No checked-in `review-local` command or script exists in the repo today, so the local review pass was performed manually against the diff instead of via an automated command. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -98,7 +99,8 @@
 ### Verification state
 - `npx tsc --noEmit` — clean
 - `npx jest --runInBand` — 84 tests passing
-- `npx playwright test` — 3/3 passing from the prior user-facing pass; not re-run for Phase 9 because no UI changed
+- `npm run test:e2e` — 3/3 passing on 2026-03-16
+- `review-local` — no repo-defined script/command exists; manual peer-review pass completed against the Phase 9 diff
 - Branch: `feat/phase-9-metrics-engine`
 
 ### Next: Phase 10 — Dashboard
