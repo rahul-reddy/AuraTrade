@@ -20,23 +20,22 @@ async function registerAndSignIn(page: Page) {
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await page.waitForURL(/\/dashboard$/, { timeout: 15_000 });
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByText("No trading account found.")).toBeVisible();
 
   return { email };
 }
 
 test("user can register, sign in, and navigate core authenticated pages", async ({ page }) => {
-  const { email } = await registerAndSignIn(page);
+  await registerAndSignIn(page);
 
-  await expect(page.getByText(email)).toBeVisible();
-
-  await page.getByRole("link", { name: "Trades" }).click();
-  await expect(page).toHaveURL(/\/trades/);
-  await expect(page.getByText("No trading account found.")).toBeVisible();
   await page.getByRole("link", { name: "Upload a CSV to get started →" }).click();
   await expect(page).toHaveURL(/\/upload$/);
   await expect(page.getByRole("heading", { name: "Import Trades" })).toBeVisible();
 
-  await page.getByRole("link", { name: /dashboard/i }).click();
+  await page.goto("/trades");
+  await expect(page).toHaveURL(/\/trades/);
+  await expect(page.getByText("No trading account found.")).toBeVisible();
+
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 });

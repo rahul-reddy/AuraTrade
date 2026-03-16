@@ -1,6 +1,6 @@
 # AuraTrade — Implementation Plan (v2)
 
-> Last updated: 2026-03-15
+> Last updated: 2026-03-16
 
 ## Context
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
@@ -354,7 +354,7 @@ API route: `GET /api/metrics?accountId&dateFrom&dateTo`
 ---
 
 ## Phase 10: Dashboard
-File: `src/app/(app)/dashboard/page.tsx`
+Files: `src/app/(app)/dashboard/page.tsx`, `src/app/api/dashboard/route.ts`, `src/components/dashboard/DashboardClient.tsx`
 
 Summary cards: Total P&L (sparkline), Win Rate, Profit Factor, Avg Win/Loss ($+%), Expectancy, Streak, Best/Worst Day
 
@@ -364,6 +364,7 @@ Charts (Recharts):
 - Rolling 20-trade win rate
 - P&L by day-of-week
 - P&L by hour of day
+  - **Implementation note:** Schwab/TDA Transaction History exports are date-only, so hour-of-day analysis is unavailable with the current source format. Surface this limitation explicitly in the dashboard rather than fabricating intraday timing buckets.
 - Holding duration scatter (X = hold time, Y = P&L — spots overtrading / cutting winners early)
 - **Position sizing scatter** (X = position size, Y = P&L — am I sizing up on bad trades?)
 - Monthly P&L heatmap (GitHub contribution graph style, green/red intensity by daily P&L)
@@ -371,6 +372,7 @@ Charts (Recharts):
 - **Sector/industry breakdown** — resolve symbols to sectors via yahoo-finance2 `quoteSummary()`, show P&L by sector
 
 All charts behind TanStack Query with skeleton loaders. Every metric card clickable → filtered trades view.
+Dashboard API should return chart-ready series (daily equity, histogram bins, rolling win rate, day-of-week, heatmap, scatter datasets, Kelly inputs) so the client page stays presentation-focused.
 
 ---
 
@@ -472,6 +474,8 @@ Shows:
 | `src/lib/parser/tos-csv-parser.ts` | 3 |
 | `src/lib/engine/trade-grouper.ts` | 4 |
 | `src/lib/engine/metrics.ts` | 9 (includes Kelly: kellyFull, kellyHalf, kellyQuarter — no separate kelly.ts) |
+| `src/app/api/dashboard/route.ts` | 10 |
+| `src/components/dashboard/DashboardClient.tsx` | 10 |
 | `src/lib/engine/classifier.ts` | 11 |
 | `src/lib/engine/trade-enrichment.ts` | 7.5 |
 | `src/lib/market-data/yahoo-client.ts` | 7 |
