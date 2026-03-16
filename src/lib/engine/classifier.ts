@@ -38,6 +38,7 @@ export interface ClassifierTrade {
 export interface ClassifierExecution {
   posEffect: 'OPEN' | 'CLOSE' | 'AUTO'
   side: 'BUY' | 'SELL' | 'SELL_SHORT' | 'BUY_TO_COVER'
+  execTime: Date
   price: number
   qty: number
   daySeq: number
@@ -144,7 +145,11 @@ function analyzeOpeningFills(
 ): { openingFillCount: number; worseningOpenAdds: number } {
   const opening = executions
     .filter((execution) => execution.posEffect === 'OPEN')
-    .sort((a, b) => a.daySeq - b.daySeq)
+    .sort((a, b) => {
+      const timeDiff = a.execTime.getTime() - b.execTime.getTime()
+      if (timeDiff !== 0) return timeDiff
+      return a.daySeq - b.daySeq
+    })
 
   if (opening.length < 2) {
     return { openingFillCount: opening.length, worseningOpenAdds: 0 }
@@ -227,12 +232,12 @@ function buildSignalSnapshot(
   )
 
   return {
-    atrPct: atrPct == null ? null : round(atrPct),
-    daysHeld: daysHeld == null ? null : round(daysHeld),
-    distanceFromHighPct: distanceFromHighPct == null ? null : round(distanceFromHighPct),
-    distanceFromLowPct: distanceFromLowPct == null ? null : round(distanceFromLowPct),
-    distanceToEmaAtr: distanceToEmaAtr == null ? null : round(distanceToEmaAtr),
-    entryVsSma20Atr: entryVsSma20Atr == null ? null : round(entryVsSma20Atr),
+    atrPct,
+    daysHeld,
+    distanceFromHighPct,
+    distanceFromLowPct,
+    distanceToEmaAtr,
+    entryVsSma20Atr,
     gapAbs: Math.abs(context.gapPercent),
     sameDayCandidate,
     trendAligned,
@@ -406,12 +411,16 @@ export function calculateSetupScores(
   return {
     scores,
     derivedSignals: {
-      atrPct: signals.atrPct,
-      daysHeld: signals.daysHeld,
-      distanceFromHighPct: signals.distanceFromHighPct,
-      distanceFromLowPct: signals.distanceFromLowPct,
-      distanceToEmaAtr: signals.distanceToEmaAtr,
-      entryVsSma20Atr: signals.entryVsSma20Atr,
+      atrPct: signals.atrPct == null ? null : round(signals.atrPct),
+      daysHeld: signals.daysHeld == null ? null : round(signals.daysHeld),
+      distanceFromHighPct:
+        signals.distanceFromHighPct == null ? null : round(signals.distanceFromHighPct),
+      distanceFromLowPct:
+        signals.distanceFromLowPct == null ? null : round(signals.distanceFromLowPct),
+      distanceToEmaAtr:
+        signals.distanceToEmaAtr == null ? null : round(signals.distanceToEmaAtr),
+      entryVsSma20Atr:
+        signals.entryVsSma20Atr == null ? null : round(signals.entryVsSma20Atr),
       openingFillCount: signals.openingFillCount,
       worseningOpenAdds: signals.worseningOpenAdds,
       sameDayCandidate: signals.sameDayCandidate,

@@ -325,13 +325,14 @@ async function runEnrichmentJob(
         initialRisk: true,
         executions: {
           select: {
+            execTime: true,
             posEffect: true,
             side: true,
             price: true,
             qty: true,
             daySeq: true,
           },
-          orderBy: { daySeq: 'asc' },
+          orderBy: [{ execTime: 'asc' }, { daySeq: 'asc' }],
         },
       },
     })
@@ -485,6 +486,7 @@ async function runEnrichmentJob(
           marketRegime: regime,
         }
         const classificationExecutions: ClassifierExecution[] = trade.executions.map((execution) => ({
+          execTime: execution.execTime,
           posEffect: execution.posEffect,
           side: execution.side,
           price: execution.price.toNumber(),
@@ -502,7 +504,7 @@ async function runEnrichmentJob(
           update: {
             setup: classification.setup,
             confidence: classification.confidence,
-            secondarySetup: classification.secondarySetup ?? undefined,
+            secondarySetup: classification.secondarySetup ?? null,
             scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
             classifiedAt: new Date(),
           },
@@ -510,7 +512,7 @@ async function runEnrichmentJob(
             tradeId: trade.id,
             setup: classification.setup,
             confidence: classification.confidence,
-            secondarySetup: classification.secondarySetup ?? undefined,
+            secondarySetup: classification.secondarySetup ?? null,
             scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
           },
         })
