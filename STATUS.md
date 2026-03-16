@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 10 — Dashboard**
+**Phase 11 — Trade Classification Engine**
 
 ## Phase Checklist
 
@@ -20,7 +20,7 @@
 | 7.5 | Trade context enrichment pipeline | ✅ Done | Enrichment engine, /api/enrich route, progress UI on upload page. 23 tests in the enrichment suite; 75 total project tests after the review follow-up, market-data fallback fix, and full-span enrichment fix. |
 | 8 | Interactive chart (Lightweight Charts) | ✅ Done | Candlestick chart, trade markers, price lines, auto-TF zoom, OHLCV panel, trade sidebar |
 | 9 | Performance metrics engine (Kelly, formulas) | ✅ Done | Pure `metrics.ts`, authenticated `GET /api/metrics`, 9 unit tests. Daily performance series is currently derived from closed-trade exit dates rather than `DailySnapshot` rows. |
-| 10 | Dashboard | Not started | |
+| 10 | Dashboard | ✅ Done | Query-backed dashboard UI, chart-ready `/api/dashboard`, loading/error states, sector breakdown, and explicit hour-of-day limitation for date-only Schwab exports. |
 | 11 | Trade classification engine | Not started | |
 | 12 | Edge analysis & style profile | Not started | |
 | 13 | App shell & auth UI polish | Not started | |
@@ -65,6 +65,9 @@
 | 2026-03-16 | Phase 9 verification: `npx tsc --noEmit` clean, targeted metrics suite 9/9 passing, full `npx jest --runInBand` now 84/84 passing. |
 | 2026-03-16 | Merge-gate follow-up for Phase 9: `npm run test:e2e` re-run on branch `feat/phase-9-metrics-engine` and passed 3/3. No checked-in `review-local` command or script exists in the repo today, so the local review pass was performed manually against the diff instead of via an automated command. |
 | 2026-03-16 | PR review follow-up for Phase 9: fixed `calculateMaxDrawdown()` to measure ratio against the running peak at the time of each drawdown, changed `/api/metrics` 500 responses to avoid echoing raw internal errors, and added direct unit coverage for the exported metrics helpers plus Sharpe's `<2 samples` edge case. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (94/94), and `npm run test:e2e` (3/3). |
+| 2026-03-16 | Phase 10 complete on branch `feat/phase-10-dashboard`: added `src/app/api/dashboard/route.ts` for chart-ready dashboard data, `src/lib/dashboard/dashboard-data.ts` for pure dashboard aggregates, TanStack Query provider wiring in `src/app/layout.tsx`, and `src/components/dashboard/DashboardClient.tsx` with summary cards, equity/drawdown, histogram + normal overlay, rolling win rate, day-of-week, heatmap, scatter charts, Kelly widget, and sector breakdown. |
+| 2026-03-16 | Dashboard limitation decision: hour-of-day analysis is intentionally surfaced as unavailable because the Schwab/TDA Transaction History export is date-only. We show the limitation explicitly instead of fabricating intraday buckets. |
+| 2026-03-16 | Phase 10 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 96/96 passing, `npm run test:e2e` 4/4 passing after adding `playwright/dashboard.spec.ts` and updating the auth-nav smoke test for the new no-account dashboard empty state. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -82,16 +85,7 @@
 - **Enrichment** (`src/lib/engine/trade-enrichment.ts`): SMA20/50/200, EMA20, ATR14, RSI14, ADX14, BBands, 52w range, gap %, SPY regime, earnings. `POST /api/enrich` triggers; `GET /api/enrich` polls. Upload page shows live progress bar.
 - **Interactive chart** (`/chart/[symbol]`): LWC v5 candlestick chart, fill markers, price lines, auto-TF zoom, OHLCV crosshair panel, trade sidebar with focus/zoom. Fully reviewed (peer-review + CodeRabbit).
 - **Performance metrics** (`src/lib/engine/metrics.ts`, `/api/metrics`): pure metrics engine with Kelly/full-half-quarter, profit factor, expectancy, Sharpe approximation, max drawdown, and close-date daily P&L aggregation for dashboard-ready time series.
-
-### Phase 8 — complete and reviewed (2026-03-15)
-
-**Files (final state after review):**
-- `src/components/charts/CandlestickChart.tsx` — LWC v5 chart (ssr:false). Marker color semantics: green=long open (BUY), red=short open (SELL_SHORT), amber=all closes. Volume crosshair uses per-TF tolerance. Deselect zooms out to full history via `reduce`-based min/max.
-- `src/components/charts/ChartWorkspace.tsx` — client state wrapper (focusTradeId). Imports shared formatters from `src/lib/format.ts`. Dynamic import fallback is a candlestick skeleton (not spinner).
-- `src/app/(app)/chart/[symbol]/page.tsx` — server component. Date-range uses reduce (no spread). Dev-mode warning on market data fetch failure.
-- `src/app/(app)/chart/[symbol]/loading.tsx` — candlestick bar skeleton (not spinner).
-
-**Open PR:** `fix/phase-8-review-findings` — passes tsc, jest 75/75, playwright 3/3.
+- **Dashboard** (`/dashboard`, `/api/dashboard`): TanStack Query-backed analytics page with summary cards, equity/drawdown, distribution + normal overlay, rolling win rate, day-of-week, monthly heatmap, Kelly widget, size/duration scatterplots, sector breakdown, and explicit hour-of-day unavailability for date-only source data.
 
 **Known build issues (pre-existing):**
 - `next build` fails: auth middleware imports Prisma into the edge runtime.
@@ -99,15 +93,15 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 94 tests passing
-- `npm run test:e2e` — 3/3 passing on 2026-03-16
-- `review-local` — no repo-defined script/command exists; manual peer-review pass completed against the Phase 9 diff
-- Branch: `feat/phase-9-metrics-engine`
+- `npx jest --runInBand` — 96 tests passing
+- `npm run test:e2e` — 4/4 passing on 2026-03-16
+- `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
+- Branch: `feat/phase-10-dashboard`
 
-### Next: Phase 10 — Dashboard
-Target file: `src/app/(app)/dashboard/page.tsx`
+### Next: Phase 11 — Trade Classification Engine
+Target file: `src/lib/engine/classifier.ts`
 
-Available inputs after Phase 9:
-- Metrics API: `GET /api/metrics?accountId&dateFrom&dateTo&symbol`
-- Daily series is already returned for dashboard charting, derived from realized trade exits
-- Kelly/full-half-quarter, PF, expectancy, Sharpe approx, and max drawdown are implemented and unit tested
+Available inputs after Phase 10:
+- `TradeContext` enrichment is already in place from Phase 7.5
+- `metrics.ts` and `/api/dashboard` now expose stable performance context for downstream classification summaries
+- Dashboard explicitly documents the date-only broker limitation, so classifier signals should continue to avoid intraday-time assumptions unless a richer data source is added
