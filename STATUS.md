@@ -64,6 +64,7 @@
 | 2026-03-16 | Phase 9 complete on branch `feat/phase-9-metrics-engine`: added `src/lib/engine/metrics.ts` with pure win-rate / PF / expectancy / Sharpe / max-drawdown / Kelly helpers plus `buildDailyPerformanceSeries()` and `calculatePerformanceMetrics()`. Added authenticated `GET /api/metrics` scoped by user/account and filtered by `exitTime` for realized-performance windows. |
 | 2026-03-16 | Phase 9 verification: `npx tsc --noEmit` clean, targeted metrics suite 9/9 passing, full `npx jest --runInBand` now 84/84 passing. |
 | 2026-03-16 | Merge-gate follow-up for Phase 9: `npm run test:e2e` re-run on branch `feat/phase-9-metrics-engine` and passed 3/3. No checked-in `review-local` command or script exists in the repo today, so the local review pass was performed manually against the diff instead of via an automated command. |
+| 2026-03-16 | PR review follow-up for Phase 9: fixed `calculateMaxDrawdown()` to measure ratio against the running peak at the time of each drawdown, changed `/api/metrics` 500 responses to avoid echoing raw internal errors, and added direct unit coverage for the exported metrics helpers plus Sharpe's `<2 samples` edge case. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (94/94), and `npm run test:e2e` (3/3). |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -98,7 +99,7 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 84 tests passing
+- `npx jest --runInBand` — 94 tests passing
 - `npm run test:e2e` — 3/3 passing on 2026-03-16
 - `review-local` — no repo-defined script/command exists; manual peer-review pass completed against the Phase 9 diff
 - Branch: `feat/phase-9-metrics-engine`
