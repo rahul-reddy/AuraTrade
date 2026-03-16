@@ -389,11 +389,15 @@ Rule-based scoring (0–100 per category), reads from pre-computed TradeContext 
 | MOMENTUM | ADX > 25, multi-day hold, trend direction |
 | REVERSAL | Downtrend, entry near 52-week low |
 | AVERAGE_DOWN | Multiple adds at progressively lower prices |
-| SCALP | Duration < 1 hour |
-| GAP_PLAY | Entry within first 30 min, gapPercent significant |
+| SCALP | Inferred same-day / very-short-hold candidate from `durationSeconds`; exact sub-hour timing is unobservable in date-only Schwab/TDA exports |
+| GAP_PLAY | Significant `gapPercent`; exact "first 30 min" entry timing is unobservable in date-only Schwab/TDA exports, so short-hold behavior is inferred probabilistically |
 | EARNINGS_PLAY | daysToEarnings ≤ 2 |
 
 Assign top 1–2 categories per trade, store with confidence score.
+
+Implementation note:
+- Because the Schwab/TDA export is date-only, `SCALP` is inferred as a same-day / very-short-hold candidate from `durationSeconds`, not from literal intraday timestamps. Treat it as a probabilistic style tag rather than a precise sub-hour measurement.
+- Classification is populated during the existing enrichment pass so `TradeContext` and `TradeClassification` stay in sync.
 
 ---
 
