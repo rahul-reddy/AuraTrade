@@ -90,6 +90,9 @@ export async function GET(req: NextRequest) {
     })
   } catch (err) {
     console.error('[GET /api/metrics]', err)
-    return NextResponse.json({ error: 'internal_error', message: String(err) }, { status: 500 })
+    return NextResponse.json(
+      { error: 'internal_error', message: 'An internal error occurred.' },
+      { status: 500 },
+    )
   }
 }

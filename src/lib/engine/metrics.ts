@@ -84,7 +84,7 @@ export function calculateExpectancy(
   lossRate: number,
   avgLoss: number,
 ): number {
-  return (winRate * avgWin) - (lossRate * Math.abs(avgLoss))
+  return (winRate * avgWin) - (lossRate * avgLoss)
 }
 
 export function kellyFull(winRate: number, avgWin: number, avgLoss: number): number | null {
@@ -124,16 +124,22 @@ export function calculateMaxDrawdown(
   let equity = startingBalance
   let peakEquity = startingBalance
   let maxDrawdownAmount = 0
+  let maxDrawdownRatio = 0
 
   for (const pnl of dailyPnls) {
     equity += pnl
     peakEquity = Math.max(peakEquity, equity)
-    maxDrawdownAmount = Math.max(maxDrawdownAmount, peakEquity - equity)
+    const drawdownAmount = peakEquity - equity
+    maxDrawdownAmount = Math.max(maxDrawdownAmount, drawdownAmount)
+
+    if (peakEquity > 0) {
+      maxDrawdownRatio = Math.max(maxDrawdownRatio, drawdownAmount / peakEquity)
+    }
   }
 
   return {
     amount: maxDrawdownAmount,
-    ratio: peakEquity > 0 ? maxDrawdownAmount / peakEquity : 0,
+    ratio: maxDrawdownRatio,
   }
 }
 
