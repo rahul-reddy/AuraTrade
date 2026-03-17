@@ -8,6 +8,7 @@ import {
   Upload,
   TrendingUp,
   TrendingDown,
+  Settings,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -60,6 +61,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             <Upload className="mr-2 h-4 w-4 text-zinc-400" />
             Upload CSV
             <span className="ml-auto text-xs text-zinc-500">u</span>
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/settings/integrity')}>
+            <Settings className="mr-2 h-4 w-4 text-zinc-400" />
+            Data Integrity
           </CommandItem>
         </CommandGroup>
 
