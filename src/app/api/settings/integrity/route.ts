@@ -50,7 +50,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const parsed = actionSchema.parse(await req.json())
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+    }
+
+    const parsed = actionSchema.parse(body)
     const account = await resolveIntegrityAccount(session.user.id, parsed.accountId)
     if (!account) {
       return NextResponse.json({ error: 'no_account' }, { status: 404 })

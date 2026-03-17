@@ -37,4 +37,12 @@ test('user can open the integrity settings page after importing trades', async (
   await expect(page.getByRole('button', { name: 'Reprocess All Trades' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Orphaned Executions' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Duplicate Candidates' })).toBeVisible()
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Reprocess All Trades' }).click()
+  await expect(page.getByText(/Reprocessed .* trades and rebuilt .* snapshots\./)).toBeVisible()
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Rebuild All Snapshots' }).click()
+  await expect(page.getByText(/Rebuilt .* daily snapshots\./)).toBeVisible()
 })

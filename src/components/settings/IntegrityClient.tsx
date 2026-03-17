@@ -154,6 +154,17 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
     },
   })
 
+  const requestAction = (action: IntegrityAction) => {
+    const confirmed = window.confirm(
+      action === 'reprocess_trades'
+        ? 'Reprocess every execution into round trips and rebuild all snapshots for this account?'
+        : 'Rebuild every daily snapshot for this account from realized trades?',
+    )
+
+    if (!confirmed) return
+    actionMutation.mutate({ action })
+  }
+
   if (integrityQuery.isPending) {
     return (
       <div className="mx-auto max-w-[1680px] px-8 py-6 text-white">
@@ -213,7 +224,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => actionMutation.mutate({ action: 'reprocess_trades' })}
+              onClick={() => requestAction('reprocess_trades')}
               disabled={actionMutation.isPending}
               className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -222,7 +233,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
             </button>
             <button
               type="button"
-              onClick={() => actionMutation.mutate({ action: 'rebuild_snapshots' })}
+              onClick={() => requestAction('rebuild_snapshots')}
               disabled={actionMutation.isPending}
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -309,7 +320,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
               {data.orphanedExecutions.length === 0 ? (
                 <EmptyState message="Every execution is currently linked to a round trip." />
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-zinc-800">
+                <div className="overflow-x-auto rounded-2xl border border-zinc-800">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-zinc-950/70 text-xs uppercase tracking-[0.16em] text-zinc-500">
                       <tr>
@@ -354,7 +365,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
               {data.positionMismatches.length === 0 ? (
                 <EmptyState message="No closed trades currently show quantity mismatches." />
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-zinc-800">
+                <div className="overflow-x-auto rounded-2xl border border-zinc-800">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-zinc-950/70 text-xs uppercase tracking-[0.16em] text-zinc-500">
                       <tr>

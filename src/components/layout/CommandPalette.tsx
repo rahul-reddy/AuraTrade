@@ -64,7 +64,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           </CommandItem>
           <CommandItem onSelect={() => navigate('/settings/integrity')}>
             <Settings className="mr-2 h-4 w-4 text-zinc-400" />
-            Data Integrity
+            Settings: Data Integrity
           </CommandItem>
         </CommandGroup>
 
