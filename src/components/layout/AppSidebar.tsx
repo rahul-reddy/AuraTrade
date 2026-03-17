@@ -54,9 +54,8 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     label: 'Settings',
-    href: '/settings',
+    href: '/settings/integrity',
     icon: Settings,
-    disabled: true,
   },
 ]
 
@@ -141,30 +140,10 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
                       <KbdHint hint={item.hint} />
                     </span>
                   )}
-                  {item.disabled && (
-                    <span className="ml-auto rounded bg-zinc-700/60 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                      soon
-                    </span>
-                  )}
                 </>
               )}
             </>
           )
-
-          if (item.disabled) {
-            return (
-              <span
-                key={item.href}
-                role="link"
-                aria-disabled="true"
-                aria-label={item.label}
-                className={itemClass}
-                title={collapsed ? item.label : undefined}
-              >
-                {inner}
-              </span>
-            )
-          }
 
           return (
             <Link
