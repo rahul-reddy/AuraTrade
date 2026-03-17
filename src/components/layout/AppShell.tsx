@@ -142,7 +142,10 @@ function useKeyboardShortcuts(onOpenPalette: () => void) {
         return
       }
 
-      // Single-key shortcuts
+      // Single-key shortcuts — skip when any modifier is held so browser
+      // combos like Ctrl+U (view source) or Cmd+G (find next) are not intercepted.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
       switch (e.key) {
         case 'g':
           e.preventDefault()
@@ -180,7 +183,7 @@ export default function AppShell({ children, userEmail, accountName }: AppShellP
       <AppSidebar userEmail={userEmail} accountName={accountName} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onOpenPalette={openPalette} />
+        <TopBar onOpenPalette={openPalette} accountName={accountName} />
 
         <main className="flex-1 overflow-y-auto">
           <ShellErrorBoundary>

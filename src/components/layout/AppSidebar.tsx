@@ -157,6 +157,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
                 key={item.href}
                 role="link"
                 aria-disabled="true"
+                aria-label={item.label}
                 className={itemClass}
                 title={collapsed ? item.label : undefined}
               >
@@ -170,6 +171,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
               key={item.href}
               href={item.href}
               className={itemClass}
+              aria-label={collapsed ? item.label : undefined}
               title={collapsed ? item.label : undefined}
             >
               {inner}
@@ -184,6 +186,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: '/login' })}
+            aria-label="Sign out"
             title="Sign out"
             className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-red-400"
           >

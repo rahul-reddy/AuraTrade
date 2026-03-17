@@ -2,34 +2,31 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search, Layers } from 'lucide-react'
 
-// ─── Page title map ───────────────────────────────────────────────────────────
+// ─── Context label ─────────────────────────────────────────────────────────────
+// For chart pages: show the symbol (e.g. "AAPL").
+// For all other pages: show the active account name — genuinely useful context
+// that the page content doesn't already repeat.
 
-const PAGE_TITLES: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/trades': 'Trade History',
-  '/upload': 'Import Trades',
-  '/settings': 'Settings',
-}
-
-function getPageTitle(pathname: string): string {
-  for (const [prefix, title] of Object.entries(PAGE_TITLES)) {
-    if (pathname === prefix || pathname.startsWith(prefix + '/')) return title
+function getContextLabel(pathname: string, accountName: string): string {
+  if (pathname.startsWith('/chart/')) {
+    const symbol = pathname.split('/chart/')[1]?.split('/')[0] ?? ''
+    return decodeURIComponent(symbol).toUpperCase()
   }
-  if (pathname.startsWith('/chart/')) return 'Chart'
-  return 'AuraTrade'
+  return accountName
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface TopBarProps {
   onOpenPalette: () => void
+  accountName: string
 }
 
-export default function TopBar({ onOpenPalette }: TopBarProps) {
+export default function TopBar({ onOpenPalette, accountName }: TopBarProps) {
   const pathname = usePathname()
-  const title = getPageTitle(pathname)
+  const contextLabel = getContextLabel(pathname, accountName)
 
   // Detect platform on the client to show the correct modifier key
   const [modKey, setModKey] = useState('⌘K')
@@ -41,7 +38,10 @@ export default function TopBar({ onOpenPalette }: TopBarProps) {
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/80 px-5 backdrop-blur">
-      <p className="text-sm font-semibold text-zinc-100">{title}</p>
+      <div className="flex items-center gap-2 text-sm text-zinc-400">
+        <Layers className="h-3.5 w-3.5 shrink-0" />
+        <span className="font-medium text-zinc-300">{contextLabel}</span>
+      </div>
 
       <button
         type="button"
