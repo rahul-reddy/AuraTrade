@@ -1,29 +1,29 @@
-import type { Prisma } from '@/generated/prisma'
+import { Prisma } from '@/generated/prisma'
 
 export interface SnapshotTradeInput {
   exitTime: Date | string
-  netPnl: number
-  totalFees: number
+  netPnl: Prisma.Decimal
+  totalFees: Prisma.Decimal
 }
 
 export interface SnapshotSeed {
-  cumulativePnl: number
-  peakEquity: number
-  maxDrawdown: number
+  cumulativePnl: Prisma.Decimal
+  peakEquity: Prisma.Decimal
+  maxDrawdown: Prisma.Decimal
 }
 
 export interface BuiltDailySnapshot {
   date: Date
-  dailyPnl: number
-  cumulativePnl: number
-  peakEquity: number
-  drawdown: number
-  maxDrawdown: number
+  dailyPnl: Prisma.Decimal
+  cumulativePnl: Prisma.Decimal
+  peakEquity: Prisma.Decimal
+  drawdown: Prisma.Decimal
+  maxDrawdown: Prisma.Decimal
   winCount: number
   lossCount: number
   tradeCount: number
-  grossPnl: number
-  totalFees: number
+  grossPnl: Prisma.Decimal
+  totalFees: Prisma.Decimal
 }
 
 export interface SnapshotRebuildResult {
@@ -35,12 +35,18 @@ export interface SnapshotRebuildResult {
 
 interface DailyBucket {
   date: Date
-  dailyPnl: number
-  grossPnl: number
-  totalFees: number
+  dailyPnl: Prisma.Decimal
+  grossPnl: Prisma.Decimal
+  totalFees: Prisma.Decimal
   tradeCount: number
   winCount: number
   lossCount: number
+}
+
+const ZERO = new Prisma.Decimal(0)
+
+function decimalMax(left: Prisma.Decimal, right: Prisma.Decimal): Prisma.Decimal {
+  return left.greaterThan(right) ? left : right
 }
 
 function dateKey(value: Date | string): string {
@@ -64,37 +70,38 @@ export function buildDailySnapshots(
     const key = dateKey(trade.exitTime)
     const current = grouped.get(key) ?? {
       date: toUtcDateOnly(trade.exitTime),
-      dailyPnl: 0,
-      grossPnl: 0,
-      totalFees: 0,
+      dailyPnl: ZERO,
+      grossPnl: ZERO,
+      totalFees: ZERO,
       tradeCount: 0,
       winCount: 0,
       lossCount: 0,
     }
 
-    current.dailyPnl += trade.netPnl
-    current.grossPnl += trade.netPnl + trade.totalFees
-    current.totalFees += trade.totalFees
+    current.dailyPnl = current.dailyPnl.plus(trade.netPnl)
+    current.grossPnl = current.grossPnl.plus(trade.netPnl).plus(trade.totalFees)
+    current.totalFees = current.totalFees.plus(trade.totalFees)
     current.tradeCount += 1
 
-    if (trade.netPnl > 0) current.winCount += 1
-    else if (trade.netPnl < 0) current.lossCount += 1
+    if (trade.netPnl.greaterThan(ZERO)) current.winCount += 1
+    else if (trade.netPnl.lessThan(ZERO)) current.lossCount += 1
 
     grouped.set(key, current)
   }
 
-  let cumulativePnl = seed?.cumulativePnl ?? 0
-  let peakEquity = seed?.peakEquity ?? startingBalance
-  let maxDrawdown = seed?.maxDrawdown ?? 0
+  const startingBalanceDecimal = new Prisma.Decimal(startingBalance)
+  let cumulativePnl = seed?.cumulativePnl ?? ZERO
+  let peakEquity = seed?.peakEquity ?? startingBalanceDecimal
+  let maxDrawdown = seed?.maxDrawdown ?? ZERO
 
   return Array.from(grouped.entries())
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([, bucket]) => {
-      cumulativePnl += bucket.dailyPnl
-      const equity = startingBalance + cumulativePnl
-      peakEquity = Math.max(peakEquity, equity)
-      const drawdown = peakEquity - equity
-      maxDrawdown = Math.max(maxDrawdown, drawdown)
+      cumulativePnl = cumulativePnl.plus(bucket.dailyPnl)
+      const equity = startingBalanceDecimal.plus(cumulativePnl)
+      peakEquity = decimalMax(peakEquity, equity)
+      const drawdown = peakEquity.minus(equity)
+      maxDrawdown = decimalMax(maxDrawdown, drawdown)
 
       return {
         date: bucket.date,
@@ -121,29 +128,33 @@ export async function rebuildDailySnapshotsForAccount(
   const normalizedFromDate = options.fromDate ? toUtcDateOnly(options.fromDate) : null
 
   let seed: SnapshotSeed | undefined
-  if (normalizedFromDate) {
+  let rebuildFromDate = normalizedFromDate
+
+  if (rebuildFromDate) {
     const previousSnapshot = await tx.dailySnapshot.findFirst({
       where: {
         accountId,
-        date: { lt: normalizedFromDate },
+        date: { lt: rebuildFromDate },
       },
       orderBy: { date: 'desc' },
     })
 
     if (previousSnapshot) {
       seed = {
-        cumulativePnl: previousSnapshot.cumulativePnl.toNumber(),
-        peakEquity: previousSnapshot.peakEquity.toNumber(),
-        maxDrawdown: previousSnapshot.maxDrawdown.toNumber(),
+        cumulativePnl: previousSnapshot.cumulativePnl,
+        peakEquity: previousSnapshot.peakEquity,
+        maxDrawdown: previousSnapshot.maxDrawdown,
       }
+    } else {
+      rebuildFromDate = null
     }
   }
 
   await tx.dailySnapshot.deleteMany({
-    where: normalizedFromDate
+    where: rebuildFromDate
       ? {
           accountId,
-          date: { gte: normalizedFromDate },
+          date: { gte: rebuildFromDate },
         }
       : { accountId },
   })
@@ -152,7 +163,7 @@ export async function rebuildDailySnapshotsForAccount(
     where: {
       accountId,
       isOpen: false,
-      exitTime: normalizedFromDate ? { gte: normalizedFromDate } : { not: null },
+      exitTime: rebuildFromDate ? { gte: rebuildFromDate } : { not: null },
       netPnl: { not: null },
     },
     select: {
@@ -168,8 +179,8 @@ export async function rebuildDailySnapshotsForAccount(
       .filter((trade) => trade.exitTime !== null && trade.netPnl !== null)
       .map((trade) => ({
         exitTime: trade.exitTime as Date,
-        netPnl: trade.netPnl!.toNumber(),
-        totalFees: trade.totalFees.toNumber(),
+        netPnl: trade.netPnl!,
+        totalFees: trade.totalFees,
       })),
     startingBalance,
     seed,
@@ -195,7 +206,7 @@ export async function rebuildDailySnapshotsForAccount(
   }
 
   return {
-    fromDate: normalizedFromDate ? normalizedFromDate.toISOString() : null,
+    fromDate: rebuildFromDate ? rebuildFromDate.toISOString() : null,
     snapshotsWritten: snapshots.length,
     tradesProcessed: trades.length,
     lastSnapshotDate: snapshots.at(-1)?.date.toISOString() ?? null,

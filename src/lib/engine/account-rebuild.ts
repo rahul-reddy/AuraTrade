@@ -34,6 +34,10 @@ export function executionToParsedExecution(row: Execution): ParsedDbExecution {
   }
 }
 
+function normalizeToUtcMidnight(value: Date): Date {
+  return new Date(`${value.toISOString().slice(0, 10)}T00:00:00.000Z`)
+}
+
 export async function rebuildTradesForAccount(
   tx: Prisma.TransactionClient,
   accountId: string,
@@ -106,6 +110,6 @@ export async function rebuildTradesForAccount(
     closedTrades,
     openPositions,
     warnings: warnings.map((warning) => warning.message),
-    earliestExecutionDate: executions[0]?.execTime ?? null,
+    earliestExecutionDate: executions[0] ? normalizeToUtcMidnight(executions[0].execTime) : null,
   }
 }

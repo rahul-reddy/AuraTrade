@@ -26,7 +26,7 @@ export default function IntegrityError({
           <button
             type="button"
             onClick={reset}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+            className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600"
           >
             Retry
           </button>
