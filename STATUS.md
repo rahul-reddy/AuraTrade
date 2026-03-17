@@ -79,6 +79,7 @@
 | 2026-03-17 | Phase 14 complete on branch `feat/phase-14-data-integrity`: added `src/app/(app)/settings/integrity/page.tsx`, `src/components/settings/IntegrityClient.tsx`, and authenticated `GET/POST /api/settings/integrity` so the app now shows execution/trade health counts, orphaned execution samples, position mismatch samples, duplicate-candidate clusters, and repair actions for full trade reprocessing or full snapshot rebuilds. |
 | 2026-03-17 | Data repair engine extraction: added `src/lib/engine/account-rebuild.ts` and `src/lib/engine/daily-snapshots.ts` as the shared source of truth for account-wide trade regrouping and `DailySnapshot` recomputation. Upload confirmation now reuses these helpers and incrementally rebuilds snapshots from the earliest date in a newly imported file instead of leaving `DailySnapshot` stale. |
 | 2026-03-17 | Phase 14 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 126/126 passing after adding `src/__tests__/engine/daily-snapshots.test.ts`, and focused Playwright smoke `npx playwright test playwright/settings-integrity.spec.ts` passing for the new settings route. |
+| 2026-03-17 | Phase 14 merge-gate follow-up: manual local reviewer pass completed with no actionable findings. Full `npm run test:e2e` suite now passes 5/5, including the new integrity settings smoke. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -108,7 +109,7 @@
 ### Verification state
 - `npx tsc --noEmit` — clean
 - `npx jest --runInBand` — 126 tests passing
-- `npx playwright test playwright/settings-integrity.spec.ts` — passing on 2026-03-17
+- `npm run test:e2e` — 5/5 passing on 2026-03-17
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
 - Branch: `feat/phase-14-data-integrity`
 
