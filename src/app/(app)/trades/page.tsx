@@ -185,31 +185,7 @@ export default async function TradesPage({
   )
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Top bar */}
-      <div className="border-b border-zinc-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-blue-500 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">A</span>
-            </div>
-            <span className="text-white font-semibold text-sm">AuraTrade</span>
-          </div>
-          <nav className="flex items-center gap-5 text-sm">
-            <Link href="/dashboard" className="text-zinc-400 hover:text-zinc-200 transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/trades" className="text-white font-medium">
-              Trades
-            </Link>
-            <Link href="/upload" className="text-zinc-400 hover:text-zinc-200 transition-colors">
-              Upload
-            </Link>
-          </nav>
-        </div>
-        <span className="text-zinc-500 text-sm">{session.user.email}</span>
-      </div>
-
+    <div className="text-white">
       <div className="px-8 py-6 max-w-[1600px]">
         {/* Page header */}
         <div className="mb-6">
