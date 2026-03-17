@@ -396,7 +396,8 @@ function buildRegimeCrossReference(trades: ClosedTrade[]): RegimePerformanceSumm
   const grouped = new Map<string, ClosedTrade[]>()
 
   for (const trade of trades) {
-    const regime = trade.marketRegime ?? 'CHOPPY'
+    if (trade.marketRegime == null) continue
+    const regime = trade.marketRegime
     const key = `${trade.setup}:${regime}`
     const current = grouped.get(key) ?? []
     current.push(trade)
@@ -608,7 +609,9 @@ export function estimateExpectedValue(input: {
     confidenceOfProfit: setupStats.winRate,
     suggestedKellyFraction: setupStats.kellyHalf,
     suggestedNotional:
-      input.accountBalance != null && setupStats.kellyHalf != null
+      input.accountBalance != null &&
+      setupStats.kellyHalf != null &&
+      setupStats.kellyHalf > 0
         ? input.accountBalance * setupStats.kellyHalf
         : null,
     averageHoldSeconds: setupStats.averageHoldSeconds,
