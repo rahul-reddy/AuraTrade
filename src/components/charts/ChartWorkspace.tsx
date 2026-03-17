@@ -85,7 +85,7 @@ export default function ChartWorkspace({
   }
 
   return (
-    <div className="flex flex-col h-screen bg-zinc-950 text-white">
+    <div className="flex flex-col h-full bg-zinc-950 text-white">
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
         <div className="flex items-center gap-4">

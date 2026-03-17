@@ -567,20 +567,7 @@ export default function UploadPage() {
   const reset = useCallback(() => setPhase({ kind: 'idle' }), [])
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Top bar */}
-      <div className="border-b border-zinc-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-md bg-blue-500 flex items-center justify-center">
-            <span className="text-white font-bold text-xs">A</span>
-          </div>
-          <span className="text-white font-semibold">AuraTrade</span>
-        </div>
-        <a href="/dashboard" className="text-zinc-400 hover:text-zinc-200 text-sm transition-colors">
-          ← Dashboard
-        </a>
-      </div>
-
+    <div className="text-white">
       {/* Main content */}
       <div className="flex flex-col items-center justify-center py-16 px-4">
         <div className="w-full max-w-xl mb-8 text-center">
