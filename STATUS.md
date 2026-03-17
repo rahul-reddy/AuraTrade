@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 12 — Edge Analysis & Style Profile**
+**Phase 13 — App Shell & Auth UI Polish**
 
 ## Phase Checklist
 
@@ -22,7 +22,7 @@
 | 9 | Performance metrics engine (Kelly, formulas) | ✅ Done | Pure `metrics.ts`, authenticated `GET /api/metrics`, 9 unit tests. Daily performance series is currently derived from closed-trade exit dates rather than `DailySnapshot` rows. |
 | 10 | Dashboard | ✅ Done | Query-backed dashboard UI, chart-ready `/api/dashboard`, loading/error states, sector breakdown, and explicit hour-of-day limitation for date-only Schwab exports. |
 | 11 | Trade classification engine | ✅ Done | Pure `classifier.ts`, classification upserts during enrichment, 11 unit tests. Same-day `SCALP` tagging is treated as a date-only export candidate, not literal intraday timestamp truth. |
-| 12 | Edge analysis & style profile | Not started | |
+| 12 | Edge analysis & style profile | ✅ Done | Pure `edge-analysis.ts` engine with style profile, per-setup stats, regime cross-reference, persistence trends, Kelly sizing comparison, recommendations, expected-value estimates, and setup-fit scoring. 11 unit tests. |
 | 13 | App shell & auth UI polish | Not started | |
 | 14 | Data integrity page + settings | Not started | |
 
@@ -72,6 +72,8 @@
 | 2026-03-16 | Classification limitation decision: because Schwab/TDA exports are date-only, same-day trades are tagged as `SCALP` candidates from `durationSeconds === 0` rather than precise intraday timing. Treat `SCALP` as a probabilistic style tag, especially when paired with a stronger primary setup. |
 | 2026-03-16 | Phase 11 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 107/107 passing after adding `src/__tests__/engine/classifier.test.ts`, and `npm run test:e2e` 4/4 passing. |
 | 2026-03-16 | PR review follow-up for Phase 11: classifier scoring now keeps raw unrounded inputs for threshold checks, AVERAGE_DOWN ordering uses `execTime` + `daySeq` instead of `daySeq` alone, `secondarySetup` is cleared with `null` when removed on reclassification, and boundary-score tests were added for the 55-point primary cutoff and exact score weights. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (110/110), and `npm run test:e2e` (4/4). |
+| 2026-03-16 | Phase 12 complete on branch `feat/phase-12-edge-analysis`: added `src/lib/engine/edge-analysis.ts` with style-profile aggregation, per-setup performance summaries, Wilson win-rate confidence intervals, one-sample t-test significance checks, regime cross-reference, rolling expectancy persistence, Kelly sizing comparison, recommendations, expected-value estimation, and setup-fit scoring. |
+| 2026-03-16 | PR review follow-up for Phase 12: regime cross-reference now excludes trades with missing `marketRegime` instead of folding them into `CHOPPY`, and expected-value sizing now returns `null` rather than a negative suggested notional when Kelly is nonpositive. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (123/123), and `npm run test:e2e` (4/4). |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -80,7 +82,7 @@
 ## Where We Stopped (2026-03-16)
 
 ### What's complete
-- **Phases 1–11 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
+- **Phases 1–12 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
 - **Parser** (`src/lib/parser/tos-csv-parser.ts`): handles both TDA 2022 and Schwab 2026 CSV variants, auto-detects reverse-chronological order, daySeq dedup.
 - **Grouper** (`src/lib/engine/trade-grouper.ts`): FIFO VWAP grouper, pure function, no DB calls.
 - **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm.
@@ -91,6 +93,7 @@
 - **Performance metrics** (`src/lib/engine/metrics.ts`, `/api/metrics`): pure metrics engine with Kelly/full-half-quarter, profit factor, expectancy, Sharpe approximation, max drawdown, and close-date daily P&L aggregation for dashboard-ready time series.
 - **Dashboard** (`/dashboard`, `/api/dashboard`): TanStack Query-backed analytics page with summary cards, equity/drawdown, distribution + normal overlay, rolling win rate, day-of-week, monthly heatmap, Kelly widget, size/duration scatterplots, sector breakdown, and explicit hour-of-day unavailability for date-only source data.
 - **Trade classification** (`src/lib/engine/classifier.ts`): rule-based setup engine assigns primary/secondary tags plus confidence and score breakdown during enrichment. Existing trades UI and chart sidebar now show real setup labels once enrichment has run.
+- **Edge analysis** (`src/lib/engine/edge-analysis.ts`): pure analytics engine for style mix, per-setup edge stats, significance, regime cross-reference, persistence trends, Kelly sizing comparison, recommendations, expected-value estimates, and setup-fit scoring.
 
 **Known build issues (pre-existing):**
 - `next build` fails: auth middleware imports Prisma into the edge runtime.
@@ -98,16 +101,16 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 110 tests passing
+- `npx jest --runInBand` — 123 tests passing
 - `npm run test:e2e` — 4/4 passing on 2026-03-16
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
-- Branch: `feat/phase-11-classifier`
+- Branch: `feat/phase-12-edge-analysis`
 
-### Next: Phase 12 — Edge Analysis & Style Profile
-Target file: `src/lib/engine/edge-analysis.ts`
+### Next: Phase 13 — App Shell & Auth UI Polish
+Target file: `src/app/(app)/layout.tsx`
 
-Available inputs after Phase 11:
+Available inputs after Phase 12:
 - `TradeContext` enrichment is already in place from Phase 7.5 and now refreshes `TradeClassification` in the same pass
 - `metrics.ts` and `/api/dashboard` expose stable realized-performance context for downstream edge summaries
-- Trades and chart views already surface the primary setup tag, so Phase 12 can aggregate existing classifications rather than inventing a parallel setup taxonomy
-- Dashboard still documents the date-only broker limitation, so any future time-of-day edge analysis must keep treating `SCALP` as an inferred candidate label unless richer source data is added
+- `edge-analysis.ts` now computes the setup-level statistics and recommendation primitives that a future dashboard/API surface can consume directly
+- Dashboard still documents the date-only broker limitation, so any future time-of-day surfaces must keep treating `SCALP` as an inferred candidate label unless richer source data is added
