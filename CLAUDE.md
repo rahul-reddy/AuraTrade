@@ -63,6 +63,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/app/api/dashboard/route.ts` | Dashboard data API (Phase 10) |
 | `src/components/dashboard/DashboardClient.tsx` | Dashboard charts + summary UI |
 | `src/lib/engine/classifier.ts` | Trade classification (Phase 11) |
+| `src/lib/engine/edge-analysis.ts` | Edge analysis + style profile engine (Phase 12) |
 | `src/lib/market-data/yahoo-client.ts` | Market data fetching |
 | `src/lib/market-data/market-data-cache.ts` | Market data cache + staleness logic |
 | `src/app/api/market-data/route.ts` | Authenticated market data API |
