@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 13 — App Shell & Auth UI Polish**
+**Phase 14 — Data Integrity Page + Settings**
 
 ## Phase Checklist
 
@@ -23,7 +23,7 @@
 | 10 | Dashboard | ✅ Done | Query-backed dashboard UI, chart-ready `/api/dashboard`, loading/error states, sector breakdown, and explicit hour-of-day limitation for date-only Schwab exports. |
 | 11 | Trade classification engine | ✅ Done | Pure `classifier.ts`, classification upserts during enrichment, 11 unit tests. Same-day `SCALP` tagging is treated as a date-only export candidate, not literal intraday timestamp truth. |
 | 12 | Edge analysis & style profile | ✅ Done | Pure `edge-analysis.ts` engine with style profile, per-setup stats, regime cross-reference, persistence trends, Kelly sizing comparison, recommendations, expected-value estimates, and setup-fit scoring. 11 unit tests. |
-| 13 | App shell & auth UI polish | Not started | |
+| 13 | App shell & auth UI polish | ✅ Done | Collapsible sidebar, TopBar, CommandPalette (⌘K), Framer Motion page transitions, global keyboard shortcuts (g d/t/c, u, ⌘K) |
 | 14 | Data integrity page + settings | Not started | |
 
 ## Decisions & Notes Log
@@ -74,6 +74,7 @@
 | 2026-03-16 | PR review follow-up for Phase 11: classifier scoring now keeps raw unrounded inputs for threshold checks, AVERAGE_DOWN ordering uses `execTime` + `daySeq` instead of `daySeq` alone, `secondarySetup` is cleared with `null` when removed on reclassification, and boundary-score tests were added for the 55-point primary cutoff and exact score weights. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (110/110), and `npm run test:e2e` (4/4). |
 | 2026-03-16 | Phase 12 complete on branch `feat/phase-12-edge-analysis`: added `src/lib/engine/edge-analysis.ts` with style-profile aggregation, per-setup performance summaries, Wilson win-rate confidence intervals, one-sample t-test significance checks, regime cross-reference, rolling expectancy persistence, Kelly sizing comparison, recommendations, expected-value estimation, and setup-fit scoring. |
 | 2026-03-16 | PR review follow-up for Phase 12: regime cross-reference now excludes trades with missing `marketRegime` instead of folding them into `CHOPPY`, and expected-value sizing now returns `null` rather than a negative suggested notional when Kelly is nonpositive. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (123/123), and `npm run test:e2e` (4/4). |
+| 2026-03-17 | Phase 13 complete on branch `feat/phase-13-app-shell`: added persistent collapsible sidebar (`AppSidebar`), topbar with dynamic page title and ⌘K button (`TopBar`), Cmd+K command palette for page navigation (`CommandPalette`), Framer Motion `AnimatePresence` page transitions, and global keyboard shortcuts (g d/t/c, u, ⌘K) via `AppShell`. Inline nav bars removed from DashboardClient, trades page, and upload page. `(app)/layout.tsx` is a server component that fetches session+first account and wraps all (app) routes in AppShell. `npx tsc --noEmit` clean, `npx jest --runInBand` 123/123. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -106,11 +107,5 @@
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
 - Branch: `feat/phase-12-edge-analysis`
 
-### Next: Phase 13 — App Shell & Auth UI Polish
-Target file: `src/app/(app)/layout.tsx`
-
-Available inputs after Phase 12:
-- `TradeContext` enrichment is already in place from Phase 7.5 and now refreshes `TradeClassification` in the same pass
-- `metrics.ts` and `/api/dashboard` expose stable realized-performance context for downstream edge summaries
-- `edge-analysis.ts` now computes the setup-level statistics and recommendation primitives that a future dashboard/API surface can consume directly
-- Dashboard still documents the date-only broker limitation, so any future time-of-day surfaces must keep treating `SCALP` as an inferred candidate label unless richer source data is added
+### Next: Phase 14 — Data Integrity Page + Settings
+Target file: `src/app/(app)/settings/integrity/page.tsx`

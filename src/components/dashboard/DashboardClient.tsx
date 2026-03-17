@@ -23,7 +23,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import LogoutButton from '@/components/auth/LogoutButton'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton'
 import { formatCurrency, formatDate, formatDuration } from '@/lib/format'
 import type { DashboardPayload, HeatmapMonth } from '@/lib/dashboard/types'
@@ -258,7 +257,7 @@ export default function DashboardClient({
 
   if (dashboardQuery.isError || !dashboardQuery.data) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-8">
+      <div className="flex items-center justify-center p-8 py-24 text-white">
         <div className="max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6 text-center">
           <h1 className="text-xl font-semibold">Dashboard unavailable</h1>
           <p className="mt-2 text-sm text-zinc-400">
@@ -330,35 +329,7 @@ export default function DashboardClient({
   })
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      <div className="border-b border-zinc-800 px-8 py-4">
-        <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-500">
-                <span className="text-sm font-bold text-white">A</span>
-              </div>
-              <span className="text-lg font-semibold text-white">AuraTrade</span>
-            </div>
-            <nav className="flex items-center gap-5 text-sm">
-              <Link href="/dashboard" className="font-medium text-white">
-                Dashboard
-              </Link>
-              <Link href="/trades" className="text-zinc-400 transition-colors hover:text-zinc-200">
-                Trades
-              </Link>
-              <Link href="/upload" className="text-zinc-400 transition-colors hover:text-zinc-200">
-                Upload
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-400">{userEmail}</span>
-            <LogoutButton />
-          </div>
-        </div>
-      </div>
-
+    <div className="text-white">
       <div className="mx-auto max-w-[1680px] px-8 py-6">
         <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
