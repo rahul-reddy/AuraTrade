@@ -3,34 +3,8 @@ import { createHash } from 'crypto'
 import { getRequiredSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import { parseSchwabCSV, type ParsedExecution } from '@/lib/parser/tos-csv-parser'
-import { groupTrades } from '@/lib/engine/trade-grouper'
-import type { Execution } from '@/generated/prisma'
-
-// ─── type helpers ────────────────────────────────────────────────────
-
-// ParsedExecution extended with the DB row's id for relinking after rebuild
-type ParsedWithDbId = ParsedExecution & { dbId: string }
-
-/** Map a DB Execution row back to the shape groupTrades() expects. */
-function dbExecToParsed(row: Execution): ParsedWithDbId {
-  const isShort = row.side === 'SELL_SHORT' || row.side === 'BUY_TO_COVER'
-  // daySeq is the 0-based intra-day occurrence index — use directly as rowIndex for FIFO ordering
-  return {
-    dbId: row.id,
-    rowIndex: row.daySeq,
-    date: new Date(row.execTime.toISOString().split('T')[0] + 'T00:00:00.000Z'),
-    symbol: row.symbol,
-    action: row.side,
-    side: row.side === 'BUY' || row.side === 'BUY_TO_COVER' ? 'BUY' : 'SELL',
-    posEffect: row.posEffect === 'OPEN' ? 'OPEN' : 'CLOSE',
-    direction: isShort ? 'SHORT' : 'LONG',
-    qty: row.qty.toNumber(),
-    price: row.price.toNumber(),
-    commission: row.commission.toNumber(),
-    amount: 0,
-    description: '',
-  }
-}
+import { rebuildTradesForAccount } from '@/lib/engine/account-rebuild'
+import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
 
 /** Map ParsedExecution side/posEffect/direction → Prisma Side enum string. */
 function toPrismaside(
@@ -110,6 +84,13 @@ export async function POST(
     }
 
     const accountId = upload.accountId
+    const account = await prisma.tradingAccount.findFirst({
+      where: { id: accountId, userId },
+      select: { id: true, startingBalance: true },
+    })
+    if (!account) {
+      return NextResponse.json({ error: 'account_not_found' }, { status: 404 })
+    }
 
     // Parse the file
     const parseResult = parseSchwabCSV(content)
@@ -141,71 +122,40 @@ export async function POST(
         const newExecCount = afterCount - beforeCount
         const skippedExecCount = execData.length - newExecCount
 
-        // ── 2. Null out tradeId on all executions (prep for trade rebuild) ──
-        await tx.execution.updateMany({ where: { accountId }, data: { tradeId: null } })
+        // ── 2. Rebuild round trips from all executions ──
+        const rebuildResult = await rebuildTradesForAccount(tx, accountId)
 
-        // ── 3. Delete all existing RoundTripTrades for account ──
-        await tx.roundTripTrade.deleteMany({ where: { accountId } })
+        // ── 3. Rebuild snapshots from the earliest date in this upload when new data landed ──
+        const snapshotResult =
+          newExecCount > 0 && parseResult.dateRange?.from
+            ? await rebuildDailySnapshotsForAccount(
+                tx,
+                accountId,
+                account.startingBalance.toNumber(),
+                { fromDate: parseResult.dateRange.from },
+              )
+            : null
 
-        // ── 4. Load ALL executions and rebuild round trips from scratch ──
-        const allDbExecs = await tx.execution.findMany({
-          where: { accountId },
-          orderBy: [{ execTime: 'asc' }, { daySeq: 'asc' }],
-        })
-        const allParsed = allDbExecs.map(dbExecToParsed)
-        const { trades: grouped, warnings } = groupTrades(allParsed)
-
-        // ── 5. Create RoundTripTrades and link their executions ──
-        for (const trade of grouped) {
-          const created = await tx.roundTripTrade.create({
-            data: {
-              accountId,
-              symbol: trade.symbol,
-              direction: trade.direction,
-              entryPrice: trade.entryPrice,
-              exitPrice: trade.exitPrice ?? undefined,
-              totalQty: trade.totalQty,
-              closedQty: trade.closedQty,
-              grossPnl: trade.grossPnl ?? undefined,
-              totalFees: trade.totalFees,
-              netPnl: trade.netPnl ?? undefined,
-              isOpen: trade.isOpen,
-              entryTime: trade.entryTime,
-              exitTime: trade.exitTime ?? undefined,
-              durationSeconds: trade.durationSeconds ?? undefined,
-            },
-          })
-
-          const fillIds = [
-            ...trade.openingFills.map((f) => (f as ParsedWithDbId).dbId),
-            ...trade.closingFills.map((f) => (f as ParsedWithDbId).dbId),
-          ].filter(Boolean)
-
-          if (fillIds.length > 0) {
-            await tx.execution.updateMany({
-              where: { id: { in: fillIds } },
-              data: { tradeId: created.id },
-            })
-          }
-        }
-
-        // ── 6. Mark upload complete ──
+        // ── 4. Mark upload complete ──
         await tx.upload.update({
           where: { id: uploadId },
           data: { status: 'COMPLETE', completedAt: new Date() },
         })
 
-        const closedTrades = grouped.filter((t) => !t.isOpen)
-        const openPositions = grouped.filter((t) => t.isOpen)
-        const estimatedPnl = closedTrades.reduce((s, t) => s + (t.netPnl ?? 0), 0)
+        const closedTrades = await tx.roundTripTrade.findMany({
+          where: { accountId, isOpen: false, netPnl: { not: null } },
+          select: { netPnl: true },
+        })
+        const estimatedPnl = closedTrades.reduce((sum, trade) => sum + (trade.netPnl?.toNumber() ?? 0), 0)
 
         return {
           newExecCount,
           skippedExecCount,
-          totalTrades: closedTrades.length,
-          openPositions: openPositions.length,
+          totalTrades: rebuildResult.closedTrades,
+          openPositions: rebuildResult.openPositions,
           estimatedPnl: Math.round(estimatedPnl * 100) / 100,
-          warnings: warnings.map((w) => w.message),
+          warnings: rebuildResult.warnings,
+          snapshotsRebuilt: snapshotResult?.snapshotsWritten ?? 0,
         }
       },
       { timeout: 30000 },
