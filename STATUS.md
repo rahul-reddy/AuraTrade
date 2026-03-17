@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**Phase 14 — Data Integrity Page + Settings**
+**All planned phases complete (1–14)**
 
 ## Phase Checklist
 
@@ -24,7 +24,7 @@
 | 11 | Trade classification engine | ✅ Done | Pure `classifier.ts`, classification upserts during enrichment, 11 unit tests. Same-day `SCALP` tagging is treated as a date-only export candidate, not literal intraday timestamp truth. |
 | 12 | Edge analysis & style profile | ✅ Done | Pure `edge-analysis.ts` engine with style profile, per-setup stats, regime cross-reference, persistence trends, Kelly sizing comparison, recommendations, expected-value estimates, and setup-fit scoring. 11 unit tests. |
 | 13 | App shell & auth UI polish | ✅ Done | Collapsible sidebar, TopBar, CommandPalette (⌘K), Framer Motion page transitions, global keyboard shortcuts (g d/t/c, u, ⌘K) |
-| 14 | Data integrity page + settings | Not started | |
+| 14 | Data integrity page + settings | ✅ Done | Settings integrity workspace, repair actions, snapshot rebuild engine, and sidebar/command-palette wiring landed. |
 
 ## Decisions & Notes Log
 | Date | Note |
@@ -76,18 +76,21 @@
 | 2026-03-16 | PR review follow-up for Phase 12: regime cross-reference now excludes trades with missing `marketRegime` instead of folding them into `CHOPPY`, and expected-value sizing now returns `null` rather than a negative suggested notional when Kelly is nonpositive. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (123/123), and `npm run test:e2e` (4/4). |
 | 2026-03-17 | Phase 13 complete on branch `feat/phase-13-app-shell`: added persistent collapsible sidebar (`AppSidebar`), topbar with dynamic page title and ⌘K button (`TopBar`), Cmd+K command palette for page navigation (`CommandPalette`), Framer Motion `AnimatePresence` page transitions, and global keyboard shortcuts (g d/t/c, u, ⌘K) via `AppShell`. Inline nav bars removed from DashboardClient, trades page, and upload page. `(app)/layout.tsx` is a server component that fetches session+first account and wraps all (app) routes in AppShell. `npx tsc --noEmit` clean, `npx jest --runInBand` 123/123. |
 | 2026-03-17 | CI review workflow updated: `.github/workflows/claude-code-review.yml` no longer auto-runs on PR open/sync. Claude review now runs only when a PR comment contains `/claude-review` or when the workflow is launched manually via `workflow_dispatch` with a PR number. |
+| 2026-03-17 | Phase 14 complete on branch `feat/phase-14-data-integrity`: added `src/app/(app)/settings/integrity/page.tsx`, `src/components/settings/IntegrityClient.tsx`, and authenticated `GET/POST /api/settings/integrity` so the app now shows execution/trade health counts, orphaned execution samples, position mismatch samples, duplicate-candidate clusters, and repair actions for full trade reprocessing or full snapshot rebuilds. |
+| 2026-03-17 | Data repair engine extraction: added `src/lib/engine/account-rebuild.ts` and `src/lib/engine/daily-snapshots.ts` as the shared source of truth for account-wide trade regrouping and `DailySnapshot` recomputation. Upload confirmation now reuses these helpers and incrementally rebuilds snapshots from the earliest date in a newly imported file instead of leaving `DailySnapshot` stale. |
+| 2026-03-17 | Phase 14 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 126/126 passing after adding `src/__tests__/engine/daily-snapshots.test.ts`, and focused Playwright smoke `npx playwright test playwright/settings-integrity.spec.ts` passing for the new settings route. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
 - [x] ~~Provide sample TOS CSV export for parser validation~~ — received 2026-03-13
 
-## Where We Stopped (2026-03-16)
+## Where We Stopped (2026-03-17)
 
 ### What's complete
-- **Phases 1–12 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
+- **Phases 1–14 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
 - **Parser** (`src/lib/parser/tos-csv-parser.ts`): handles both TDA 2022 and Schwab 2026 CSV variants, auto-detects reverse-chronological order, daySeq dedup.
 - **Grouper** (`src/lib/engine/trade-grouper.ts`): FIFO VWAP grouper, pure function, no DB calls.
-- **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm.
+- **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm; daily snapshots now rebuild incrementally from the earliest imported date when new executions land.
 - **Trades list** (`/trades`, `/api/trades`): URL-synced filters, sortable columns, page-size, CSV export, loading/error states.
 - **Market data** (`src/lib/market-data/`): Yahoo daily + intraday, DB cache with staleness logic, `GET /api/market-data`.
 - **Enrichment** (`src/lib/engine/trade-enrichment.ts`): SMA20/50/200, EMA20, ATR14, RSI14, ADX14, BBands, 52w range, gap %, SPY regime, earnings. `POST /api/enrich` triggers; `GET /api/enrich` polls. Upload page shows live progress bar.
@@ -96,6 +99,7 @@
 - **Dashboard** (`/dashboard`, `/api/dashboard`): TanStack Query-backed analytics page with summary cards, equity/drawdown, distribution + normal overlay, rolling win rate, day-of-week, monthly heatmap, Kelly widget, size/duration scatterplots, sector breakdown, and explicit hour-of-day unavailability for date-only source data.
 - **Trade classification** (`src/lib/engine/classifier.ts`): rule-based setup engine assigns primary/secondary tags plus confidence and score breakdown during enrichment. Existing trades UI and chart sidebar now show real setup labels once enrichment has run.
 - **Edge analysis** (`src/lib/engine/edge-analysis.ts`): pure analytics engine for style mix, per-setup edge stats, significance, regime cross-reference, persistence trends, Kelly sizing comparison, recommendations, expected-value estimates, and setup-fit scoring.
+- **Data integrity/settings** (`/settings/integrity`, `/api/settings/integrity`): TanStack Query-backed integrity workspace with health summary cards, orphaned execution/mismatch/duplicate candidate detail panels, full trade reprocess action, full daily snapshot rebuild action, and route-level loading/error states. Sidebar and command palette now route into settings.
 
 **Known build issues (pre-existing):**
 - `next build` fails: auth middleware imports Prisma into the edge runtime.
@@ -103,10 +107,11 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 123 tests passing
-- `npm run test:e2e` — 4/4 passing on 2026-03-16
+- `npx jest --runInBand` — 126 tests passing
+- `npx playwright test playwright/settings-integrity.spec.ts` — passing on 2026-03-17
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
-- Branch: `feat/phase-12-edge-analysis`
+- Branch: `feat/phase-14-data-integrity`
 
-### Next: Phase 14 — Data Integrity Page + Settings
-Target file: `src/app/(app)/settings/integrity/page.tsx`
+### Next: Post-Phase Cleanup / Deployment Readiness
+- Fix the pre-existing `next build` middleware/Prisma edge-runtime failure.
+- Exclude `src/generated/prisma` from lint so `npm run lint` can become part of the regular merge gate.
