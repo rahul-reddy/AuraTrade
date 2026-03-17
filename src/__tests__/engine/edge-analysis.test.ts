@@ -136,6 +136,25 @@ describe('buildEdgeAnalysis', () => {
     ])
     expect(analysis.perCategory).toHaveLength(1)
   })
+
+  it('excludes trades with null regimes from regime cross-reference buckets', () => {
+    const analysis = buildEdgeAnalysis({
+      trades: [
+        makeTrade({ id: 'known', setup: 'BREAKOUT', marketRegime: 'TRENDING_UP', netPnl: 100 }),
+        makeTrade({ id: 'unknown', setup: 'BREAKOUT', marketRegime: null, netPnl: -50 }),
+      ],
+      startingBalance: 100_000,
+    })
+
+    expect(analysis.regimeCrossReference).toEqual([
+      expect.objectContaining({
+        setup: 'BREAKOUT',
+        regime: 'TRENDING_UP',
+        tradeCount: 1,
+        averageTrade: 100,
+      }),
+    ])
+  })
 })
 
 describe('opportunity helpers', () => {
@@ -179,5 +198,28 @@ describe('opportunity helpers', () => {
   it('returns null when the setup has no history', () => {
     expect(estimateExpectedValue({ analysis, setup: 'SCALP' as SetupCategory })).toBeNull()
     expect(scoreSetupFit({ analysis, setup: 'SCALP' as SetupCategory })).toBeNull()
+  })
+
+  it('does not return a negative suggested notional when Kelly is nonpositive', () => {
+    const negativeAnalysis = buildEdgeAnalysis({
+      trades: [
+        makeTrade({ id: 'n1', setup: 'SCALP', netPnl: -200 }),
+        makeTrade({ id: 'n2', setup: 'SCALP', netPnl: -150 }),
+        makeTrade({ id: 'n3', setup: 'SCALP', netPnl: 50 }),
+        makeTrade({ id: 'n4', setup: 'SCALP', netPnl: -100 }),
+        makeTrade({ id: 'n5', setup: 'SCALP', netPnl: -80 }),
+      ],
+      startingBalance: 100_000,
+    })
+
+    const estimate = estimateExpectedValue({
+      analysis: negativeAnalysis,
+      setup: 'SCALP',
+      accountBalance: 100_000,
+    })
+
+    expect(estimate?.suggestedKellyFraction).not.toBeNull()
+    expect((estimate?.suggestedKellyFraction ?? 0)).toBeLessThanOrEqual(0)
+    expect(estimate?.suggestedNotional).toBeNull()
   })
 })

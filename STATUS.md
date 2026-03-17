@@ -73,6 +73,7 @@
 | 2026-03-16 | Phase 11 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 107/107 passing after adding `src/__tests__/engine/classifier.test.ts`, and `npm run test:e2e` 4/4 passing. |
 | 2026-03-16 | PR review follow-up for Phase 11: classifier scoring now keeps raw unrounded inputs for threshold checks, AVERAGE_DOWN ordering uses `execTime` + `daySeq` instead of `daySeq` alone, `secondarySetup` is cleared with `null` when removed on reclassification, and boundary-score tests were added for the 55-point primary cutoff and exact score weights. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (110/110), and `npm run test:e2e` (4/4). |
 | 2026-03-16 | Phase 12 complete on branch `feat/phase-12-edge-analysis`: added `src/lib/engine/edge-analysis.ts` with style-profile aggregation, per-setup performance summaries, Wilson win-rate confidence intervals, one-sample t-test significance checks, regime cross-reference, rolling expectancy persistence, Kelly sizing comparison, recommendations, expected-value estimation, and setup-fit scoring. |
+| 2026-03-16 | PR review follow-up for Phase 12: regime cross-reference now excludes trades with missing `marketRegime` instead of folding them into `CHOPPY`, and expected-value sizing now returns `null` rather than a negative suggested notional when Kelly is nonpositive. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (123/123), and `npm run test:e2e` (4/4). |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -100,7 +101,7 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 121 tests passing
+- `npx jest --runInBand` — 123 tests passing
 - `npm run test:e2e` — 4/4 passing on 2026-03-16
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
 - Branch: `feat/phase-12-edge-analysis`
