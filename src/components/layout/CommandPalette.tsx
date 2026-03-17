@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -38,18 +38,6 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     },
     [onClose, router],
   )
-
-  // Cmd+K / Ctrl+K to open (handled by parent, but re-close on Escape handled by dialog itself)
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        // toggled by parent
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
 
   return (
     <CommandDialog open={open} onOpenChange={(v) => !v && onClose()}>

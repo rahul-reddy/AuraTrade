@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { Component, useState, useEffect, useCallback, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion, type Transition } from 'framer-motion'
 import AppSidebar from '@/components/layout/AppSidebar'
@@ -20,12 +20,59 @@ interface AppShellProps {
 const pageVariants = {
   initial: { opacity: 0, y: 6 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -4 },
+  // Zero-duration exit: old page unmounts immediately so the entering page is
+  // the only one in the DOM, avoiding strict-mode heading selector collisions.
+  exit: { opacity: 0, transition: { duration: 0 } },
 }
 
 const pageTransition: Transition = {
-  duration: 0.18,
+  duration: 0.15,
   ease: 'easeOut',
+}
+
+// ─── Shell error boundary ─────────────────────────────────────────────────────
+
+interface ErrorBoundaryState {
+  hasError: boolean
+  message: string
+}
+
+class ShellErrorBoundary extends Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false, message: '' }
+  }
+
+  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
+    return {
+      hasError: true,
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.',
+    }
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-full items-center justify-center p-8">
+          <div className="max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6 text-center">
+            <p className="text-sm font-semibold text-zinc-100">Something went wrong</p>
+            <p className="mt-2 text-xs text-zinc-400">{this.state.message}</p>
+            <button
+              type="button"
+              onClick={() => this.setState({ hasError: false, message: '' })}
+              className="mt-4 rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 // ─── Keyboard shortcuts ───────────────────────────────────────────────────────
@@ -34,9 +81,9 @@ const pageTransition: Transition = {
  * Global keyboard shortcuts:
  *  g d  → /dashboard
  *  g t  → /trades
- *  g c  → /chart (no-op without symbol, skipped)
+ *  g c  → /trades (fallback — no symbol context at shell level)
  *  u    → /upload
- *  ⌘K   → command palette
+ *  ⌘K / Ctrl+K → command palette
  *
  * Sequence shortcuts (g+key) have a 1.5s window after pressing g.
  * Shortcuts are suppressed when focus is in an input/textarea/select.
@@ -89,7 +136,7 @@ function useKeyboardShortcuts(onOpenPalette: () => void) {
             break
           case 'c':
             e.preventDefault()
-            router.push('/trades') // fallback: no symbol context here
+            router.push('/trades')
             break
         }
         return
@@ -136,19 +183,21 @@ export default function AppShell({ children, userEmail, accountName }: AppShellP
         <TopBar onOpenPalette={openPalette} />
 
         <main className="flex-1 overflow-y-auto">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={pathname}
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              className="h-full"
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          <ShellErrorBoundary>
+            {/* AnimatePresence without mode="wait" so main height never collapses */}
+            <AnimatePresence initial={false}>
+              <motion.div
+                key={pathname}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={pageTransition}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </ShellErrorBoundary>
         </main>
       </div>
 

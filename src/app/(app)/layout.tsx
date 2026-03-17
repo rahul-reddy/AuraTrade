@@ -6,17 +6,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getRequiredSession()
   const userId = session.user.id
 
-  const account = await prisma.tradingAccount.findFirst({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-    select: { name: true },
-  })
+  let accountName = 'No account'
+  try {
+    const account = await prisma.tradingAccount.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: { name: true },
+    })
+    if (account) accountName = account.name
+  } catch {
+    // DB unavailable — shell still renders; pages handle their own data errors
+  }
+
+  const userEmail = session.user.email || session.user.name || 'Unknown user'
 
   return (
-    <AppShell
-      userEmail={session.user.email}
-      accountName={account?.name ?? 'No account'}
-    >
+    <AppShell userEmail={userEmail} accountName={accountName}>
       {children}
     </AppShell>
   )

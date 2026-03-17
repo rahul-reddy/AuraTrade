@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { Search } from 'lucide-react'
 
 // ─── Page title map ───────────────────────────────────────────────────────────
@@ -30,9 +31,17 @@ export default function TopBar({ onOpenPalette }: TopBarProps) {
   const pathname = usePathname()
   const title = getPageTitle(pathname)
 
+  // Detect platform on the client to show the correct modifier key
+  const [modKey, setModKey] = useState('⌘K')
+  useEffect(() => {
+    if (!navigator.platform.toUpperCase().includes('MAC')) {
+      setModKey('Ctrl K')
+    }
+  }, [])
+
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/80 px-5 backdrop-blur">
-      <h1 className="text-sm font-semibold text-zinc-100">{title}</h1>
+      <p className="text-sm font-semibold text-zinc-100">{title}</p>
 
       <button
         type="button"
@@ -42,7 +51,7 @@ export default function TopBar({ onOpenPalette }: TopBarProps) {
         <Search className="h-3.5 w-3.5" />
         <span>Search…</span>
         <kbd className="ml-1 rounded bg-zinc-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-zinc-400">
-          ⌘K
+          {modKey}
         </kbd>
       </button>
     </header>

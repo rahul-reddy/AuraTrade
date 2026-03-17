@@ -117,23 +117,21 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
-          const isActive = pathname.startsWith(item.href)
+          // Use exact match for root-like paths, prefix+slash for nested ones
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + '/')
 
-          return (
-            <Link
-              key={item.href}
-              href={item.disabled ? '#' : item.href}
-              aria-disabled={item.disabled}
-              className={cn(
-                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                isActive
-                  ? 'bg-zinc-800 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100',
-                item.disabled && 'pointer-events-none opacity-40',
-                collapsed && 'justify-center px-0',
-              )}
-              title={collapsed ? item.label : undefined}
-            >
+          const itemClass = cn(
+            'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+            isActive
+              ? 'bg-zinc-800 text-white'
+              : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100',
+            item.disabled && 'opacity-40',
+            collapsed && 'justify-center px-0',
+          )
+
+          const inner = (
+            <>
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <>
@@ -150,6 +148,31 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
                   )}
                 </>
               )}
+            </>
+          )
+
+          if (item.disabled) {
+            return (
+              <span
+                key={item.href}
+                role="link"
+                aria-disabled="true"
+                className={itemClass}
+                title={collapsed ? item.label : undefined}
+              >
+                {inner}
+              </span>
+            )
+          }
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={itemClass}
+              title={collapsed ? item.label : undefined}
+            >
+              {inner}
             </Link>
           )
         })}
