@@ -246,6 +246,7 @@ describe('open positions', () => {
     expect(t.durationSeconds).toBeNull()
     expect(t.totalQty).toBe(300)
     expect(t.closedQty).toBe(0)
+    expect(t.remainingQty).toBe(300)
   })
 })
 

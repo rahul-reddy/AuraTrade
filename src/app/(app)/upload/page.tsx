@@ -24,15 +24,31 @@ import { Skeleton } from '@/components/ui/skeleton'
 // ─── types ────────────────────────────────────────────────────────────
 
 interface UploadSummary {
+  canImport: boolean
+  totalRows: number
   totalExecutions: number
+  importableTradeRows: number
+  blockedTradeRows: number
+  nonTradeRows: number
+  positionAffectingNonTradeRows: number
+  optionRows: number
   skippedRows: number
-  newTrades: number
-  openPositions: number
+  newTrades: number | null
+  openPositions: number | null
   dateRange: { from: string; to: string } | null
   symbols: string[]
-  estimatedPnl: number
+  estimatedPnl: number | null
   warnings: string[]
   assumptions: string[]
+  blockers: string[]
+  actionBreakdown: Array<{
+    action: string
+    count: number
+    category: string
+    importableCount: number
+    blockedCount: number
+    instrumentTypes: string[]
+  }>
 }
 
 interface EnrichmentState {
@@ -47,8 +63,8 @@ interface EnrichmentState {
 type Phase =
   | { kind: 'idle' }
   | { kind: 'analyzing' }
-  | { kind: 'preview'; uploadId: string; accountId: string; summary: UploadSummary; file: File }
-  | { kind: 'confirming'; uploadId: string; accountId: string; file: File; summary: UploadSummary }
+  | { kind: 'preview'; uploadId: string | null; accountId: string | null; summary: UploadSummary; file: File }
+  | { kind: 'confirming'; uploadId: string; accountId: string | null; file: File; summary: UploadSummary }
   | { kind: 'success'; newExecCount: number; totalTrades: number; openPositions: number; estimatedPnl: number; enrichment: EnrichmentState }
   | { kind: 'error'; message: string }
 
@@ -149,7 +165,8 @@ function PreviewCard({
   isConfirming: boolean
 }) {
   const [showAssumptions, setShowAssumptions] = useState(false)
-  const pnlPositive = summary.estimatedPnl >= 0
+  const [showActions, setShowActions] = useState(false)
+  const pnlPositive = (summary.estimatedPnl ?? 0) >= 0
   const dateFrom = summary.dateRange ? new Date(summary.dateRange.from).toLocaleDateString() : '—'
   const dateTo = summary.dateRange ? new Date(summary.dateRange.to).toLocaleDateString() : '—'
 
@@ -174,13 +191,35 @@ function PreviewCard({
 
         {/* Core stats */}
         <StatRow label="Date range" value={`${dateFrom} – ${dateTo}`} />
+        <StatRow label="Rows in statement" value={<span className="font-mono">{summary.totalRows.toLocaleString()}</span>} />
         <StatRow label="Executions parsed" value={<span className="font-mono">{summary.totalExecutions.toLocaleString()}</span>} />
+        <StatRow label="Importable trade rows" value={<span className="font-mono">{summary.importableTradeRows.toLocaleString()}</span>} />
+        {summary.blockedTradeRows > 0 && (
+          <StatRow
+            label="Blocked trade rows"
+            value={<span className="font-mono text-yellow-400">{summary.blockedTradeRows.toLocaleString()}</span>}
+          />
+        )}
+        {summary.optionRows > 0 && (
+          <StatRow
+            label="Option rows"
+            value={<span className="font-mono text-blue-400">{summary.optionRows.toLocaleString()}</span>}
+          />
+        )}
+        {summary.positionAffectingNonTradeRows > 0 && (
+          <StatRow
+            label="Position-affecting non-trade rows"
+            value={<span className="font-mono text-yellow-400">{summary.positionAffectingNonTradeRows.toLocaleString()}</span>}
+          />
+        )}
         <StatRow label="Rows skipped" value={<span className="font-mono text-zinc-500">{summary.skippedRows.toLocaleString()}</span>} />
-        <StatRow
-          label="Round-trip trades"
-          value={<span className="font-mono">{summary.newTrades.toLocaleString()}</span>}
-        />
-        {summary.openPositions > 0 && (
+        {summary.newTrades != null && (
+          <StatRow
+            label="Round-trip trades"
+            value={<span className="font-mono">{summary.newTrades.toLocaleString()}</span>}
+          />
+        )}
+        {summary.openPositions != null && summary.openPositions > 0 && (
           <StatRow
             label="Open positions"
             value={
@@ -190,15 +229,17 @@ function PreviewCard({
             }
           />
         )}
-        <StatRow
-          label="Est. net P&L"
-          value={
-            <span className={`font-mono font-semibold flex items-center gap-1 ${pnlPositive ? 'text-green-400' : 'text-red-400'}`}>
-              {pnlPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-              {pnlPositive ? '+' : ''}${summary.estimatedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          }
-        />
+        {summary.estimatedPnl != null && (
+          <StatRow
+            label="Est. net P&L"
+            value={
+              <span className={`font-mono font-semibold flex items-center gap-1 ${pnlPositive ? 'text-green-400' : 'text-red-400'}`}>
+                {pnlPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                {pnlPositive ? '+' : ''}${summary.estimatedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            }
+          />
+        )}
 
         <Separator className="bg-zinc-800 my-3" />
 
@@ -219,6 +260,23 @@ function PreviewCard({
           </div>
         </div>
 
+        {summary.blockers.length > 0 && (
+          <>
+            <Separator className="bg-zinc-800 my-3" />
+            <div className="py-2 space-y-2">
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span className="text-sm font-medium">Import blocked for safety</span>
+              </div>
+              <ul className="space-y-1">
+                {summary.blockers.map((blocker, index) => (
+                  <li key={index} className="text-xs text-zinc-400 pl-5 leading-relaxed">{blocker}</li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+
         {/* Warnings */}
         {summary.warnings.length > 0 && (
           <>
@@ -235,6 +293,39 @@ function PreviewCard({
               </ul>
             </div>
           </>
+        )}
+
+        <Separator className="bg-zinc-800 my-3" />
+        <button
+          onClick={() => setShowActions(!showActions)}
+          className="flex items-center gap-2 text-zinc-500 hover:text-zinc-300 text-xs w-full py-1 transition-colors"
+        >
+          {showActions ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          Broker action breakdown ({summary.actionBreakdown.length})
+        </button>
+        {showActions && (
+          <div className="mt-3 space-y-2">
+            {summary.actionBreakdown.map((action) => (
+              <div key={action.action} className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-zinc-200">{action.action}</p>
+                    <p className="text-xs text-zinc-500">
+                      {action.category} · {action.instrumentTypes.join(', ')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono text-sm text-zinc-100">{action.count}</p>
+                    {action.blockedCount > 0 ? (
+                      <p className="text-[11px] text-yellow-400">{action.blockedCount} blocked</p>
+                    ) : (
+                      <p className="text-[11px] text-green-400">{action.importableCount} importable</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Assumptions (collapsible) */}
@@ -267,7 +358,7 @@ function PreviewCard({
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={isConfirming}
+            disabled={isConfirming || !summary.canImport}
             className="flex-1 bg-blue-600 hover:bg-blue-500 text-white"
           >
             {isConfirming ? (
@@ -275,8 +366,10 @@ function PreviewCard({
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Importing…
               </span>
+            ) : !summary.canImport ? (
+              'Dry-run only — import disabled'
             ) : (
-              `Import ${summary.newTrades + summary.openPositions} Trades`
+              `Import ${(summary.newTrades ?? 0) + (summary.openPositions ?? 0)} Trades`
             )}
           </Button>
         </div>
@@ -443,7 +536,7 @@ export default function UploadPage() {
   }, [])
 
   const handleConfirm = useCallback(async () => {
-    if (phase.kind !== 'preview') return
+    if (phase.kind !== 'preview' || !phase.summary.canImport || !phase.uploadId) return
     const { uploadId, accountId, file, summary } = phase
     setPhase({ kind: 'confirming', uploadId, accountId, file, summary })
 

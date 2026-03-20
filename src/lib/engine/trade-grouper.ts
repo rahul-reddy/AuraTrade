@@ -36,6 +36,8 @@ export interface GroupedTrade {
   totalQty: number
   /** Total qty that has been closed/exited */
   closedQty: number
+  /** Remaining open qty after any partial trims */
+  remainingQty: number
   /** Gross PnL before fees; null if open */
   grossPnl: number | null
   /** Sum of all commissions on opening AND closing fills */
@@ -109,6 +111,7 @@ function finalizePosition(
 ): GroupedTrade {
   const entryVWAP = vwap(pos.openingFills)
   const closedQty = totalFilledQty(pos.closingFills)
+  const remainingQty = pos.fifoQueue.reduce((s, lot) => s + lot.qty, 0)
   const symbol = pos.openingFills[0].symbol
 
   let exitPrice: number | null = null
@@ -135,6 +138,7 @@ function finalizePosition(
     exitPrice,
     totalQty: pos.peakPosition,
     closedQty,
+    remainingQty,
     grossPnl,
     totalFees: pos.totalFees,
     netPnl,

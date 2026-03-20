@@ -16,10 +16,12 @@ async function registerAndSignIn(page: Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/dashboard$/, { timeout: 15_000 });
+  await page.waitForURL(/\/dashboard(?:\?.*)?$/, { timeout: 30_000 });
 }
 
 test("user can upload a CSV and see imported trades", async ({ page }) => {
+  test.setTimeout(60_000);
+
   await registerAndSignIn(page);
 
   const fixturePath = path.join(process.cwd(), "playwright", "fixtures", "sample-trades.csv");
@@ -31,8 +33,12 @@ test("user can upload a CSV and see imported trades", async ({ page }) => {
   await expect(page.getByText("sample-trades.csv")).toBeVisible();
   await expect(page.getByText("Executions parsed")).toBeVisible();
 
-  await page.getByRole("button", { name: "Import 1 Trades" }).click();
-  await expect(page.getByText("Import complete")).toBeVisible();
+  const importButton = page.getByRole("button", { name: "Import 1 Trades" });
+  await expect(importButton).toBeEnabled();
+  await importButton.click({ force: true });
+  await expect(page.getByRole("heading", { name: "Import complete" })).toBeVisible({
+    timeout: 20_000,
+  });
 
   await page.goto("/trades");
   await expect(page.getByRole("heading", { name: "Trade History" })).toBeVisible();

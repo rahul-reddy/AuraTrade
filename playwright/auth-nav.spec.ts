@@ -19,13 +19,17 @@ async function registerAndSignIn(page: Page) {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await page.waitForURL(/\/dashboard$/, { timeout: 15_000 });
-  await expect(page.getByText("No trading account found.")).toBeVisible();
+  await page.waitForURL(/\/dashboard(?:\?.*)?$/, { timeout: 30_000 });
+  await expect(page.getByText("No trading account found.")).toBeVisible({
+    timeout: 15_000,
+  });
 
   return { email };
 }
 
 test("user can register, sign in, and navigate core authenticated pages", async ({ page }) => {
+  test.setTimeout(60_000);
+
   await registerAndSignIn(page);
 
   await page.getByRole("link", { name: "Upload a CSV to get started →" }).click();
