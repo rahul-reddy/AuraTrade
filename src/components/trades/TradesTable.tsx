@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatCurrency, formatDate, formatDuration, formatPrice } from '@/lib/format'
+import { getDisplayTradeQuantity } from '@/lib/trades/trade-quantity'
 
 type SortField = 'entryTime' | 'symbol' | 'netPnl' | 'durationSeconds' | 'rMultiple'
 
@@ -70,6 +71,10 @@ function buildChartHref(trade: TradeRow): string {
   params.set('from', trade.entryTime.toISOString().split('T')[0])
   params.set('to', (trade.exitTime ?? trade.entryTime).toISOString().split('T')[0])
   return `/chart/${encodeURIComponent(trade.symbol)}?${params.toString()}`
+}
+
+function canLinkToChart(trade: TradeRow): boolean {
+  return trade.instrumentType === 'EQUITY' && trade.closeKind !== 'TRANSFER'
 }
 
 function SortableHeading({
@@ -171,12 +176,18 @@ export function TradesTable({
                   className="border-zinc-800 hover:bg-zinc-900/40 transition-colors"
                 >
                   <TableCell className="py-2.5">
-                    <Link
-                      href={buildChartHref(trade)}
-                      className="font-mono font-semibold text-sm text-zinc-100 hover:text-blue-400 transition-colors"
-                    >
-                      {trade.symbol}
-                    </Link>
+                    {canLinkToChart(trade) ? (
+                      <Link
+                        href={buildChartHref(trade)}
+                        className="font-mono font-semibold text-sm text-zinc-100 hover:text-blue-400 transition-colors"
+                      >
+                        {trade.symbol}
+                      </Link>
+                    ) : (
+                      <span className="font-mono font-semibold text-sm text-zinc-100">
+                        {trade.symbol}
+                      </span>
+                    )}
                   </TableCell>
 
                   <TableCell className="py-2.5">
@@ -218,7 +229,11 @@ export function TradesTable({
                   </TableCell>
 
                   <TableCell className="py-2.5 font-mono text-sm text-zinc-300 text-right">
-                    {trade.totalQty.toNumber().toLocaleString()}
+                    {getDisplayTradeQuantity({
+                      isOpen: trade.isOpen,
+                      totalQty: trade.totalQty.toNumber(),
+                      remainingQty: trade.remainingQty.toNumber(),
+                    }).toLocaleString()}
                   </TableCell>
 
                   <TableCell className="py-2.5 font-mono text-sm font-semibold text-right">
@@ -266,14 +281,18 @@ export function TradesTable({
                   </TableCell>
 
                   <TableCell className="py-2.5 text-right">
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-zinc-300 hover:text-white hover:bg-zinc-800"
-                    >
-                      <Link href={buildChartHref(trade)}>View</Link>
-                    </Button>
+                    {canLinkToChart(trade) ? (
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-zinc-300 hover:text-white hover:bg-zinc-800"
+                      >
+                        <Link href={buildChartHref(trade)}>View</Link>
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-zinc-600">No chart</span>
+                    )}
                   </TableCell>
                 </TableRow>
               )

@@ -1,6 +1,6 @@
 # AuraTrade — Implementation Plan (v2)
 
-> Last updated: 2026-03-16
+> Last updated: 2026-03-20
 
 ## Context
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
@@ -47,6 +47,13 @@ NEXTAUTH_URL="http://localhost:3000"
 
 ## Phase 2: Database Schema
 File: `prisma/schema.prisma`
+
+### Post-2026-03-20 redesign note
+- Raw broker-statement persistence now exists via `BrokerStatementImport` + `BrokerStatementRow` before canonical `Execution` rows are created
+- Raw persistence preserves broker `Action`, `Description`, date text, quantity/price/fees/amount text, row index, and option contract metadata (underlying, expiration, strike, call/put, multiplier)
+- The dry-run layer now also persists grouped `BrokerStatementPosition` rows plus ledger warnings so statement-level grouping can be audited independently of canonical imports
+- `BrokerStatementPosition.remainingQty` and `RoundTripTrade.remainingQty` now persist the actual open size left after trims; `totalQty` remains peak position size for analytics
+- Canonical import of mixed stock/option statements remains intentionally blocked at dry-run time until the full option-aware ledger/grouping design lands
 
 ### Key Design Decisions
 - `@db.Decimal` for ALL financial values — never Float (IEEE 754 binary errors in money)
@@ -132,6 +139,14 @@ const { userId } = session.user
 ## Phase 3: CSV Parser ✅ COMPLETE
 File: `src/lib/parser/tos-csv-parser.ts` — exports `parseSchwabCSV()`
 
+### Post-2026-03-20 dry-run safety gate
+- Upload preview now also runs `src/lib/parser/schwab-statement-analyzer.ts`
+- The analyzer preserves broker `Action` values exactly, classifies statement rows by action taxonomy, detects option contracts/multipliers, and blocks canonical import when the statement contains:
+  - option open/close rows
+  - option lifecycle rows like `Expired`
+  - position-affecting non-trade rows like `Journaled Shares`
+- Current canonical parser remains equity-focused; mixed-action statements must stay in dry-run until the redesigned Phase 2/4 flow lands
+
 **Actual format: Schwab/TDA Transaction History** (NOT TOS Activity & Positions)
 
 ### Actual headers (two variants):
@@ -157,6 +172,20 @@ Pipeline: Strip BOM → PapaParse → classify Action → parse date (`M/d/yyyy`
 ## Phase 4: Trade Grouping Engine ✅ COMPLETE
 File: `src/lib/engine/trade-grouper.ts` — exports `groupTrades(executions)` → `{ trades, warnings }`
 
+### Post-2026-03-20 redesign note
+- The current grouper is only considered safe for equity-only statements whose position changes are fully represented by buy/sell/short/cover trade rows
+- Option grouping, expiration handling, assignment/exercise, and journal/transfer-driven position changes require a new instrument-aware ledger before canonical import is re-enabled for mixed statements
+- Dry-run analysis now includes an instrument-aware broker ledger that can model:
+  - option opens/closes in contracts with multiplier-aware exposure
+  - simultaneous long and short option legs on the same contract when broker `Action` values are explicit (`Buy to Open` / `Sell to Open` / `Buy to Close` / `Sell to Close`)
+  - option expirations as zero-price closes
+  - transfer/journal outs as non-P&L position exits
+  - same-day stock-merger close/open pairs where the corporate-action close row uses a temporary CUSIP symbol instead of the active trading symbol
+  - equity reversal rows where `Buy` closes an open short before opening a new long remainder, and `Sell Short` closes an open long before opening a new short remainder
+  - date-only same-day ordering heuristic: opening-style rows are processed before ordinary same-day closes so reverse-chronological broker exports do not leave false orphaned closes or phantom open positions
+- The ledger is now promoted into canonical mixed-statement import for supported statements: `/api/upload/[id]/confirm` can create `RoundTripTrade` rows directly from persisted `BrokerStatementPosition` rows when the file contains supported mixed instrument activity
+- Unsupported `UNKNOWN` broker actions still block canonical import; supported mixed imports intentionally skip equity-only chart/enrichment paths for option and transfer-based trades
+
 Algorithm: FIFO position tracker per symbol, pure function.
 
 ```
@@ -176,6 +205,7 @@ grossPnl  = (entryVWAP - exitVWAP) × closedQty  [SHORT]
 netPnl    = grossPnl - totalFees
 totalFees = Σ(commission) over ALL fills (opens + closes)
 totalQty  = peak open position size
+remainingQty = Σ(open lots still in FIFO queue after closes)
 durationSeconds = (exitDate - entryDate) × 86400  [same-day = 0, intraday exact unknown]
 ```
 
@@ -194,6 +224,12 @@ Files: `src/app/(app)/upload/page.tsx`, `src/app/api/upload/route.ts`, `src/app/
 ### Two-phase commit:
 1. `POST /api/upload` → parse file, run grouper in-memory only (no DB writes), return confirmation preview
 2. `POST /api/upload/[id]/confirm` → write Executions (upsert), write RoundTripTrades, trigger async enrichment pipeline, rebuild DailySnapshots from earliest new execution date
+
+### Post-2026-03-20 safety behavior
+- `/api/upload` now acts as a dry-run broker statement analyzer first
+- Dry-run analysis is persisted to `BrokerStatementImport` / `BrokerStatementRow` / `BrokerStatementPosition` even when canonical import is blocked, so every statement can be audited before legacy trade reconstruction exists
+- If the statement contains unsupported position-affecting actions, the UI shows a preview with blockers and action breakdown, no canonical `Upload` row is created, and confirm/import stays disabled
+- Only equity-only statements that pass the dry-run safety gate proceed to the existing canonical preview/import flow
 
 ### Confirmation screen data:
 ```json

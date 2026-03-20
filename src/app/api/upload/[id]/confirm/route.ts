@@ -3,8 +3,15 @@ import { createHash } from 'crypto'
 import { getRequiredSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import { parseSchwabCSV, type ParsedExecution } from '@/lib/parser/tos-csv-parser'
+import { analyzeSchwabStatement } from '@/lib/parser/schwab-statement-analyzer'
+import { persistBrokerStatementImport } from '@/lib/parser/broker-statement-store'
 import { rebuildTradesForAccount } from '@/lib/engine/account-rebuild'
 import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
+import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
+import {
+  evaluateStatementImportSupport,
+  mapBrokerPositionToTradeCreateInput,
+} from '@/lib/engine/broker-trade-importer'
 
 /** Map ParsedExecution side/posEffect/direction → Prisma Side enum string. */
 function toPrismaside(
@@ -93,7 +100,41 @@ export async function POST(
     }
 
     // Parse the file
+    const dryRun = analyzeSchwabStatement(content)
+    const brokerLedger = buildBrokerPositionLedger(dryRun.rows)
+    const importSupport = evaluateStatementImportSupport(dryRun)
     const parseResult = parseSchwabCSV(content)
+
+    await persistBrokerStatementImport(prisma, {
+      userId,
+      accountId,
+      fileHash,
+      fileName: file.name,
+      dryRun,
+      ledger: brokerLedger,
+    })
+
+    const statementImport = await prisma.brokerStatementImport.findUnique({
+      where: {
+        accountId_fileHash: {
+          accountId,
+          fileHash,
+        },
+      },
+      include: {
+        positions: true,
+        ledgerWarnings: {
+          orderBy: [{ rowIndex: 'asc' }, { createdAt: 'asc' }],
+          select: { message: true },
+        },
+      },
+    })
+
+    const useMixedLedgerImport =
+      !dryRun.importSupported &&
+      importSupport.supported &&
+      statementImport != null &&
+      statementImport.positions.length > 0
 
     // Assign content-based daySeq — enables cross-file dedup for overlapping date ranges
     const withSeqs = assignDaySeqs(parseResult.executions)
@@ -115,6 +156,83 @@ export async function POST(
 
     const result = await prisma.$transaction(
       async (tx) => {
+        if (useMixedLedgerImport && statementImport) {
+          await tx.roundTripTrade.deleteMany({
+            where: { brokerStatementImportId: statementImport.id },
+          })
+
+          for (const position of statementImport.positions) {
+            await tx.roundTripTrade.create({
+              data: mapBrokerPositionToTradeCreateInput(
+                accountId,
+                statementImport.id,
+                position.id,
+                {
+                  instrumentKey: position.instrumentKey,
+                  instrumentType: position.instrumentType as 'EQUITY' | 'OPTION',
+                  symbol: position.symbol,
+                  side: position.side as 'LONG' | 'SHORT',
+                  totalQty: position.totalQty.toNumber(),
+                  closedQty: position.closedQty.toNumber(),
+                  remainingQty: position.remainingQty.toNumber(),
+                  multiplier: position.multiplier,
+                  underlyingEquivalentQty: position.underlyingEquivalentQty.toNumber(),
+                  entryPrice: position.entryPrice.toNumber(),
+                  exitPrice: position.exitPrice?.toNumber() ?? null,
+                  grossPnl: position.grossPnl?.toNumber() ?? null,
+                  totalFees: position.totalFees.toNumber(),
+                  netPnl: position.netPnl?.toNumber() ?? null,
+                  isOpen: position.isOpen,
+                  openRows: position.openRows,
+                  closeRows: position.closeRows,
+                  openingActions: position.openingActions,
+                  closingActions: position.closingActions,
+                  entryTime: position.entryTime,
+                  exitTime: position.exitTime,
+                  closeKind: position.closeKind as
+                    | 'TRADE'
+                    | 'EXPIRATION'
+                    | 'TRANSFER'
+                    | 'MIXED'
+                    | null,
+                },
+              ),
+            })
+          }
+
+          const snapshotResult = await rebuildDailySnapshotsForAccount(
+            tx,
+            accountId,
+            account.startingBalance.toNumber(),
+          )
+
+          await tx.upload.update({
+            where: { id: uploadId },
+            data: { status: 'COMPLETE', completedAt: new Date() },
+          })
+
+          const importedTrades = await tx.roundTripTrade.findMany({
+            where: { brokerStatementImportId: statementImport.id },
+            select: { isOpen: true, netPnl: true },
+          })
+
+          const estimatedPnl = importedTrades.reduce(
+            (sum, trade) => sum + (trade.netPnl?.toNumber() ?? 0),
+            0,
+          )
+          const openPositions = importedTrades.filter((trade) => trade.isOpen).length
+
+          return {
+            newExecCount: 0,
+            skippedExecCount: 0,
+            totalTrades: importedTrades.length - openPositions,
+            openPositions,
+            estimatedPnl: Math.round(estimatedPnl * 100) / 100,
+            warnings: statementImport.ledgerWarnings.map((warning) => warning.message),
+            snapshotsRebuilt: snapshotResult.snapshotsWritten,
+          }
+        }
+
         // ── 1. Upsert new executions (skipDuplicates deduplicates overlapping uploads) ──
         const beforeCount = await tx.execution.count({ where: { accountId } })
         await tx.execution.createMany({ data: execData, skipDuplicates: true })

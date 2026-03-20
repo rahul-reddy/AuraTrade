@@ -3,7 +3,7 @@
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
 ## Current Phase
-**All planned phases complete (1–14)**
+**Post-phase follow-up: Phase 2–4 trade-import redesign / dry-run hardening**
 
 ## Phase Checklist
 
@@ -81,6 +81,30 @@
 | 2026-03-17 | Phase 14 verification: `npx tsc --noEmit` clean, `npx jest --runInBand` 126/126 passing after adding `src/__tests__/engine/daily-snapshots.test.ts`, and focused Playwright smoke `npx playwright test playwright/settings-integrity.spec.ts` passing for the new settings route. |
 | 2026-03-17 | Phase 14 merge-gate follow-up: manual local reviewer pass completed with no actionable findings. Full `npm run test:e2e` suite now passes 5/5, including the new integrity settings smoke. |
 | 2026-03-17 | PR comment follow-up for Phase 14: added confirmation prompts around both destructive integrity actions, hardened `/api/settings/integrity` against invalid JSON bodies, switched the snapshot engine to Decimal arithmetic with a full-rebuild fallback when incremental history is missing, enabled horizontal scroll for the integrity tables on small screens, aligned the command palette label with Settings, and expanded the Playwright spec to exercise both repair buttons. Re-ran `npx tsc --noEmit`, `npx jest --runInBand` (126/126), and `npm run test:e2e` (5/5). |
+| 2026-03-20 | Trade-domain backend reset completed ahead of the parser/grouper rethink: deleted all `Upload`, `Execution`, `RoundTripTrade`, `TradeContext`, `TradeClassification`, and `DailySnapshot` rows while preserving users, sessions, trading accounts, and market-data cache. |
+| 2026-03-20 | Upload preview now runs a new dry-run analyzer in `src/lib/parser/schwab-statement-analyzer.ts` before canonical import. The analyzer preserves broker `Action` values, classifies row taxonomy, detects option contracts/multipliers, and blocks canonical import when the statement contains option open/close rows, `Expired` rows, or position-affecting non-trade rows such as `Journaled Shares`. |
+| 2026-03-20 | Real statement finding: `Individual_XXX047_Transactions_20260313-091015_updated.csv` contains options (`Buy to Open`, `Sell to Close`, `Sell to Open`, `Buy to Close`, `Expired`) plus `Journaled Shares`, dividends, interest, transfers, and merger/service-fee rows. Example ORCL option rows reconcile at a 100x multiplier, confirming quantities are contracts, not shares. |
+| 2026-03-20 | Verification for the dry-run safety gate: `npx tsc --noEmit` clean, `npx jest --runInBand` now 129/129 passing, and focused Playwright `playwright/upload-import.spec.ts` passing on rerun after an initial dev-server compile timeout during login. |
+| 2026-03-20 | Added raw broker-statement persistence via `BrokerStatementImport` + `BrokerStatementRow` (migration `20260320160220_add_broker_statement_imports`). `/api/upload` now stores dry-run statement metadata and normalized raw rows even when canonical import is blocked, so mixed statements remain auditable before the option-aware ledger exists. |
+| 2026-03-20 | Added Jest coverage for broker-statement persistence mapping/update flow in `src/__tests__/parser/broker-statement-store.test.ts`. Re-ran `npx tsc --noEmit` clean and `npx jest --runInBand` now 131/131 passing. Focused Playwright `playwright/upload-dry-run-blockers.spec.ts` is currently blocked by the pre-existing middleware/Prisma edge-runtime issue that hangs `/upload` under the Playwright web server. |
+| 2026-03-20 | Added `src/lib/engine/broker-position-ledger.ts`, a pure instrument-aware dry-run ledger for mixed broker statements. It models equities and options by instrument key, keeps option quantities in contracts with multipliers, supports expirations and transfer-out rows, and summarizes blocked uploads without relying on the equity-only FIFO grouper. |
+| 2026-03-20 | Reversal handling added to the dry-run ledger: plain `Buy` rows now cover an open short before opening any remaining long quantity, and `Sell Short` rows now close an open long before opening any remaining short quantity. On the real Schwab statement this reduced ledger warnings from 581 to 164 and reduced unresolved open spans from 490 to 101. |
+| 2026-03-20 | Analyzer refinement: empty-symbol `Journaled Shares` mark-to-market / cash-movement rows are now treated as cash entries rather than position-affecting blockers. `/api/upload` blocked previews now use the dry-run ledger summary for `newTrades`, `openPositions`, `estimatedPnl`, and warnings instead of borrowing misleading numbers from the equity-only parser. |
+| 2026-03-20 | Added persisted dry-run ledger storage with `BrokerStatementPosition` + `BrokerStatementWarning` (migration `20260320164827_add_broker_statement_ledger_persistence`). `persistBrokerStatementImport()` now stores raw rows, grouped ledger positions, and ledger warnings together for every analyzed statement. |
+| 2026-03-20 | Verification after persisted-ledger migration: `npx tsc --noEmit` clean and `npx jest --runInBand` now 139/139 passing. |
+| 2026-03-20 | Analyzer ordering fix: `schwab-statement-analyzer.ts` now reverses newest-to-oldest Schwab exports before row indexing, just like the legacy parser. On the real statement this dropped dry-run ledger warnings from 164 to 19 and reduced unresolved open spans from 101 to 19. |
+| 2026-03-20 | Added `src/lib/engine/broker-trade-importer.ts` plus RoundTripTrade instrument fields (migration `20260320172953_add_round_trip_trade_instrument_fields`). Supported mixed statements can now confirm/import by creating canonical `RoundTripTrade` rows directly from persisted `BrokerStatementPosition` rows instead of forcing everything through stock-only `Execution` records. |
+| 2026-03-20 | Mixed-import safety rails: trade enrichment now only targets `instrumentType = EQUITY` and non-transfer trades; trades table chart links are disabled for option / transfer trades. `UNKNOWN` broker actions remain the canonical-import blocker. |
+| 2026-03-20 | Real-statement ledger follow-up: `broker-position-ledger.ts` now keeps active positions by instrument+side, so explicit option rows can represent simultaneous long/short legs on the same contract without false direction-conflict warnings. Stock-merger transfer-outs can also resolve through a same-day paired merger-open row when the close row uses a temporary CUSIP instead of the active trading symbol. |
+| 2026-03-20 | Real-statement warning reduction after the ledger follow-up: the Schwab file's ORCL option conflict and RKLB/`773122106` merger orphan are now gone; remaining ledger warnings are down to 17 and are concentrated in early-window orphaned equity closes plus one small META oversized close that likely represent carry-in inventory rather than same-day ordering bugs. |
+| 2026-03-20 | Upload retry fix: `/api/upload` now reuses and refreshes an existing non-complete `Upload` row for the same `(accountId, fileHash)` via `src/lib/upload/pending-upload.ts` instead of crashing on the unique `(accountId, fileHash)` constraint when the same file is previewed again before import completes. |
+| 2026-03-20 | Same-day ordering fix for date-only broker exports: `broker-position-ledger.ts` now sorts each trading day with opening-style rows before ordinary closes, while keeping transfer/merger close rows ahead of their paired transfer-in/open rows. On the real Schwab statement this removed the false open positions the user flagged for `BILI`, `TQQQ`, `TNA`, `IOT`, and `IONQ`, and cut the warning set further to 13. |
+| 2026-03-20 | Confirm/import refresh fix: `/api/upload/[id]/confirm` now re-runs the dry-run analyzer + broker ledger and persists the latest `BrokerStatementImport` snapshot before creating canonical `RoundTripTrade` rows, so confirm can no longer import stale grouped positions from an older preview. |
+| 2026-03-20 | Local live-data repair completed after the same-day ordering fix: the currently imported statement was rebuilt from the corrected broker ledger, replacing the stale `RoundTripTrade` rows for that statement and refreshing daily snapshots for the account. |
+| 2026-03-20 | Verification after the same-day ordering + confirm refresh fixes: `npx tsc --noEmit` clean and `npx jest --runInBand` now 153/153 passing. |
+| 2026-03-20 | Open-quantity model fix: added `remainingQty` to both `BrokerStatementPosition` and `RoundTripTrade` (migration `20260320203759_add_remaining_qty_to_statement_positions_and_trades`). `totalQty` now stays peak position size for analytics, while `/trades` and CSV export can show the true remaining size for open positions such as AMD `242` instead of peak `350`. |
+| 2026-03-20 | Live backfill for the current imported statement: recomputed `remainingQty` directly from persisted broker row indices and synced it into canonical trades. Verified current AMD open trade now stores `totalQty=350`, `closedQty=300`, `remainingQty=242`. |
+| 2026-03-20 | Verification after the remaining-quantity fix: `npx tsc --noEmit` clean and `npx jest --runInBand` now 157/157 passing. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)
@@ -90,9 +114,15 @@
 
 ### What's complete
 - **Phases 1–14 complete.** All DB tables present. Docker container `auratrade-pg` on port 5432.
+- **Post-phase import hardening (2026-03-20):** upload preview now acts as a safety-first dry run. Mixed stock/option statements are analyzed and explained before confirm; unsupported `UNKNOWN` action patterns still stay dry-run only.
+- **Raw statement persistence (2026-03-20):** every `/api/upload` dry run now writes a `BrokerStatementImport` record plus normalized `BrokerStatementRow` children, even for blocked mixed statements. We can audit broker actions/option metadata safely before canonical executions or trades are created.
+- **Instrument-aware dry-run ledger (2026-03-20):** blocked mixed statements now flow through `broker-position-ledger.ts`, which can reason about options, expirations, transfer-outs, and equity reversal rows well enough to produce a safer preview summary before canonical import exists.
+- **Persisted ledger audit layer (2026-03-20):** the grouped dry-run output now lives in the database too via `BrokerStatementPosition` and `BrokerStatementWarning`, so statement-level grouping/warnings survive beyond the upload response and can become the bridge into a future canonical mixed import path.
+- **Canonical mixed import bridge (2026-03-20):** supported mixed statements can confirm/import into instrument-aware `RoundTripTrade` rows via the persisted ledger path; unsupported `UNKNOWN` actions still keep the statement in dry-run only mode.
+- **Open quantity semantics (2026-03-20):** `totalQty` remains the peak size reached within a trade span, while `remainingQty` is now the source of truth for what is still open after partial trims. The trades list/export uses `remainingQty` for open positions.
 - **Parser** (`src/lib/parser/tos-csv-parser.ts`): handles both TDA 2022 and Schwab 2026 CSV variants, auto-detects reverse-chronological order, daySeq dedup.
 - **Grouper** (`src/lib/engine/trade-grouper.ts`): FIFO VWAP grouper, pure function, no DB calls.
-- **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write; full trade rebuild on every confirm; enrichment auto-triggered after confirm; daily snapshots now rebuild incrementally from the earliest imported date when new executions land.
+- **Upload flow** (`/upload`, `/api/upload`, `/api/upload/[id]/confirm`): two-phase parse-preview → confirm-write for equity-safe statements; upload preview now also runs a broker action dry-run analyzer and blocks canonical import when option or position-affecting non-trade actions are present. Full trade rebuild still runs on confirm for supported equity-only statements; daily snapshots rebuild incrementally from the earliest imported date when new executions land.
 - **Trades list** (`/trades`, `/api/trades`): URL-synced filters, sortable columns, page-size, CSV export, loading/error states.
 - **Market data** (`src/lib/market-data/`): Yahoo daily + intraday, DB cache with staleness logic, `GET /api/market-data`.
 - **Enrichment** (`src/lib/engine/trade-enrichment.ts`): SMA20/50/200, EMA20, ATR14, RSI14, ADX14, BBands, 52w range, gap %, SPY regime, earnings. `POST /api/enrich` triggers; `GET /api/enrich` polls. Upload page shows live progress bar.
@@ -109,11 +139,13 @@
 
 ### Verification state
 - `npx tsc --noEmit` — clean
-- `npx jest --runInBand` — 126 tests passing
+- `npx jest --runInBand` — 157 tests passing
 - `npm run test:e2e` — 5/5 passing on 2026-03-17
+- `npx playwright test playwright/upload-dry-run-blockers.spec.ts` — blocked by the pre-existing middleware/Prisma edge-runtime issue on `/upload`
 - `review-local` — no repo-defined script/command exists; manual local review still has to be done without an automated repo command
-- Branch: `feat/phase-14-data-integrity`
+- Branch: `feat/trade-import-dry-run-redesign`
 
 ### Next: Post-Phase Cleanup / Deployment Readiness
+- Harden the mixed-import path further, especially same-day close-then-reopen sequencing and execution-rebuild interoperability with broker-ledger trades.
 - Fix the pre-existing `next build` middleware/Prisma edge-runtime failure.
 - Exclude `src/generated/prisma` from lint so `npm run lint` can become part of the regular merge gate.

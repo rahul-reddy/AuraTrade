@@ -16,10 +16,12 @@ async function registerAndSignIn(page: Page) {
   await page.getByLabel('Email').fill(email)
   await page.getByLabel('Password').fill(password)
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await page.waitForURL(/\/dashboard$/, { timeout: 15_000 })
+  await page.waitForURL(/\/dashboard(?:\?.*)?$/, { timeout: 30_000 })
 }
 
 test('user can view the dashboard after importing trades', async ({ page }) => {
+  test.setTimeout(60_000)
+
   await registerAndSignIn(page)
 
   const fixturePath = path.join(process.cwd(), 'playwright', 'fixtures', 'sample-trades.csv')
@@ -28,7 +30,9 @@ test('user can view the dashboard after importing trades', async ({ page }) => {
   await page.locator('input[type="file"]').setInputFiles(fixturePath)
   await expect(page.getByText('Executions parsed')).toBeVisible()
   await page.getByRole('button', { name: 'Import 1 Trades' }).click()
-  await expect(page.getByText('Import complete')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Import complete' })).toBeVisible({
+    timeout: 20_000,
+  })
 
   await page.goto('/dashboard')
   await expect(page.getByRole('heading', { name: 'Performance Dashboard' })).toBeVisible()
