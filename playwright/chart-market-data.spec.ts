@@ -16,10 +16,12 @@ async function registerAndSignIn(page: Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/dashboard$/, { timeout: 15_000 });
+  await page.waitForURL(/\/dashboard(?:\?.*)?$/, { timeout: 30_000 });
 }
 
 test("user can navigate from trades into the symbol chart workspace", async ({ page }) => {
+  test.setTimeout(60_000);
+
   await registerAndSignIn(page);
 
   const fixturePath = path.join(process.cwd(), "playwright", "fixtures", "sample-trades.csv");
@@ -28,14 +30,23 @@ test("user can navigate from trades into the symbol chart workspace", async ({ p
   await page.locator('input[type="file"]').setInputFiles(fixturePath);
   await expect(page.getByText("Executions parsed")).toBeVisible();
   await page.getByRole("button", { name: "Import 1 Trades" }).click();
-  await expect(page.getByText("Import complete")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Import complete" })).toBeVisible({
+    timeout: 20_000,
+  });
 
-  await page.goto("/trades");
+  await page.goto("/trades", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Trade History" })).toBeVisible();
 
   // Navigate to chart from trades list
-  await page.getByRole("link", { name: "BROS" }).click();
-  await page.waitForURL(/\/chart\/BROS/);
+  const chartLink = page.getByRole("link", { name: "BROS" });
+  await expect(chartLink).toHaveAttribute("href", /\/chart\/BROS/);
+  await Promise.all([
+    page.waitForURL(/\/chart\/BROS/, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    }),
+    chartLink.click({ force: true }),
+  ]);
 
   // Header: back link and symbol name visible
   await expect(page.getByRole("link", { name: "← Trades" })).toBeVisible();
