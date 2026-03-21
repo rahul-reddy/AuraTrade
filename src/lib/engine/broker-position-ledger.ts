@@ -91,10 +91,10 @@ function sortRows(rows: AnalyzedStatementRow[]): AnalyzedStatementRow[] {
     const rightTime = right.date?.getTime() ?? Number.POSITIVE_INFINITY
     if (leftTime !== rightTime) return leftTime - rightTime
 
-    const leftPriority = getSameDayActionPriority(left)
-    const rightPriority = getSameDayActionPriority(right)
-    if (leftPriority !== rightPriority) return leftPriority - rightPriority
-
+    // Use original row order within a day — the statement is already reversed to
+    // chronological order by analyzeSchwabStatement, so rowIndex is the only
+    // reliable same-day sequencing signal. Forcing opens-before-closes breaks
+    // real patterns like "close carried position in the morning, reopen later".
     return left.rowIndex - right.rowIndex
   })
 }
@@ -220,11 +220,15 @@ function finalizePosition(pos: ActivePosition, isOpen: boolean): BrokerLedgerPos
   const remainingQty = pos.fifoQueue.reduce((sum, lot) => sum + lot.qty, 0)
   const closeKind = isOpen ? null : inferCloseKind(pos.closingEvents)
   const hasTransferClose = pos.closingEvents.some((event) => event.kind === 'TRANSFER_OUT')
+  // If every opening event lacks a price (e.g. transfer-in, merger-in), entryPrice
+  // is 0 from vwap() and would make the entire sale proceeds look like profit.
+  // Guard by checking whether any priced opening event exists.
+  const hasPricedOpen = pos.openingEvents.some((event) => event.price != null)
 
   let exitPrice: number | null = null
   let grossPnl: number | null = null
 
-  if (!isOpen && pos.closingEvents.length > 0 && !hasTransferClose) {
+  if (!isOpen && pos.closingEvents.length > 0 && !hasTransferClose && hasPricedOpen) {
     exitPrice = vwap(pos.closingEvents)
     if (pos.side === 'LONG') {
       grossPnl = (exitPrice - entryPrice) * closedQty * pos.multiplier
@@ -353,9 +357,6 @@ function consumeCloseEvent(
   event: NormalizedLedgerEvent,
   warnings: BrokerLedgerWarning[],
 ): boolean {
-  active.closingEvents.push(event)
-  active.totalFees += event.fees
-
   let remaining = event.qty
   while (remaining > 0 && active.fifoQueue.length > 0) {
     const lot = active.fifoQueue[0]
@@ -375,6 +376,17 @@ function consumeCloseEvent(
       instrumentKey: active.instrumentKey,
     })
   }
+
+  // Cap the recorded close qty to what was actually consumed from the FIFO queue.
+  // Recording the full raw qty when carry-in inventory is smaller overstates
+  // closedQty and P&L in finalizePosition.
+  const consumedQty = event.qty - remaining
+  const [consumedFees] = remaining > 0
+    ? splitFees(event.fees, consumedQty, event.qty)
+    : [event.fees, 0]
+  const recordedEvent = remaining > 0 ? withQtyAndFees(event, consumedQty, consumedFees) : event
+  active.closingEvents.push(recordedEvent)
+  active.totalFees += recordedEvent.fees
 
   return active.fifoQueue.length === 0
 }

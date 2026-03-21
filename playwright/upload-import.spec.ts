@@ -35,7 +35,8 @@ test("user can upload a CSV and see imported trades", async ({ page }) => {
 
   const importButton = page.getByRole("button", { name: "Import 1 Trades" });
   await expect(importButton).toBeEnabled();
-  await importButton.click({ force: true });
+  await importButton.scrollIntoViewIfNeeded();
+  await importButton.click();
   await expect(page.getByRole("heading", { name: "Import complete" })).toBeVisible({
     timeout: 20_000,
   });

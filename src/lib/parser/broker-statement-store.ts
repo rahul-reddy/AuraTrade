@@ -1,6 +1,6 @@
 import { parse as parseDate } from 'date-fns'
 import { Prisma } from '@/generated/prisma'
-import type { PrismaClient } from '@/generated/prisma'
+import { PrismaClient } from '@/generated/prisma'
 import type { BrokerLedgerResult } from '@/lib/engine/broker-position-ledger'
 import type {
   AnalyzedStatementRow,
@@ -109,81 +109,83 @@ function mapWarningCreateManyInput(
 }
 
 export async function persistBrokerStatementImport(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: PrismaClient,
   args: PersistBrokerStatementArgs,
 ): Promise<{ statementImportId: string }> {
-  const existing = await db.brokerStatementImport.findUnique({
-    where: {
-      accountId_fileHash: {
-        accountId: args.accountId,
-        fileHash: args.fileHash,
+  return db.$transaction(async (tx) => {
+    const existing = await tx.brokerStatementImport.findUnique({
+      where: {
+        accountId_fileHash: {
+          accountId: args.accountId,
+          fileHash: args.fileHash,
+        },
       },
-    },
-    select: { id: true },
-  })
+      select: { id: true },
+    })
 
-  const metadata = {
-    userId: args.userId,
-    accountId: args.accountId,
-    fileHash: args.fileHash,
-    fileName: args.fileName,
-    totalRows: args.dryRun.totalRows,
-    importableTradeRows: args.dryRun.importableTradeRows,
-    blockedTradeRows: args.dryRun.blockedTradeRows,
-    nonTradeRows: args.dryRun.nonTradeRows,
-    positionAffectingNonTradeRows: args.dryRun.positionAffectingNonTradeRows,
-    optionRows: args.dryRun.optionRows,
-    skippedRows: args.dryRun.skippedRows,
-    importSupported: args.dryRun.importSupported,
-    dateFrom: args.dryRun.dateRange?.from ?? null,
-    dateTo: args.dryRun.dateRange?.to ?? null,
-    warnings: args.dryRun.warnings,
-    blockers: args.dryRun.blockers,
-    assumptions: args.dryRun.assumptions,
-  }
+    const metadata = {
+      userId: args.userId,
+      accountId: args.accountId,
+      fileHash: args.fileHash,
+      fileName: args.fileName,
+      totalRows: args.dryRun.totalRows,
+      importableTradeRows: args.dryRun.importableTradeRows,
+      blockedTradeRows: args.dryRun.blockedTradeRows,
+      nonTradeRows: args.dryRun.nonTradeRows,
+      positionAffectingNonTradeRows: args.dryRun.positionAffectingNonTradeRows,
+      optionRows: args.dryRun.optionRows,
+      skippedRows: args.dryRun.skippedRows,
+      importSupported: args.dryRun.importSupported,
+      dateFrom: args.dryRun.dateRange?.from ?? null,
+      dateTo: args.dryRun.dateRange?.to ?? null,
+      warnings: args.dryRun.warnings,
+      blockers: args.dryRun.blockers,
+      assumptions: args.dryRun.assumptions,
+    }
 
-  const statementImport = existing
-    ? await db.brokerStatementImport.update({
-        where: { id: existing.id },
-        data: metadata,
-        select: { id: true },
+    const statementImport = existing
+      ? await tx.brokerStatementImport.update({
+          where: { id: existing.id },
+          data: metadata,
+          select: { id: true },
+        })
+      : await tx.brokerStatementImport.create({
+          data: metadata,
+          select: { id: true },
+        })
+
+    await tx.brokerStatementRow.deleteMany({
+      where: { statementImportId: statementImport.id },
+    })
+    await tx.brokerStatementPosition.deleteMany({
+      where: { statementImportId: statementImport.id },
+    })
+    await tx.brokerStatementWarning.deleteMany({
+      where: { statementImportId: statementImport.id },
+    })
+
+    if (args.dryRun.rows.length > 0) {
+      await tx.brokerStatementRow.createMany({
+        data: args.dryRun.rows.map((row) => mapRowCreateManyInput(statementImport.id, row)),
       })
-    : await db.brokerStatementImport.create({
-        data: metadata,
-        select: { id: true },
+    }
+
+    if (args.ledger.positions.length > 0) {
+      await tx.brokerStatementPosition.createMany({
+        data: args.ledger.positions.map((position) =>
+          mapPositionCreateManyInput(statementImport.id, position),
+        ),
       })
+    }
 
-  await db.brokerStatementRow.deleteMany({
-    where: { statementImportId: statementImport.id },
+    if (args.ledger.warnings.length > 0) {
+      await tx.brokerStatementWarning.createMany({
+        data: args.ledger.warnings.map((warning) =>
+          mapWarningCreateManyInput(statementImport.id, warning),
+        ),
+      })
+    }
+
+    return { statementImportId: statementImport.id }
   })
-  await db.brokerStatementPosition.deleteMany({
-    where: { statementImportId: statementImport.id },
-  })
-  await db.brokerStatementWarning.deleteMany({
-    where: { statementImportId: statementImport.id },
-  })
-
-  if (args.dryRun.rows.length > 0) {
-    await db.brokerStatementRow.createMany({
-      data: args.dryRun.rows.map((row) => mapRowCreateManyInput(statementImport.id, row)),
-    })
-  }
-
-  if (args.ledger.positions.length > 0) {
-    await db.brokerStatementPosition.createMany({
-      data: args.ledger.positions.map((position) =>
-        mapPositionCreateManyInput(statementImport.id, position),
-      ),
-    })
-  }
-
-  if (args.ledger.warnings.length > 0) {
-    await db.brokerStatementWarning.createMany({
-      data: args.ledger.warnings.map((warning) =>
-        mapWarningCreateManyInput(statementImport.id, warning),
-      ),
-    })
-  }
-
-  return { statementImportId: statementImport.id }
 }
