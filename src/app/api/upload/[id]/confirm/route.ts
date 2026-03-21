@@ -157,6 +157,17 @@ export async function POST(
     const result = await prisma.$transaction(
       async (tx) => {
         if (useMixedLedgerImport && statementImport) {
+          // Atomically claim the upload so concurrent confirms cannot both run
+          // the deleteMany/create sequence and produce duplicate trades.
+          const claimed = await tx.upload.updateMany({
+            where: { id: uploadId, status: { not: 'COMPLETE' } },
+            data: { status: 'COMPLETE', completedAt: new Date() },
+          })
+          if (claimed.count === 0) {
+            // Another request already completed this upload.
+            return null
+          }
+
           await tx.roundTripTrade.deleteMany({
             where: { brokerStatementImportId: statementImport.id },
           })
@@ -205,11 +216,6 @@ export async function POST(
             accountId,
             account.startingBalance.toNumber(),
           )
-
-          await tx.upload.update({
-            where: { id: uploadId },
-            data: { status: 'COMPLETE', completedAt: new Date() },
-          })
 
           const importedTrades = await tx.roundTripTrade.findMany({
             where: { brokerStatementImportId: statementImport.id },
@@ -278,6 +284,10 @@ export async function POST(
       },
       { timeout: 30000 },
     )
+
+    if (result === null) {
+      return NextResponse.json({ error: 'already_confirmed' }, { status: 409 })
+    }
 
     return NextResponse.json({ uploadId, ...result })
   } catch (err) {

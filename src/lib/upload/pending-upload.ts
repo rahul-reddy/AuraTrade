@@ -35,7 +35,13 @@ export async function createOrReusePendingUpload(
     select: { id: true, status: true },
   })
 
-  if (existing && existing.status !== 'COMPLETE') {
+  if (existing) {
+    // Reuse a COMPLETE upload as-is (the caller already checked for duplicate
+    // files and returned 409 before reaching here, so this path is a no-op
+    // that prevents a guaranteed unique-key crash).
+    if (existing.status === 'COMPLETE') {
+      return { id: existing.id }
+    }
     return db.upload.update({
       where: { id: existing.id },
       data: {
@@ -53,8 +59,27 @@ export async function createOrReusePendingUpload(
     })
   }
 
-  return db.upload.create({
-    data,
-    select: { id: true },
-  })
+  // Guard against a concurrent insert racing past the findUnique above.
+  try {
+    return await db.upload.create({ data, select: { id: true } })
+  } catch (err) {
+    const isPrismaUniqueViolation =
+      err != null &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code: string }).code === 'P2002'
+    if (isPrismaUniqueViolation) {
+      const row = await db.upload.findUnique({
+        where: {
+          accountId_fileHash: {
+            accountId: data.accountId,
+            fileHash: data.fileHash,
+          },
+        },
+        select: { id: true },
+      })
+      if (row) return row
+    }
+    throw err
+  }
 }

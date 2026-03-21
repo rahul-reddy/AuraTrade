@@ -165,6 +165,7 @@ model BrokerStatementImport {
   rows    BrokerStatementRow[]
   positions BrokerStatementPosition[]
   ledgerWarnings BrokerStatementWarning[]
+  roundTripTrades RoundTripTrade[]
 
   @@unique([accountId, fileHash])
   @@index([userId, createdAt])
@@ -237,6 +238,7 @@ model BrokerStatementPosition {
   createdAt               DateTime @default(now())
 
   statementImport BrokerStatementImport @relation(fields: [statementImportId], references: [id], onDelete: Cascade)
+  roundTripTrades RoundTripTrade[]
 
   @@index([statementImportId, instrumentKey])
   @@index([statementImportId, isOpen])
@@ -298,6 +300,9 @@ model RoundTripTrade {
   closeKind       String?
   brokerStatementImportId String?
   brokerStatementPositionId String?
+
+  brokerStatementImport   BrokerStatementImport?   @relation(fields: [brokerStatementImportId], references: [id], onDelete: SetNull)
+  brokerStatementPosition BrokerStatementPosition? @relation(fields: [brokerStatementPositionId], references: [id], onDelete: SetNull)
   entryPrice      Decimal   @db.Decimal(12, 4)
   exitPrice       Decimal?  @db.Decimal(12, 4)
   totalQty        Decimal   @db.Decimal(12, 4)

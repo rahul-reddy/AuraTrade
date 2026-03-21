@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     if (dryRun.totalRows === 0) {
       return NextResponse.json(
-        { error: 'empty_file', message: 'No rows were found in this file.' },
+        { error: 'empty_file', message: 'No rows were found in this file.', statementImportId },
         { status: 422 },
       )
     }

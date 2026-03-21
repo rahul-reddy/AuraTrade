@@ -6,7 +6,10 @@ ALTER TABLE "RoundTripTrade" ADD COLUMN     "remainingQty" DECIMAL(12,4) NOT NUL
 
 -- Backfill broker-ledger remaining quantity from persisted open/close row indices.
 UPDATE "BrokerStatementPosition" AS p
-SET "remainingQty" = COALESCE(open_totals.qty, 0) - COALESCE(close_totals.qty, 0)
+SET "remainingQty" = GREATEST(
+  COALESCE(open_totals.qty, 0) - COALESCE(close_totals.qty, 0),
+  0
+)
 FROM LATERAL (
   SELECT SUM(COALESCE(r."optionQuantityContracts", ABS(r."quantity"))) AS qty
   FROM "BrokerStatementRow" AS r
