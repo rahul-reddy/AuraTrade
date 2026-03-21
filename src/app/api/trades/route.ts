@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import Papa from 'papaparse'
 import { formatDate, formatDuration } from '@/lib/format'
+import { getDisplayTradeQuantity } from '@/lib/trades/trade-quantity'
 
 const ALLOWED_SORT = ['entryTime', 'symbol', 'netPnl', 'durationSeconds', 'rMultiple'] as const
 type SortField = (typeof ALLOWED_SORT)[number]
@@ -108,7 +109,11 @@ export async function GET(req: NextRequest) {
         'Exit Date': formatDate(t.exitTime),
         'Entry Price': t.entryPrice.toNumber(),
         'Exit Price': t.exitPrice?.toNumber() ?? '',
-        Qty: t.totalQty.toNumber(),
+        Qty: getDisplayTradeQuantity({
+          isOpen: t.isOpen,
+          totalQty: t.totalQty.toNumber(),
+          remainingQty: t.remainingQty.toNumber(),
+        }),
         'Gross P&L': t.grossPnl?.toNumber() ?? '',
         'Net P&L': t.netPnl?.toNumber() ?? '',
         Fees: t.totalFees.toNumber(),
@@ -177,6 +182,7 @@ export async function GET(req: NextRequest) {
         entryPrice: t.entryPrice.toNumber(),
         exitPrice: t.exitPrice?.toNumber() ?? null,
         totalQty: t.totalQty.toNumber(),
+        remainingQty: t.remainingQty.toNumber(),
         grossPnl: t.grossPnl?.toNumber() ?? null,
         netPnl: t.netPnl?.toNumber() ?? null,
         totalFees: t.totalFees.toNumber(),

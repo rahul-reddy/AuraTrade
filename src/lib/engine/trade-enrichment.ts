@@ -312,7 +312,11 @@ async function runEnrichmentJob(
     // We enrich both open and closed trades so classifiers can use context even for
     // open positions, but open trades may have incomplete data.
     const trades = await db.roundTripTrade.findMany({
-      where: { accountId },
+      where: {
+        accountId,
+        instrumentType: 'EQUITY',
+        OR: [{ closeKind: null }, { closeKind: { not: 'TRANSFER' } }],
+      },
       select: {
         id: true,
         symbol: true,

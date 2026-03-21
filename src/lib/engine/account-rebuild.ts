@@ -47,7 +47,12 @@ export async function rebuildTradesForAccount(
     data: { tradeId: null },
   })
 
-  await tx.roundTripTrade.deleteMany({ where: { accountId } })
+  await tx.roundTripTrade.deleteMany({
+    where: {
+      accountId,
+      brokerStatementPositionId: null,
+    },
+  })
 
   const executions = await tx.execution.findMany({
     where: { accountId },
@@ -78,6 +83,7 @@ export async function rebuildTradesForAccount(
         exitPrice: trade.exitPrice ?? undefined,
         totalQty: trade.totalQty,
         closedQty: trade.closedQty,
+        remainingQty: trade.remainingQty,
         grossPnl: trade.grossPnl ?? undefined,
         totalFees: trade.totalFees,
         netPnl: trade.netPnl ?? undefined,

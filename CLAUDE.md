@@ -35,6 +35,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 13. **Git commit after every meaningful unit of work** with a descriptive message, but only after the relevant tester pass is complete; for user-facing changes this includes Playwright unless a blocker is explicitly called out
 14. **Desktop-first** — traders use wide monitors; responsive is secondary
 15. **Do meaningful feature work on a short-lived branch, not directly on `main`** — merge through a PR after tester + reviewer passes
+16. **Mixed-action broker statements require a dry-run first** — if a statement contains option actions, expirations, or position-affecting non-trade rows (journals/transfers/mergers), do not canonically import it until the raw-row + option-aware redesign can model those events safely
 
 ## Tech Decisions (already made, don't revisit)
 - Market data: `yahoo-finance2` only (no API key needed)
@@ -57,6 +58,11 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/lib/session.ts` | `getRequiredSession()` helper |
 | `src/middleware.ts` | Route protection |
 | `src/lib/parser/tos-csv-parser.ts` | TOS CSV parser |
+| `src/lib/parser/schwab-statement-analyzer.ts` | Dry-run broker statement analyzer (action taxonomy, options, blockers) |
+| `src/lib/parser/broker-statement-store.ts` | Persists dry-run broker statement imports, raw rows, ledger positions, and warnings |
+| `src/lib/upload/pending-upload.ts` | Reuses existing pending upload rows for same-file preview retries instead of creating duplicate Upload records |
+| `src/lib/engine/broker-position-ledger.ts` | Instrument-aware dry-run ledger for equities/options/transfers/expirations |
+| `src/lib/engine/broker-trade-importer.ts` | Canonical import bridge from persisted ledger positions into RoundTripTrade |
 | `src/lib/engine/trade-grouper.ts` | FIFO trade grouping |
 | `src/components/trades/TradesTable.tsx` | Trades list table + pagination UI |
 | `src/lib/engine/metrics.ts` | All metrics + Kelly (Phase 9) |
