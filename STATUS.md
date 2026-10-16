@@ -13,12 +13,21 @@
   `BrokerStatementImport` gains `sourceFormat`, `coverageFrom/To`, `confirmedAt`; enrichment
   survives a concurrent rebuild. On rebase, the feature migration dropped its two foreign
   keys, which `main` now creates in the guarded `20261016190000` migration.
-- **Local results on this revision:** cross-review self-test passed; `npm run lint` 0
-  errors; `npm run typecheck` clean; `npm test` 192/192; fresh-DB `prisma migrate deploy` +
-  drift check: no difference; `npm run build` passed; Playwright 9/9 with no retries
-  against `next start` (includes the TOS import spec).
+- **Cross-review round 1 (codex, critical tier):** 5 blocking findings, all fixed:
+  (1) legacy Execution-path duplication — one canonical ledger import path; `confirmedAt`
+  backfilled only for statements that own ledger trades; statements overlapping legacy
+  fills are refused; (2) close-only statements were rejected — preview/confirm now use
+  account-level impact; (3) unmatched fee rows became $0 fees — now block import;
+  (4) option fee join ignored contract identity — key now includes expiry/strike/type;
+  (5) unsupported instrument types imported as equity — only STOCK/ETF allowed.
+- **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
+  `npm test` 206/206; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm run build` passed; Playwright 10/10 with no retries against `next start` (adds a
+  two-statement carry-in import). Real 703-fill statement unchanged: 702 importable,
+  0 blocked, all option fills matched to their own contract's fee row.
 - **Local data:** the owner's database is migrated (checksum of the rebased feature
-  migration realigned; the guarded FK migration applied as a no-op). After merge, run
+  migration realigned; the guarded FK migration applied as a no-op; 16 test-account
+  statements un-confirmed per the narrowed backfill, owner statements unchanged). After merge, run
   Settings → Data Integrity → Reprocess trades to rebuild trades account-wide.
 - **Delivery:** `ghcr.io/rahul-reddy/auratrade-web:83fd9eb35692c0450ccc90b1465c1db0dfc0c592`
   published by the first main run. No hosting target exists yet (`docs/DEPLOYMENT.md`).
