@@ -52,3 +52,6 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# cross-review audit records (scripts/cross-review.ps1)
+.local/

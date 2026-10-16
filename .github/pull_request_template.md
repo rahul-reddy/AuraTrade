@@ -1,37 +1,13 @@
-## Summary
+## Change
+Describe the problem and resulting behavior.
 
-- What changed?
-- Why was this needed?
+## Verification
+- [ ] Relevant tests, lint, typing, build and browser flows pass.
+- [ ] Money/data boundaries reviewed: formulas shown and tested, fees read from the broker file, `@db.Decimal` for money, every API query scoped by `userId`, no destructive migration without backup, no secrets or account numbers.
+- [ ] STATUS.md and affected documentation updated.
+- [ ] `scripts/cross-review.ps1 -Number <this PR>` run, with zero blocking findings on
+      the current head (see AGENTS.md "Cross-model code review"). N/A only if every
+      commit here is human-authored with no AI Co-Authored-By trailer.
 
-## Scope
-
-- Phase or feature:
-- Key files touched:
-
-## Tester Pass
-
-- [ ] Relevant tester pass completed before commit
-- [ ] `npx tsc --noEmit`
-- [ ] Targeted `eslint`
-- [ ] `npx jest --runInBand` when relevant
-- [ ] `npx playwright test` for user-facing changes
-
-Notes:
-
-## Reviewer Pass
-
-- [ ] Local reviewer pass completed
-- [ ] CodeRabbit PR review completed or acknowledged as unavailable
-
-Findings addressed:
-
-## Docs
-
-- [ ] `STATUS.md` updated if project reality changed
-- [ ] `PLAN.md` updated if implementation diverged from plan
-- [ ] `CLAUDE.md` updated if standing rules or key file map changed
-
-## Risks / Follow-ups
-
-- Remaining blockers:
-- Unverified areas:
+## Limitations
+State unimplemented behavior and external prerequisites explicitly.

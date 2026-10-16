@@ -3,6 +3,13 @@ import { persistBrokerStatementImport } from '@/lib/parser/broker-statement-stor
 import { analyzeSchwabStatement } from '@/lib/parser/schwab-statement-analyzer'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 
+/** persistBrokerStatementImport wraps its writes in $transaction; run the callback against the mock itself. */
+function withInlineTransaction(db: PrismaClient): void {
+  Object.assign(db, {
+    $transaction: (callback: (tx: PrismaClient) => Promise<unknown>) => callback(db),
+  })
+}
+
 function makeCsv(rows: string[]): string {
   const header = 'Date,Action,Symbol,Description,Quantity,Price,Fees & Comm,Amount'
   return [header, ...rows].join('\n')
@@ -40,6 +47,7 @@ describe('persistBrokerStatementImport', () => {
         createMany: createManyWarnings,
       },
     } as unknown as PrismaClient
+    withInlineTransaction(db)
 
     const result = await persistBrokerStatementImport(db, {
       userId: 'user_1',
@@ -160,6 +168,7 @@ describe('persistBrokerStatementImport', () => {
         createMany: createManyWarnings,
       },
     } as unknown as PrismaClient
+    withInlineTransaction(db)
 
     const result = await persistBrokerStatementImport(db, {
       userId: 'user_1',

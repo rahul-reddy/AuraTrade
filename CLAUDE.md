@@ -14,8 +14,8 @@ Professional trading analytics platform for a high-frequency discretionary equit
 Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should look and feel like a $50/month product.
 
 ## Always Read First
-- `AGENTS.md` — shared coordination workflow for Claude and Codex
-- `PLAN.md` — full 14-phase implementation plan with formulas, schema, and build order
+- `AGENTS.md` — contributor contract: branch/PR workflow, cross-model review gate, commands, boundaries
+- `docs/PLAN.md` — full 14-phase implementation plan with formulas, schema, and build order
 - `STATUS.md` — current phase, what's done, what's blocked, pending user actions
 
 ## Standing Rules (non-negotiable)
@@ -34,7 +34,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 12. **Every data point must be explorable** — click a metric → see underlying trades; click a trade → see it on the chart
 13. **Git commit after every meaningful unit of work** with a descriptive message, but only after the relevant tester pass is complete; for user-facing changes this includes Playwright unless a blocker is explicitly called out
 14. **Desktop-first** — traders use wide monitors; responsive is secondary
-15. **Do meaningful feature work on a short-lived branch, not directly on `main`** — merge through a PR after tester + reviewer passes
+15. **Do meaningful feature work on a short-lived branch, not directly on `main`** — open a PR, wait for CI (`Verify AuraTrade`) on the final head, run `scripts/cross-review.ps1 -Number <PR>`, then merge only with `scripts/merge-pr.ps1 -Number <PR>` (see AGENTS.md)
 16. **Mixed-action broker statements require a dry-run first** — if a statement contains option actions, expirations, or position-affecting non-trade rows (journals/transfers/mergers), do not canonically import it until the raw-row + option-aware redesign can model those events safely
 
 ## Tech Decisions (already made, don't revisit)
@@ -54,7 +54,8 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 |---|---|
 | `prisma/schema.prisma` | Full DB schema |
 | `prisma.config.ts` | Prisma v6 datasource config (reads `DATABASE_URL`) |
-| `src/lib/auth.ts` | NextAuth v5 config |
+| `src/lib/auth.ts` | NextAuth v5 config (Credentials + Prisma; Node runtime only) |
+| `src/lib/auth.config.ts` | Edge-safe NextAuth settings shared with the middleware — must never import Prisma |
 | `src/lib/session.ts` | `getRequiredSession()` helper |
 | `src/middleware.ts` | Route protection |
 | `src/lib/parser/tos-csv-parser.ts` | TOS CSV parser |

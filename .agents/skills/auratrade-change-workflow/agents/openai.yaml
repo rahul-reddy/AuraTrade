@@ -1,0 +1,4 @@
+interface:
+  display_name: "AuraTrade Change Workflow"
+  short_description: "Build and review AuraTrade changes safely"
+  default_prompt: "Use $auratrade-change-workflow to implement and verify this AuraTrade change."

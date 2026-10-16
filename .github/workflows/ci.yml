@@ -1,0 +1,149 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    # merge-pr.ps1 requires a successful check with exactly this name.
+    name: Verify AuraTrade
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: auratrade
+          POSTGRES_PASSWORD: auratrade_ci
+          POSTGRES_DB: auratrade_ci
+        ports: [5432:5432]
+        options: --health-cmd "pg_isready -U auratrade" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://auratrade:auratrade_ci@127.0.0.1:5432/auratrade_ci
+      SHADOW_DATABASE_URL: postgresql://auratrade:auratrade_ci@127.0.0.1:5432/auratrade_shadow
+      AUTH_TRUST_HOST: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The parent is needed to list what this change touched.
+          fetch-depth: 2
+      # A change to documentation alone skips the tests to save Actions minutes,
+      # but this job still runs and passes, because merge-pr.ps1 requires it.
+      # Docs-only means every changed path (both sides of a rename) is docs/** or
+      # a Markdown file at the repository root; Markdown anywhere else (skills)
+      # can be read by code. Anything this step cannot establish runs the full
+      # suite: only docs_only=true skips.
+      - name: Classify the change
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          base=""
+          if [ "$EVENT" = pull_request ]; then
+            # The checkout is GitHub's merge of the PR into its base: its first
+            # parent is the base, so the diff to it is exactly the PR's change.
+            if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ]; then
+              base=$(git rev-parse HEAD^1)
+            fi
+          elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            git fetch --quiet --depth=1 origin "$BEFORE" && base="$BEFORE"
+          fi
+          if [ -z "$base" ] || ! changed=$(git diff --name-only --no-renames "$base" HEAD); then
+            echo "Could not list the change; running everything."
+            exit 0
+          fi
+          if [ -z "$changed" ]; then
+            echo "Empty change; running everything."
+            exit 0
+          fi
+          echo "$changed"
+          while IFS= read -r path; do
+            case "$path" in
+              docs/*) ;;
+              */*) echo "Not docs-only: $path"; exit 0 ;;
+              *.md) ;;
+              *) echo "Not docs-only: $path"; exit 0 ;;
+            esac
+          done <<< "$changed"
+          echo "docs_only=true" >> "$GITHUB_OUTPUT"
+      - name: "Docs-only change: skipping tests"
+        if: steps.scope.outputs.docs_only == 'true'
+        run: echo "Only docs/ or root Markdown changed; tests skipped. The secret scan still runs." | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: astral-sh/setup-uv@v6
+        if: steps.scope.outputs.docs_only != 'true'
+      - uses: actions/setup-node@v4
+        if: steps.scope.outputs.docs_only != 'true'
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+        if: steps.scope.outputs.docs_only != 'true'
+      - name: Verify agent harness
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          pwsh -NoProfile -File scripts/cross-review-selftest.ps1
+          uv run --no-project --with pyyaml python scripts/validate_skills.py
+      - run: npx prisma generate
+        if: steps.scope.outputs.docs_only != 'true'
+      - run: npm run lint && npm run typecheck
+        if: steps.scope.outputs.docs_only != 'true'
+      - name: Verify migrations on a fresh database and check for drift
+        if: steps.scope.outputs.docs_only != 'true'
+        env:
+          PGPASSWORD: auratrade_ci
+        run: |
+          psql -h 127.0.0.1 -U auratrade -d auratrade_ci -c 'CREATE DATABASE auratrade_shadow'
+          npx prisma migrate deploy
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code
+      - run: npm test -- --coverage
+        if: steps.scope.outputs.docs_only != 'true'
+      - name: Generate a throwaway auth secret for this run
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          secret=$(openssl rand -base64 32)
+          echo "::add-mask::$secret"
+          echo "AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+      - run: npm run build
+        if: steps.scope.outputs.docs_only != 'true'
+      - name: Browser tests against the production build
+        if: steps.scope.outputs.docs_only != 'true'
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+        run: |
+          npx playwright install --with-deps chromium
+          npm run start -- -H 127.0.0.1 -p 3000 > next-start.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:3000/login && break
+            sleep 2
+          done
+          npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.scope.outputs.docs_only != 'true'
+        with:
+          name: verification-evidence
+          path: |
+            coverage
+            playwright-report
+            test-results
+            next-start.log
+      - name: Dependency advisory
+        if: steps.scope.outputs.docs_only != 'true'
+        continue-on-error: true
+        run: npm audit --audit-level=high
+      - name: Secret advisory
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

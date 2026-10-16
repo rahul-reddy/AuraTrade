@@ -35,7 +35,11 @@ test('user can view the dashboard after importing trades', async ({ page }) => {
   })
 
   await page.goto('/dashboard')
-  await expect(page.getByRole('heading', { name: 'Performance Dashboard' })).toBeVisible()
+  // The heading renders once /api/dashboard returns; right after an import,
+  // background enrichment can hold the skeleton past the 5s default.
+  await expect(page.getByRole('heading', { name: 'Performance Dashboard' })).toBeVisible({
+    timeout: 15_000,
+  })
   await expect(page.getByText('Equity Curve')).toBeVisible()
   await expect(page.getByText('Kelly Sizing')).toBeVisible()
   await expect(page.getByText('P&L Distribution')).toBeVisible()

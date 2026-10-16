@@ -369,4 +369,104 @@ describe('buildBrokerPositionLedger', () => {
       remainingQty: 242,
     })
   })
+
+  test('does not defer a same-day close that carried inventory already covers (close carried, reopen later)', () => {
+    // Newest-first file: the afternoon re-buy is listed above the morning sell.
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([
+        '3/11/2026,Buy,ABC,ABC INC,50,"$12.00 ",,"($600.00)"',
+        '3/11/2026,Sell,ABC,ABC INC,100,"$11.00 ","$0.10 ","$1,099.90 "',
+        '3/10/2026,Buy,ABC,ABC INC,100,"$10.00 ",,"($1,000.00)"',
+      ]),
+    )
+
+    const result = buildBrokerPositionLedger(dryRun.rows)
+
+    expect(result.warnings).toHaveLength(0)
+    expect(result.positions).toHaveLength(2)
+    const [carried, reopened] = result.positions
+    expect(carried).toMatchObject({ isOpen: false, totalQty: 100, closedQty: 100 })
+    // (11.00 − 10.00) × 100 − 0.10
+    expect(carried.netPnl).toBeCloseTo(99.9, 10)
+    expect(reopened).toMatchObject({ isOpen: true, totalQty: 50, remainingQty: 50, entryPrice: 12 })
+  })
+
+  test('never reorders rows with distinct timestamps', () => {
+    const at = (iso: string) => new Date(iso)
+    const dryRun = analyzeSchwabStatement(
+      makeCsv(['3/10/2026,Buy,ABC,ABC INC,1,"$1.00 ",,"($1.00)"']),
+    )
+    const [template] = dryRun.rows
+    const rows = [
+      { ...template, rowIndex: 0, action: 'Sell', date: at('2026-03-11T14:00:00Z'), quantity: 10 },
+      { ...template, rowIndex: 1, action: 'Buy', date: at('2026-03-11T15:00:00Z'), quantity: 10 },
+    ]
+
+    const result = buildBrokerPositionLedger(rows)
+
+    // A real 10:00 sell before an 11:00 buy is an orphan close, not something to "fix".
+    expect(result.warnings.map((warning) => warning.message)).toEqual([
+      'Orphaned close on EQUITY:ABC: no open position found for Sell.',
+    ])
+    expect(result.positions).toHaveLength(1)
+    expect(result.positions[0].isOpen).toBe(true)
+  })
+})
+
+describe('buildBrokerPositionLedger money-market sweep exclusion', () => {
+  test('ignores sweep fund rows while keeping equity and option positions and their P&L', () => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([
+        '3/05/2026,Sell to Close,ORCL 08/21/2026 150.00 C,CALL ORACLE CORP $150 EXP 08/21/26,1,"$30.00 ","$0.66 ","$2,999.34 "',
+        '3/04/2026,Sell,SNSXX,SCHWAB TREASURY MONEY FUND,1000.47,"$1.00 ",,"$1,000.47 "',
+        '3/04/2026,Sell,AAA,AAA INC,100,"$12.00 ","$0.10 ","$1,199.90 "',
+        '3/03/2026,Buy,AAA,AAA INC,100,"$10.00 ",,"($1,000.00)"',
+        '3/02/2026,Buy,SNSXX,SCHWAB TREASURY MONEY FUND,1000,"$1.00 ",,"($1,000.00)"',
+        '3/02/2026,Buy to Open,ORCL 08/21/2026 150.00 C,CALL ORACLE CORP $150 EXP 08/21/26,1,"$25.00 ","$0.66 ","($2,500.66)"',
+      ]),
+    )
+
+    const result = buildBrokerPositionLedger(dryRun.rows)
+    const summary = summarizeBrokerLedger(result)
+
+    // The 1000.47-share redemption (with accrued dividends) would be an
+    // "oversized close" if the fund were tracked; it must not warn at all.
+    expect(result.warnings).toEqual([])
+    expect(result.positions.map((position) => position.instrumentKey).sort()).toEqual([
+      'EQUITY:AAA',
+      'OPTION:ORCL 08/21/2026 150.00 C',
+    ])
+    expect(result.positions.some((position) => position.symbol === 'SNSXX')).toBe(false)
+
+    const equity = result.positions.find((position) => position.symbol === 'AAA')
+    const option = result.positions.find((position) => position.instrumentType === 'OPTION')
+    // (12.00 − 10.00) × 100 − 0.10
+    expect(equity?.netPnl).toBeCloseTo(199.9, 10)
+    // (30.00 − 25.00) × 1 contract × 100 − (0.66 + 0.66)
+    expect(option?.netPnl).toBeCloseTo(498.68, 10)
+    expect(summary).toMatchObject({ closedTradeLikePositions: 2, openPositions: 0 })
+    expect(summary.estimatedPnl).toBeCloseTo(698.58, 10)
+  })
+
+  test('an unpaired sweep redemption does not produce an orphaned-close warning', () => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv(['3/04/2026,Sell,SWVXX,SCHWAB VALUE ADVANTAGE MONEY FUND,500,"$1.00 ",,"$500.00 "']),
+    )
+    const result = buildBrokerPositionLedger(dryRun.rows)
+    expect(result.warnings).toEqual([])
+    expect(result.positions).toEqual([])
+  })
+
+  test.each([
+    ['BOXX', 'four-letter ETF ending in XX'],
+    ['FXAIX', 'mutual fund ending in a single X'],
+    ['ABCDXX', 'six-letter symbol ending in XX'],
+  ])('still tracks %s (%s)', (symbol) => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([`3/03/2026,Buy,${symbol},TEST SECURITY,10,"$100.00 ",,"($1,000.00)"`]),
+    )
+    const result = buildBrokerPositionLedger(dryRun.rows)
+    expect(result.positions).toHaveLength(1)
+    expect(result.positions[0]).toMatchObject({ symbol, isOpen: true, remainingQty: 10 })
+  })
 })

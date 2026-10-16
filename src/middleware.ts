@@ -1,4 +1,9 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
+
+// Edge runtime: use the DB-free config. Importing src/lib/auth.ts here would
+// pull Prisma into the Edge bundle and break `next build`.
+const { auth } = NextAuth(authConfig);
 import { NextResponse } from "next/server";
 
 export default auth((req) => {
