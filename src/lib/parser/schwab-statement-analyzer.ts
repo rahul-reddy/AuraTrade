@@ -57,7 +57,12 @@ export interface StatementActionBreakdown {
   instrumentTypes: StatementInstrumentType[]
 }
 
+export type StatementSourceFormat =
+  | 'SCHWAB_TRANSACTION_HISTORY'
+  | 'TOS_ACCOUNT_STATEMENT'
+
 export interface StatementDryRun {
+  sourceFormat: StatementSourceFormat
   totalRows: number
   importableTradeRows: number
   blockedTradeRows: number
@@ -420,6 +425,19 @@ export function analyzeSchwabStatement(rawContent: string): StatementDryRun {
     })
   }
 
+  return buildStatementDryRun(rows, assumptions)
+}
+
+/**
+ * Aggregates analyzed rows into the dry-run summary. Shared by every statement
+ * format parser so blockers, action breakdowns, and counts stay consistent.
+ */
+export function buildStatementDryRun(
+  rows: AnalyzedStatementRow[],
+  assumptions: string[],
+  options: { sourceFormat?: StatementSourceFormat } = {},
+): StatementDryRun {
+  const sourceFormat = options.sourceFormat ?? 'SCHWAB_TRANSACTION_HISTORY'
   const actionMap = new Map<string, StatementActionBreakdown>()
   const blockers = new Set<string>()
   const warnings = new Set<string>()
@@ -512,7 +530,12 @@ export function analyzeSchwabStatement(rawContent: string): StatementDryRun {
     assumptions,
     actions,
     rows,
+    sourceFormat,
+    // importSupported gates the legacy equity-only Execution path, which can
+    // only read Schwab Transaction History. Other formats always go through
+    // the broker ledger import path.
     importSupported:
+      sourceFormat === 'SCHWAB_TRANSACTION_HISTORY' &&
       blockedTradeRows === 0 &&
       positionAffectingNonTradeRows === 0 &&
       importableTradeRows > 0,

@@ -31,7 +31,7 @@
 - **Next action:** owner confirms the critical-path list in AGENTS.md and chooses a host.
 
 ## Current Phase
-**Post-phase follow-up: Phase 2–4 trade-import redesign / dry-run hardening**
+**Post-phase follow-up: timestamped thinkorswim Account Statement import** (branch `feat/tos-account-statement-import`)
 
 ## Phase Checklist
 
@@ -133,6 +133,11 @@
 | 2026-03-20 | Open-quantity model fix: added `remainingQty` to both `BrokerStatementPosition` and `RoundTripTrade` (migration `20260320203759_add_remaining_qty_to_statement_positions_and_trades`). `totalQty` now stays peak position size for analytics, while `/trades` and CSV export can show the true remaining size for open positions such as AMD `242` instead of peak `350`. |
 | 2026-03-20 | Live backfill for the current imported statement: recomputed `remainingQty` directly from persisted broker row indices and synced it into canonical trades. Verified current AMD open trade now stores `totalQty=350`, `closedQty=300`, `remainingQty=242`. |
 | 2026-03-20 | Verification after the remaining-quantity fix: `npx tsc --noEmit` clean and `npx jest --runInBand` now 157/157 passing. |
+| 2026-10-16 | Product review + competitor research (Tradezella/TraderSync via REA + help docs). Key finding: Schwab Transaction History is date-only, so 450/921 imported trades had 0s duration, the classifier labeled only 19 trades (all SCALP), and no trade had tags/notes. Competitors import full history from the thinkorswim **Account Statement → Account Trade History** export (per-second Exec Time) and use Schwab's OAuth Trader API only for incremental sync (60-day history window, 7-day refresh token → weekly re-auth). |
+| 2026-10-16 | Added `src/lib/parser/tos-account-statement-parser.ts` + `analyze-broker-statement.ts` format dispatcher. Reads Account Trade History fills (per-second Exec Time, explicit TO OPEN/TO CLOSE) and joins fees/amounts from Cash Balance TRD rows (1:1 per fill; ±2s tolerance because Schwab can book the cash row 1s after the fill). Fee = \|Misc Fees\| + \|Commissions & Fees\|; on this export **buys can carry fees** (option commissions, some misc fees), so fees are read on both sides. Exec Time assumed America/New_York (overridable); the "CST" on BAL rows is boilerplate — verified by the 09:30 fill burst. FUND rows (SNSXX sweeps) are cash, not trades. TOS statements always import through the broker-ledger path (`importSupported=false` gates only the legacy Execution path). |
+| 2026-10-16 | Real-file validation (3/13–10/16/26 statement, 703 fills): 702 trade fills + 1 sweep, 0 blockers, 0 unmatched fees, 105 closed round trips + 29 open. Ledger open positions + pre-3/13 DB open positions reproduce the statement's ending Equities section exactly (AMD 242+3=245, EOSE 350+100, FRMI 60+340, NBIS 20+80, NVDA 100+100, NLR, RXRX). Symbols opened/closed inside the window match TOS P/L to within fees (TOS P/L excludes fees). TOS "P/L YTD" is mark-to-market (includes open positions, prior-year carries from 12/31 mark) so it is not a realized-P&L reconciliation target. |
+| 2026-10-16 | Known gaps (next): (1) **cross-statement dedup** — ledger-path confirm only replaces trades from the same file hash, so overlapping statements double-count; (2) **carry-in inventory** — positions opened in an earlier statement surface as orphan closes (MRNA/APPS/ORCL calls on the real file); seed the ledger from prior open positions. Pre-existing on main since `8e7247e`: 2 ledger tests asserting same-day opens-before-closes for date-only files fail after that heuristic was removed; `broker-statement-store` tests fixed here (mock lacked `$transaction`). |
+| 2026-10-16 | Verification: `npx tsc --noEmit` clean; `npx jest --runInBand` 171/173 (only the 2 pre-existing ledger failures); new `src/__tests__/parser/tos-account-statement-parser.test.ts` 15/15; Playwright `upload-tos-account-statement.spec.ts` + `upload-import.spec.ts` pass (legacy spec needs a warm dev server). |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)

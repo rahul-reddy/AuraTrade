@@ -36,15 +36,17 @@ function mapRowCreateManyInput(
   return {
     statementImportId,
     rowIndex: row.rowIndex,
-    rawDate: row.raw.Date ?? null,
+    // Schwab Transaction History column names first, then thinkorswim
+    // Account Statement equivalents (Exec Time / Qty / Cash* from the TRD row).
+    rawDate: row.raw.Date ?? row.raw['Exec Time'] ?? null,
     parsedDate: row.date ?? null,
     action: row.action,
     symbol: row.symbol,
     description: row.description,
-    quantityRaw: row.raw.Quantity ?? null,
+    quantityRaw: row.raw.Quantity ?? row.raw.Qty ?? null,
     priceRaw: row.raw.Price ?? null,
-    feesRaw: row.raw['Fees & Comm'] ?? null,
-    amountRaw: row.raw.Amount ?? null,
+    feesRaw: row.raw['Fees & Comm'] ?? row.raw['Cash Fees'] ?? null,
+    amountRaw: row.raw.Amount ?? row.raw['Cash Amount'] ?? null,
     quantity: toDecimal(row.quantity),
     price: toDecimal(row.price),
     fees: toDecimal(row.fees),

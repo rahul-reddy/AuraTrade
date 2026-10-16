@@ -26,7 +26,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 4. **Every API route** starts with `getRequiredSession()` and scopes all DB queries by `userId`
 5. **Flag TOS CSV format assumptions** explicitly in code comments — never guess silently
 6. **Kelly functions** (`kellyFull`, `kellyHalf`, `kellyQuarter`) live in `metrics.ts` only — no separate `kelly.ts`
-7. **Commission formula**: Read directly from the `Fees & Comm` column in the CSV. `(Price - NetPrice) × Qty` does NOT apply to Schwab/TDA Transaction History exports. Buys have $0 commission; sells carry the fee.
+7. **Commission formula**: Read fees directly from the broker file — never derive them. Schwab Transaction History: `Fees & Comm` column (buys $0, sells carry the fee). thinkorswim Account Statement: `|Misc Fees| + |Commissions & Fees|` from the matching Cash Balance TRD row — buys CAN carry fees there (e.g. option commissions). `(Price - NetPrice) × Qty` does NOT apply.
 8. **`@db.Decimal`** for ALL financial values in Prisma — never `Float`
 9. **Update `STATUS.md`** after completing each phase or significant sub-task
 10. **Every component gets a loading state AND an error state** — no blank screens ever; skeleton loaders not spinners
@@ -59,6 +59,8 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/lib/session.ts` | `getRequiredSession()` helper |
 | `src/middleware.ts` | Route protection |
 | `src/lib/parser/tos-csv-parser.ts` | TOS CSV parser |
+| `src/lib/parser/tos-account-statement-parser.ts` | thinkorswim Account Statement parser (per-second fills + Cash Balance fee join) — preferred import format |
+| `src/lib/parser/analyze-broker-statement.ts` | Detects export format and dispatches to the right dry-run analyzer |
 | `src/lib/parser/schwab-statement-analyzer.ts` | Dry-run broker statement analyzer (action taxonomy, options, blockers) |
 | `src/lib/parser/broker-statement-store.ts` | Persists dry-run broker statement imports, raw rows, ledger positions, and warnings |
 | `src/lib/upload/pending-upload.ts` | Reuses existing pending upload rows for same-file preview retries instead of creating duplicate Upload records |

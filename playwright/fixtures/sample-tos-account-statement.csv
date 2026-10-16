@@ -1,0 +1,24 @@
+Account Statement for 00000000SCHW (Individual) since 1/15/26 through 1/16/26
+
+Cash Balance
+DATE,TIME,TYPE,REF #,DESCRIPTION,Misc Fees,Commissions & Fees,AMOUNT,BALANCE
+1/15/26,01:00:00,BAL,,Cash balance at the start of business day 15.01 CST,,,,"10,000.00"
+1/15/26,09:30:02,TRD,="1001",BOT +60 TOSA @10.00,,,-600.00,"9,400.00"
+1/15/26,09:31:05,TRD,="1002",BOT +40 TOSA @10.50,,,-420.00,"8,980.00"
+1/15/26,09:47:13,TRD,="1003",SOLD -100 TOSA @11.00,-0.05,,"1,100.00","10,079.95"
+1/16/26,10:00:00,TRD,="1004",BOT +10 TOSB @50.00,,,-500.00,"9,579.95"
+
+Account Order History
+Notes,,Time Placed,Spread,Side,Qty,Pos Effect,Symbol,Exp,Strike,Type,PRICE,,TIF,Status
+,,1/16/26 10:00:00,STOCK,BUY,+10,TO OPEN,TOSB,,,STOCK,~,MKT,DAY,FILLED
+
+Account Trade History
+,Exec Time,Spread,Side,Qty,Pos Effect,Symbol,Exp,Strike,Type,Price,Net Price,Order Type
+,1/16/26 10:00:00,STOCK,BUY,+10,TO OPEN,TOSB,,,STOCK,50.00,50.00,MKT
+,1/15/26 09:47:12,STOCK,SELL,-100,TO CLOSE,TOSA,,,STOCK,11.00,11.00,LMT
+,1/15/26 09:31:05,STOCK,BUY,+40,TO OPEN,TOSA,,,STOCK,10.50,10.50,MKT
+,1/15/26 09:30:02,STOCK,BUY,+60,TO OPEN,TOSA,,,STOCK,10.00,10.00,MKT
+
+Equities
+Symbol,Description,Qty,Trade Price
+TOSB,SYNTHETIC TEST CO,+10,50.00

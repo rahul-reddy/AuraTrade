@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { getRequiredSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
-import { parseSchwabCSV, type ParsedExecution } from '@/lib/parser/tos-csv-parser'
-import { analyzeSchwabStatement } from '@/lib/parser/schwab-statement-analyzer'
+import {
+  emptyParseResult,
+  parseSchwabCSV,
+  type ParsedExecution,
+} from '@/lib/parser/tos-csv-parser'
+import { analyzeBrokerStatement } from '@/lib/parser/analyze-broker-statement'
 import { persistBrokerStatementImport } from '@/lib/parser/broker-statement-store'
 import { rebuildTradesForAccount } from '@/lib/engine/account-rebuild'
 import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
@@ -100,10 +104,13 @@ export async function POST(
     }
 
     // Parse the file
-    const dryRun = analyzeSchwabStatement(content)
+    const dryRun = analyzeBrokerStatement(content)
     const brokerLedger = buildBrokerPositionLedger(dryRun.rows)
     const importSupport = evaluateStatementImportSupport(dryRun)
-    const parseResult = parseSchwabCSV(content)
+    const parseResult =
+      dryRun.sourceFormat === 'SCHWAB_TRANSACTION_HISTORY'
+        ? parseSchwabCSV(content)
+        : emptyParseResult()
 
     await persistBrokerStatementImport(prisma, {
       userId,

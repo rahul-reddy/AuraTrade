@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { getRequiredSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
-import { parseSchwabCSV } from '@/lib/parser/tos-csv-parser'
-import { analyzeSchwabStatement } from '@/lib/parser/schwab-statement-analyzer'
+import { emptyParseResult, parseSchwabCSV } from '@/lib/parser/tos-csv-parser'
+import { analyzeBrokerStatement } from '@/lib/parser/analyze-broker-statement'
 import { persistBrokerStatementImport } from '@/lib/parser/broker-statement-store'
 import { groupTrades } from '@/lib/engine/trade-grouper'
 import { createOrReusePendingUpload } from '@/lib/upload/pending-upload'
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const dryRun = analyzeSchwabStatement(content)
+    const dryRun = analyzeBrokerStatement(content)
     const brokerLedger = buildBrokerPositionLedger(dryRun.rows)
     const brokerLedgerSummary = summarizeBrokerLedger(brokerLedger)
     const importSupport = evaluateStatementImportSupport(dryRun)
@@ -105,7 +105,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const parseResult = parseSchwabCSV(content)
+    const parseResult =
+      dryRun.sourceFormat === 'SCHWAB_TRANSACTION_HISTORY'
+        ? parseSchwabCSV(content)
+        : emptyParseResult()
     const groupResult = groupTrades(parseResult.executions)
     const closedTrades = groupResult.trades.filter((t) => !t.isOpen)
     const openPositions = groupResult.trades.filter((t) => t.isOpen)
@@ -158,8 +161,8 @@ export async function POST(req: NextRequest) {
       totalRows: dryRun.totalRows,
       newRows: dryRun.importSupported ? parseResult.executions.length : brokerLedger.positions.length,
       skippedRows: dryRun.importSupported ? parseResult.skippedRows.length : dryRun.skippedRows,
-      dateFrom: parseResult.dateRange?.from ?? null,
-      dateTo: parseResult.dateRange?.to ?? null,
+      dateFrom: parseResult.dateRange?.from ?? dryRun.dateRange?.from ?? null,
+      dateTo: parseResult.dateRange?.to ?? dryRun.dateRange?.to ?? null,
       warnings: dryRun.importSupported
         ? groupResult.warnings.map((w) => w.message)
         : blockedPreviewWarnings,
@@ -182,7 +185,7 @@ export async function POST(req: NextRequest) {
         newTrades: dryRun.importSupported ? closedTrades.length : brokerLedgerSummary.closedTradeLikePositions,
         openPositions: dryRun.importSupported ? openPositions.length : brokerLedgerSummary.openPositions,
         dateRange: dryRun.importSupported ? parseResult.dateRange : dryRun.dateRange,
-        symbols: parseResult.symbols,
+        symbols: dryRun.importSupported ? parseResult.symbols : dryRun.symbols,
         estimatedPnl: dryRun.importSupported
           ? Math.round(estimatedPnl * 100) / 100
           : Math.round(brokerLedgerSummary.estimatedPnl * 100) / 100,
