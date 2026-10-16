@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { rebuildTradesForAccount } from '@/lib/engine/account-rebuild'
 import {
   lockAccountLedger,
   rebuildLedgerTradesForAccount,
@@ -69,8 +68,8 @@ export async function POST(req: NextRequest) {
 
     if (parsed.action === 'reprocess_trades') {
       const result = await prisma.$transaction(async (tx) => {
+        // The account ledger rebuilds every trade, legacy executions included.
         await lockAccountLedger(tx, account.id)
-        const tradeRebuild = await rebuildTradesForAccount(tx, account.id)
         const ledgerRebuild = await rebuildLedgerTradesForAccount(tx, account.id)
         const snapshotRebuild = await rebuildDailySnapshotsForAccount(
           tx,
@@ -78,7 +77,7 @@ export async function POST(req: NextRequest) {
           account.startingBalance,
         )
 
-        return { tradeRebuild, ledgerRebuild, snapshotRebuild }
+        return { ledgerRebuild, snapshotRebuild }
       }, { timeout: 60_000 })
 
       startEnrichment(account.id)
@@ -86,7 +85,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         action: parsed.action,
         accountId: account.id,
-        tradeRebuild: result.tradeRebuild,
         ledgerRebuild: result.ledgerRebuild,
         snapshotRebuild: result.snapshotRebuild,
         enrichmentStarted: true,

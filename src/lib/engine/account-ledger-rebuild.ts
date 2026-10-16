@@ -333,9 +333,8 @@ export function evaluateAccountImport(args: {
   >
   impact: BrokerLedgerPreviewSummary
   supportReasons: string[]
-  legacyOverlap: { count: number; first: Date; last: Date } | null
 }): AccountImportDecision {
-  const { dryRun, impact, supportReasons, legacyOverlap } = args
+  const { dryRun, impact, supportReasons } = args
   // Transaction History marks option rows "blocked" only for the retired
   // Execution path; rows that truly cannot import arrive via supportReasons.
   const ledgerRows =
@@ -343,11 +342,6 @@ export function evaluateAccountImport(args: {
   const touchedPositions =
     impact.closedTradeLikePositions + impact.openPositions + impact.transferredPositions
   const blockers = [...supportReasons]
-  if (legacyOverlap) {
-    blockers.push(
-      `This account already has ${legacyOverlap.count} fill(s) from the older import path between ${legacyOverlap.first.toISOString().slice(0, 10)} and ${legacyOverlap.last.toISOString().slice(0, 10)}. Importing this statement would count them twice.`,
-    )
-  }
   return {
     canImport: blockers.length === 0 && ledgerRows > 0 && touchedPositions > 0,
     ledgerRows,
@@ -356,20 +350,117 @@ export function evaluateAccountImport(args: {
   }
 }
 
+// ─── legacy executions ──────────────────────────────────────────────
+
+/**
+ * Accounts imported before the statement ledger hold Execution rows (equity,
+ * date-only, from Schwab Transaction History). They enter the account ledger
+ * as one synthetic statement so their positions pair with later statements
+ * (a legacy buy closed by a new statement's sell) and so every trade in the
+ * account comes from one engine. It ranks as the oldest Transaction History
+ * input: a real statement covering the same day owns that day's fills.
+ */
+export const LEGACY_EXECUTIONS_STATEMENT_ID = 'legacy-executions'
+
+const LEGACY_SIDE_ACTIONS: Record<string, string> = {
+  BUY: 'Buy',
+  SELL: 'Sell',
+  SELL_SHORT: 'Sell Short',
+  BUY_TO_COVER: 'Buy to Cover',
+}
+
+export interface LegacyExecution {
+  id: string
+  execTime: Date
+  daySeq: number
+  symbol: string
+  side: string
+  qty: number
+  price: number
+  commission: number
+}
+
+export function mapLegacyExecutionsToStatement(
+  executions: LegacyExecution[],
+): { statement: LedgerStatementInput; executionIds: string[] } | null {
+  const ordered = [...executions].sort(
+    (left, right) =>
+      left.execTime.getTime() - right.execTime.getTime() || left.daySeq - right.daySeq,
+  )
+  if (ordered.length === 0) return null
+
+  const rows: AnalyzedStatementRow[] = ordered.map((execution, rowIndex) => {
+    const action = LEGACY_SIDE_ACTIONS[execution.side]
+    return {
+      rowIndex,
+      raw: {},
+      date: execution.execTime,
+      action: action ?? execution.side,
+      symbol: execution.symbol,
+      description: `Legacy execution ${execution.side} ${execution.symbol}`,
+      quantity: execution.qty,
+      price: execution.price,
+      fees: execution.commission,
+      amount: null,
+      instrumentType: 'EQUITY',
+      // An unknown side cannot be placed in the ledger: keep it out rather
+      // than guess its direction.
+      actionCategory: action ? 'EQUITY_TRADE' : 'UNKNOWN',
+      optionContract: null,
+      isImportTradeRow: action != null,
+      blocksCanonicalImport: action == null,
+      notes: [],
+    }
+  })
+
+  return {
+    statement: {
+      id: LEGACY_EXECUTIONS_STATEMENT_ID,
+      sourceFormat: 'SCHWAB_TRANSACTION_HISTORY',
+      coverageFrom: ordered[0].execTime,
+      coverageTo: ordered[ordered.length - 1].execTime,
+      createdAt: new Date(0),
+      rows,
+    },
+    executionIds: ordered.map((execution) => execution.id),
+  }
+}
+
 // ─── database access ────────────────────────────────────────────────
 
 type LedgerDb = Prisma.TransactionClient
 
-async function loadConfirmedStatements(
-  db: LedgerDb,
-  accountId: string,
-): Promise<LedgerStatementInput[]> {
-  const statements = await db.brokerStatementImport.findMany({
-    where: { accountId, confirmedAt: { not: null } },
-    include: { rows: { orderBy: { rowIndex: 'asc' } } },
-    orderBy: { createdAt: 'asc' },
-  })
-  return statements.map((statement) => ({
+interface LedgerInputs {
+  statements: LedgerStatementInput[]
+  /** executionIds[rowIndex] for rows of the synthetic legacy statement. */
+  legacyExecutionIds: string[]
+  /** Source format per input statement id (for annotation matching). */
+  formatById: Map<string, StatementSourceFormat>
+}
+
+async function loadLedgerInputs(db: LedgerDb, accountId: string): Promise<LedgerInputs> {
+  const [stored, executions] = await Promise.all([
+    db.brokerStatementImport.findMany({
+      where: { accountId, confirmedAt: { not: null } },
+      include: { rows: { orderBy: { rowIndex: 'asc' } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    db.execution.findMany({
+      where: { accountId },
+      select: {
+        id: true,
+        execTime: true,
+        daySeq: true,
+        symbol: true,
+        side: true,
+        qty: true,
+        price: true,
+        commission: true,
+      },
+    }),
+  ])
+
+  const statements: LedgerStatementInput[] = stored.map((statement) => ({
     id: statement.id,
     sourceFormat: asSourceFormat(statement.sourceFormat),
     coverageFrom: statement.coverageFrom,
@@ -377,46 +468,43 @@ async function loadConfirmedStatements(
     createdAt: statement.createdAt,
     rows: statement.rows.map(mapStoredRowToAnalyzedRow),
   }))
+  const legacy = mapLegacyExecutionsToStatement(
+    executions.map((execution) => ({
+      id: execution.id,
+      execTime: execution.execTime,
+      daySeq: execution.daySeq,
+      symbol: execution.symbol,
+      side: execution.side,
+      qty: execution.qty.toNumber(),
+      price: execution.price.toNumber(),
+      commission: execution.commission.toNumber(),
+    })),
+  )
+  if (legacy) statements.push(legacy.statement)
+
+  return {
+    statements,
+    legacyExecutionIds: legacy?.executionIds ?? [],
+    formatById: new Map(statements.map((statement) => [statement.id, statement.sourceFormat])),
+  }
 }
 
 /**
- * Previews confirming `candidate` against the account's confirmed statements,
- * without writing anything. The candidate is treated as the newest statement.
+ * Previews confirming `candidate` against everything already in the account
+ * ledger, without writing. The candidate carries its persisted createdAt so
+ * day ownership matches what the confirm-time rebuild will decide.
  */
 export async function previewStatementImport(
   db: LedgerDb,
   accountId: string,
-  candidate: Omit<LedgerStatementInput, 'createdAt'>,
+  candidate: LedgerStatementInput,
 ): Promise<StatementImpact> {
-  const confirmed = (await loadConfirmedStatements(db, accountId)).filter(
-    (statement) => statement.id !== candidate.id,
-  )
+  const { statements } = await loadLedgerInputs(db, accountId)
   const selection = selectAccountLedgerRows([
-    ...confirmed,
-    { ...candidate, createdAt: new Date() },
+    ...statements.filter((statement) => statement.id !== candidate.id),
+    candidate,
   ])
   return summarizeStatementImpact(selection, buildBrokerPositionLedger(selection.rows), candidate.id)
-}
-
-/**
- * Execution-backed (legacy import path) trades and ledger statements must not
- * cover the same dates, or the same fills would be counted twice. Returns the
- * legacy executions inside the coverage window, if any.
- */
-export async function findLegacyExecutionOverlap(
-  db: LedgerDb,
-  accountId: string,
-  coverage: { from: Date; to: Date },
-): Promise<{ count: number; first: Date; last: Date } | null> {
-  const dayAfter = new Date(coverage.to.getTime() + 86_400_000)
-  const where = { accountId, execTime: { gte: coverage.from, lt: dayAfter } }
-  const count = await db.execution.count({ where })
-  if (count === 0) return null
-  const [first, last] = await Promise.all([
-    db.execution.findFirst({ where, orderBy: { execTime: 'asc' }, select: { execTime: true } }),
-    db.execution.findFirst({ where, orderBy: { execTime: 'desc' }, select: { execTime: true } }),
-  ])
-  return { count, first: first?.execTime ?? coverage.from, last: last?.execTime ?? coverage.to }
 }
 
 /**
@@ -427,7 +515,92 @@ export async function findLegacyExecutionOverlap(
  * advisory locks release on commit or rollback; other accounts are unaffected.
  */
 export async function lockAccountLedger(tx: LedgerDb, accountId: string): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`account-ledger:${accountId}`}, 0))`
+  const lockKey = `account-ledger:${accountId}`
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
+}
+
+// ─── annotations ────────────────────────────────────────────────────
+
+export interface TradeAnnotation {
+  symbol: string
+  direction: string
+  entryTime: Date
+  /** Format of the input the trade came from; date-only formats store UTC midnight. */
+  sourceFormat: StatementSourceFormat
+  tags: string[]
+  notes: string | null
+  notesUpdatedAt: Date | null
+}
+
+function entryTradingDay(entryTime: Date, format: StatementSourceFormat): string {
+  return format === 'TOS_ACCOUNT_STATEMENT'
+    ? tosTradingDate(entryTime)
+    : entryTime.toISOString().slice(0, 10)
+}
+
+/**
+ * Matches user annotations (tags, notes) from the trades being replaced to the
+ * rebuilt positions. Exact (symbol, direction, entry instant) first; otherwise
+ * (symbol, direction, entry trading day) when exactly one old annotated trade
+ * and exactly one new position share it. The fallback carries annotations
+ * across a format upgrade, where a date-only entry (UTC midnight) becomes the
+ * real fill instant. Ambiguous days are left unmatched rather than guessed.
+ */
+export function matchAnnotations(
+  annotations: TradeAnnotation[],
+  positions: Array<{
+    symbol: string
+    direction: string
+    entryTime: Date
+    sourceFormat: StatementSourceFormat
+  }>,
+): Map<number, TradeAnnotation> {
+  const exactKey = (symbol: string, direction: string, entryTime: Date) =>
+    `${symbol}|${direction}|${entryTime.toISOString()}`
+  const dayKey = (symbol: string, direction: string, day: string) =>
+    `${symbol}|${direction}|${day}`
+
+  const exact = new Map(
+    annotations.map((annotation) => [
+      exactKey(annotation.symbol, annotation.direction, annotation.entryTime),
+      annotation,
+    ]),
+  )
+  const matched = new Map<number, TradeAnnotation>()
+  const used = new Set<TradeAnnotation>()
+  positions.forEach((position, index) => {
+    const hit = exact.get(exactKey(position.symbol, position.direction, position.entryTime))
+    if (hit && !used.has(hit)) {
+      matched.set(index, hit)
+      used.add(hit)
+    }
+  })
+
+  const oldByDay = new Map<string, TradeAnnotation[]>()
+  for (const annotation of annotations) {
+    if (used.has(annotation)) continue
+    const key = dayKey(
+      annotation.symbol,
+      annotation.direction,
+      entryTradingDay(annotation.entryTime, annotation.sourceFormat),
+    )
+    oldByDay.set(key, [...(oldByDay.get(key) ?? []), annotation])
+  }
+  const newByDay = new Map<string, number[]>()
+  positions.forEach((position, index) => {
+    if (matched.has(index)) return
+    const key = dayKey(
+      position.symbol,
+      position.direction,
+      entryTradingDay(position.entryTime, position.sourceFormat),
+    )
+    newByDay.set(key, [...(newByDay.get(key) ?? []), index])
+  })
+  for (const [key, olds] of oldByDay) {
+    const news = newByDay.get(key) ?? []
+    if (olds.length === 1 && news.length === 1) matched.set(news[0], olds[0])
+  }
+  return matched
 }
 
 // ─── database rebuild ───────────────────────────────────────────────
@@ -445,17 +618,13 @@ export interface LedgerRebuildResult {
   impact: StatementImpact | null
 }
 
-function annotationKey(symbol: string, direction: string, entryTime: Date): string {
-  return `${symbol}|${direction}|${entryTime.toISOString()}`
-}
-
 /**
- * Replaces every statement-derived RoundTripTrade for the account with a fresh
- * account-level ledger over all confirmed statements. Execution-backed legacy
- * trades (brokerStatementImportId = null) are left untouched.
+ * Replaces every RoundTripTrade for the account with a fresh account-level
+ * ledger over all confirmed statements plus any legacy executions. Callers
+ * must hold lockAccountLedger. Legacy executions are re-linked to the trades
+ * rebuilt from them (chart fills and classifier signals use that link).
  *
- * User annotations (tags, notes) survive the rebuild when a trade keeps the
- * same symbol, direction, and entry time. Derived rows (TradeContext,
+ * User annotations survive via matchAnnotations. Derived rows (TradeContext,
  * TradeClassification) cascade-delete and are recreated by enrichment.
  */
 export async function rebuildLedgerTradesForAccount(
@@ -463,47 +632,91 @@ export async function rebuildLedgerTradesForAccount(
   accountId: string,
   options: { impactFor?: string } = {},
 ): Promise<LedgerRebuildResult> {
-  const statements = await loadConfirmedStatements(tx, accountId)
+  const { statements, legacyExecutionIds, formatById } = await loadLedgerInputs(tx, accountId)
   const selection = selectAccountLedgerRows(statements)
   const ledger = buildBrokerPositionLedger(selection.rows)
 
-  const existing = await tx.roundTripTrade.findMany({
-    where: { accountId, brokerStatementImportId: { not: null } },
-    select: { symbol: true, direction: true, entryTime: true, tags: true, notes: true, notesUpdatedAt: true },
+  const annotated = await tx.roundTripTrade.findMany({
+    where: { accountId, OR: [{ tags: { isEmpty: false } }, { notes: { not: null } }] },
+    select: {
+      symbol: true,
+      direction: true,
+      entryTime: true,
+      tags: true,
+      notes: true,
+      notesUpdatedAt: true,
+      brokerStatementImportId: true,
+    },
   })
-  const annotations = new Map(
-    existing
-      .filter((trade) => trade.tags.length > 0 || trade.notes != null)
-      .map((trade) => [annotationKey(trade.symbol, trade.direction, trade.entryTime), trade]),
+
+  const originOf = (position: BrokerLedgerResult['positions'][number]) =>
+    selection.rowOrigins[position.openRows[0] ?? position.closeRows[0]]
+
+  const annotations = matchAnnotations(
+    annotated.map((trade) => ({
+      symbol: trade.symbol,
+      direction: trade.direction,
+      entryTime: trade.entryTime,
+      // Trades with no statement came from legacy executions: date-only.
+      sourceFormat:
+        formatById.get(trade.brokerStatementImportId ?? '') ?? 'SCHWAB_TRANSACTION_HISTORY',
+      tags: trade.tags,
+      notes: trade.notes,
+      notesUpdatedAt: trade.notesUpdatedAt,
+    })),
+    ledger.positions.map((position) => ({
+      symbol: position.symbol,
+      direction: position.side,
+      entryTime: position.entryTime,
+      sourceFormat:
+        formatById.get(originOf(position)?.statementId ?? '') ?? 'SCHWAB_TRANSACTION_HISTORY',
+    })),
   )
 
-  await tx.roundTripTrade.deleteMany({
-    where: { accountId, brokerStatementImportId: { not: null } },
-  })
+  // The ledger owns every trade in the account; unlink executions first.
+  await tx.execution.updateMany({ where: { accountId }, data: { tradeId: null } })
+  await tx.roundTripTrade.deleteMany({ where: { accountId } })
 
-  let annotationsPreserved = 0
-  const data = ledger.positions.map((position) => {
-    const firstRow = position.openRows[0] ?? position.closeRows[0]
-    const statementId =
-      selection.rowOrigins[firstRow]?.statementId ?? statements[0]?.id ?? null
-    const input = mapBrokerPositionToTradeCreateInput(accountId, statementId, null, position)
-    const annotation = annotations.get(
-      annotationKey(position.symbol, input.direction, position.entryTime),
+  const unlinked: Prisma.RoundTripTradeUncheckedCreateInput[] = []
+  const linked: Array<{
+    data: Prisma.RoundTripTradeUncheckedCreateInput
+    executionIds: string[]
+  }> = []
+  ledger.positions.forEach((position, index) => {
+    const statementId = originOf(position)?.statementId ?? null
+    const input = mapBrokerPositionToTradeCreateInput(
+      accountId,
+      statementId === LEGACY_EXECUTIONS_STATEMENT_ID ? null : statementId,
+      null,
+      position,
     )
-    if (annotation) {
-      annotationsPreserved += 1
-      return {
-        ...input,
-        tags: annotation.tags,
-        notes: annotation.notes,
-        notesUpdatedAt: annotation.notesUpdatedAt,
-      }
-    }
-    return input
+    const annotation = annotations.get(index)
+    const data = annotation
+      ? {
+          ...input,
+          tags: annotation.tags,
+          notes: annotation.notes,
+          notesUpdatedAt: annotation.notesUpdatedAt,
+        }
+      : input
+    const executionIds = [...position.openRows, ...position.closeRows]
+      .map((row) => selection.rowOrigins[row])
+      .filter((rowOrigin) => rowOrigin?.statementId === LEGACY_EXECUTIONS_STATEMENT_ID)
+      .map((rowOrigin) => legacyExecutionIds[rowOrigin.rowIndex])
+      .filter((id): id is string => id != null)
+    if (executionIds.length > 0) linked.push({ data, executionIds })
+    else unlinked.push(data)
   })
 
-  if (data.length > 0) {
-    await tx.roundTripTrade.createMany({ data })
+  if (unlinked.length > 0) {
+    await tx.roundTripTrade.createMany({ data: unlinked })
+  }
+  for (const { data, executionIds } of linked) {
+    const created = await tx.roundTripTrade.create({ data, select: { id: true } })
+    await tx.execution.updateMany({
+      where: { id: { in: executionIds } },
+      data: { tradeId: created.id },
+    })
   }
 
   const openPositions = ledger.positions.filter((position) => position.isOpen).length
@@ -519,7 +732,7 @@ export async function rebuildLedgerTradesForAccount(
     replacedRows: selection.replacedRows,
     closedTrades: ledger.positions.length - openPositions,
     openPositions,
-    annotationsPreserved,
+    annotationsPreserved: annotations.size,
     warnings: ledger.warnings.map((warning) => warning.message),
     earliestEntry,
     impact: options.impactFor

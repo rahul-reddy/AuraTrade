@@ -1,13 +1,17 @@
 import { Prisma, type BrokerStatementRow } from '@/generated/prisma'
 import {
+  LEGACY_EXECUTIONS_STATEMENT_ID,
   evaluateAccountImport,
-  findLegacyExecutionOverlap,
+  mapLegacyExecutionsToStatement,
   mapStoredRowToAnalyzedRow,
+  matchAnnotations,
+  previewStatementImport,
   rebuildLedgerTradesForAccount,
   selectAccountLedgerRows,
   summarizeStatementImpact,
   tradingDateOf,
   type LedgerStatementInput,
+  type TradeAnnotation,
 } from '@/lib/engine/account-ledger-rebuild'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
@@ -348,62 +352,215 @@ describe('summarizeStatementImpact', () => {
   })
 })
 
-describe('rebuildLedgerTradesForAccount ownership', () => {
-  test('reads only confirmed statements and never deletes Execution-backed trades', async () => {
-    const findStatements = jest.fn().mockResolvedValue([])
-    const deleteMany = jest.fn().mockResolvedValue({ count: 0 })
-    const tx = {
-      brokerStatementImport: { findMany: findStatements },
-      roundTripTrade: {
-        findMany: jest.fn().mockResolvedValue([]),
-        deleteMany,
-        createMany: jest.fn(),
-      },
-    } as unknown as Prisma.TransactionClient
+describe('legacy executions in the account ledger', () => {
+  const legacyBuy = {
+    id: 'exec_buy',
+    execTime: utcDay('2026-01-15'),
+    daySeq: 0,
+    symbol: 'AAA',
+    side: 'BUY',
+    qty: 100,
+    price: 50,
+    commission: 0,
+  }
 
-    const result = await rebuildLedgerTradesForAccount(tx, 'acct_1', { impactFor: 'stmt_1' })
-
-    expect(findStatements).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { accountId: 'acct_1', confirmedAt: { not: null } } }),
-    )
-    // Legacy trades have brokerStatementImportId = null and must survive.
-    expect(deleteMany).toHaveBeenCalledTimes(1)
-    expect(deleteMany).toHaveBeenCalledWith({
-      where: { accountId: 'acct_1', brokerStatementImportId: { not: null } },
+  test('maps executions to an oldest-precedence Transaction History statement', () => {
+    const mapped = mapLegacyExecutionsToStatement([
+      { ...legacyBuy, id: 'exec_2', daySeq: 1, side: 'SELL_SHORT' },
+      legacyBuy,
+      { ...legacyBuy, id: 'exec_3', side: 'MYSTERY' },
+    ])
+    expect(mapped?.statement).toMatchObject({
+      id: LEGACY_EXECUTIONS_STATEMENT_ID,
+      sourceFormat: 'SCHWAB_TRANSACTION_HISTORY',
+      createdAt: new Date(0),
     })
-    expect(result.impact).toMatchObject({ closedTradeLikePositions: 0, openPositions: 0 })
+    // Ordered by (execTime, daySeq); the unknown side is kept out of the ledger.
+    expect(mapped?.executionIds).toEqual(['exec_buy', 'exec_3', 'exec_2'])
+    expect(mapped?.statement.rows.map((r) => [r.action, r.actionCategory])).toEqual([
+      ['Buy', 'EQUITY_TRADE'],
+      ['MYSTERY', 'UNKNOWN'],
+      ['Sell Short', 'EQUITY_TRADE'],
+    ])
+    expect(mapLegacyExecutionsToStatement([])).toBeNull()
+  })
+
+  test('a new statement closes a position opened through the legacy Execution path', () => {
+    const legacy = mapLegacyExecutionsToStatement([legacyBuy])
+    const selection = selectAccountLedgerRows([
+      legacy!.statement,
+      statement('new', 'TOS_ACCOUNT_STATEMENT', ['2026-01-16', '2026-01-16'], '2026-02-01', [
+        row({ date: new Date('2026-01-16T15:00:00Z'), action: 'Sell', quantity: 100, price: 52, fees: 0.1 }),
+      ]),
+    ])
+    const ledger = buildBrokerPositionLedger(selection.rows)
+    expect(ledger.warnings).toEqual([])
+    expect(ledger.positions).toHaveLength(1)
+    // (52 − 50) × 100 − 0.10
+    expect(ledger.positions[0].netPnl).toBeCloseTo(199.9, 10)
+    expect(summarizeStatementImpact(selection, ledger, 'new').closedTradeLikePositions).toBe(1)
+  })
+
+  test('a real statement covering the same day owns its fills, so legacy fills are not double-counted', () => {
+    const legacy = mapLegacyExecutionsToStatement([legacyBuy])
+    const selection = selectAccountLedgerRows([
+      legacy!.statement,
+      statement('th', 'SCHWAB_TRANSACTION_HISTORY', ['2026-01-15', '2026-01-15'], '2026-02-01', [
+        row({ date: utcDay('2026-01-15'), action: 'Buy', quantity: 100, price: 50 }),
+      ]),
+    ])
+    expect(selection.rowOrigins.map((origin) => origin.statementId)).toEqual(['th'])
+    expect(selection.replacedRows).toBe(1)
   })
 })
 
-describe('findLegacyExecutionOverlap', () => {
-  const coverage = { from: utcDay('2026-03-13'), to: utcDay('2026-03-31') }
-
-  test('returns null when no legacy executions fall in the coverage window', async () => {
-    const count = jest.fn().mockResolvedValue(0)
-    const db = { execution: { count, findFirst: jest.fn() } } as unknown as Prisma.TransactionClient
-    expect(await findLegacyExecutionOverlap(db, 'acct_1', coverage)).toBeNull()
-    // The window includes the whole last coverage day.
-    expect(count).toHaveBeenCalledWith({
-      where: {
-        accountId: 'acct_1',
-        execTime: { gte: utcDay('2026-03-13'), lt: utcDay('2026-04-01') },
-      },
-    })
+describe('matchAnnotations', () => {
+  const note = (overrides: Partial<TradeAnnotation>): TradeAnnotation => ({
+    symbol: 'AAA',
+    direction: 'LONG',
+    entryTime: utcDay('2026-03-12'),
+    sourceFormat: 'SCHWAB_TRANSACTION_HISTORY',
+    tags: ['breakout'],
+    notes: 'held too long',
+    notesUpdatedAt: utcDay('2026-03-13'),
+    ...overrides,
   })
 
-  test('reports the count and span of overlapping legacy executions', async () => {
-    const findFirst = jest
-      .fn()
-      .mockResolvedValueOnce({ execTime: utcDay('2026-03-14') })
-      .mockResolvedValueOnce({ execTime: utcDay('2026-03-20') })
-    const db = {
-      execution: { count: jest.fn().mockResolvedValue(3), findFirst },
+  test('matches an unchanged trade on its exact entry instant', () => {
+    const matched = matchAnnotations([note({})], [
+      { symbol: 'AAA', direction: 'LONG', entryTime: utcDay('2026-03-12'), sourceFormat: 'SCHWAB_TRANSACTION_HISTORY' },
+    ])
+    expect(matched.get(0)?.notes).toBe('held too long')
+  })
+
+  test('carries annotations when a date-only entry becomes a timestamped TOS fill', () => {
+    // Date-only 3/12 (UTC midnight) → TOS fill at 3/12 10:31 ET.
+    const matched = matchAnnotations([note({})], [
+      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
+    ])
+    expect(matched.get(0)).toMatchObject({ tags: ['breakout'], notes: 'held too long' })
+  })
+
+  test('reads an evening ET fill as that ET day, not the next UTC day', () => {
+    const matched = matchAnnotations([note({})], [
+      // 3/13 01:30Z is 3/12 21:30 ET.
+      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-13T01:30:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
+    ])
+    expect(matched.size).toBe(1)
+  })
+
+  test('leaves ambiguous days unmatched instead of guessing', () => {
+    const twoNewTrades = matchAnnotations([note({})], [
+      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
+      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-12T18:02:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
+    ])
+    expect(twoNewTrades.size).toBe(0)
+
+    const otherSide = matchAnnotations([note({})], [
+      { symbol: 'AAA', direction: 'SHORT', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
+    ])
+    expect(otherSide.size).toBe(0)
+  })
+})
+
+describe('rebuildLedgerTradesForAccount', () => {
+  function mockTx(args: {
+    statements?: unknown[]
+    executions?: unknown[]
+    annotated?: unknown[]
+  }) {
+    const calls = {
+      executionUpdateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      tradeDeleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      tradeCreateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      tradeCreate: jest.fn().mockResolvedValue({ id: 'trade_new' }),
+      statementFindMany: jest.fn().mockResolvedValue(args.statements ?? []),
+    }
+    const tx = {
+      brokerStatementImport: { findMany: calls.statementFindMany },
+      execution: {
+        findMany: jest.fn().mockResolvedValue(args.executions ?? []),
+        updateMany: calls.executionUpdateMany,
+      },
+      roundTripTrade: {
+        findMany: jest.fn().mockResolvedValue(args.annotated ?? []),
+        deleteMany: calls.tradeDeleteMany,
+        createMany: calls.tradeCreateMany,
+        create: calls.tradeCreate,
+      },
     } as unknown as Prisma.TransactionClient
-    expect(await findLegacyExecutionOverlap(db, 'acct_1', coverage)).toEqual({
-      count: 3,
-      first: utcDay('2026-03-14'),
-      last: utcDay('2026-03-20'),
+    return { tx, calls }
+  }
+
+  test('reads only confirmed statements and owns every trade in the account', async () => {
+    const { tx, calls } = mockTx({})
+    const result = await rebuildLedgerTradesForAccount(tx, 'acct_1', { impactFor: 'stmt_1' })
+
+    expect(calls.statementFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { accountId: 'acct_1', confirmedAt: { not: null } } }),
+    )
+    expect(calls.executionUpdateMany).toHaveBeenCalledWith({
+      where: { accountId: 'acct_1' },
+      data: { tradeId: null },
     })
+    expect(calls.tradeDeleteMany).toHaveBeenCalledWith({ where: { accountId: 'acct_1' } })
+    expect(result.impact).toMatchObject({ closedTradeLikePositions: 0, openPositions: 0 })
+  })
+
+  test('re-links legacy executions to the trade rebuilt from them and keeps its annotation', async () => {
+    const decimal = (value: number) => new Prisma.Decimal(value)
+    const { tx, calls } = mockTx({
+      executions: [
+        { id: 'exec_buy', execTime: utcDay('2026-01-15'), daySeq: 0, symbol: 'AAA', side: 'BUY', qty: decimal(100), price: decimal(50), commission: decimal(0) },
+        { id: 'exec_sell', execTime: utcDay('2026-01-16'), daySeq: 0, symbol: 'AAA', side: 'SELL', qty: decimal(100), price: decimal(52), commission: decimal(0.1) },
+      ],
+      annotated: [
+        { symbol: 'AAA', direction: 'LONG', entryTime: utcDay('2026-01-15'), tags: ['swing'], notes: null, notesUpdatedAt: null, brokerStatementImportId: null },
+      ],
+    })
+
+    const result = await rebuildLedgerTradesForAccount(tx, 'acct_1')
+
+    expect(calls.tradeCreateMany).not.toHaveBeenCalled()
+    expect(calls.tradeCreate).toHaveBeenCalledTimes(1)
+    const created = calls.tradeCreate.mock.calls[0][0] as {
+      data: { brokerStatementImportId: string | null; tags: string[]; isOpen: boolean }
+    }
+    expect(created.data).toMatchObject({ brokerStatementImportId: null, tags: ['swing'], isOpen: false })
+    expect(calls.executionUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: { in: ['exec_buy', 'exec_sell'] } },
+      data: { tradeId: 'trade_new' },
+    })
+    expect(result).toMatchObject({ closedTrades: 1, openPositions: 0, annotationsPreserved: 1 })
+  })
+})
+
+describe('previewStatementImport', () => {
+  test('uses the candidate\'s persisted createdAt, matching the rebuild\'s day ownership', async () => {
+    // A confirmed statement B (created 2026-03-02) and candidate A (created
+    // earlier, 2026-03-01) cover the same day with the same format and
+    // coverage end, so the newer upload (B) owns that day in the rebuild.
+    const confirmedB = {
+      id: 'B',
+      sourceFormat: 'TOS_ACCOUNT_STATEMENT',
+      coverageFrom: utcDay('2026-02-27'),
+      coverageTo: utcDay('2026-02-27'),
+      createdAt: new Date('2026-03-02T00:00:00Z'),
+      rows: [],
+    }
+    const db = {
+      brokerStatementImport: { findMany: jest.fn().mockResolvedValue([confirmedB]) },
+      execution: { findMany: jest.fn().mockResolvedValue([]) },
+    } as unknown as Prisma.TransactionClient
+
+    const impact = await previewStatementImport(db, 'acct_1', {
+      ...statement('A', 'TOS_ACCOUNT_STATEMENT', ['2026-02-27', '2026-02-27'], '2026-03-01', [
+        row({ date: new Date('2026-02-27T15:00:00Z'), action: 'Buy', quantity: 1 }),
+      ]),
+    })
+
+    // A is older, so B owns 2/27 and A's preview correctly shows no trades.
+    expect(impact).toMatchObject({ closedTradeLikePositions: 0, openPositions: 0 })
   })
 })
 
@@ -411,7 +568,7 @@ describe('evaluateAccountImport', () => {
   const header = 'Date,Action,Symbol,Description,Quantity,Price,Fees & Comm,Amount'
   const csv = (rows: string[]) => [header, ...rows].join('\n')
 
-  function decide(earlier: string[], followUp: string[], legacyOverlap: Parameters<typeof evaluateAccountImport>[0]['legacyOverlap'] = null) {
+  function decide(earlier: string[], followUp: string[]) {
     const first = analyzeSchwabStatement(csv(earlier))
     const second = analyzeSchwabStatement(csv(followUp))
     const selection = selectAccountLedgerRows([
@@ -425,7 +582,6 @@ describe('evaluateAccountImport', () => {
         dryRun: second,
         impact: summarizeStatementImpact(selection, ledger, 'followUp'),
         supportReasons: evaluateStatementImportSupport(second).reasons,
-        legacyOverlap,
       }),
     }
   }
@@ -458,17 +614,9 @@ describe('evaluateAccountImport', () => {
     expect(decision).toMatchObject({ canImport: false, ledgerRows: 0, touchedPositions: 0 })
   })
 
-  test('unknown broker actions and legacy overlaps block import with a reason', () => {
-    const unknown = decide([openCall], ['2/10/2026,Mystery Action,ORCL,SOMETHING,1,"$1.00 ",,"$1.00 "'])
-    expect(unknown.decision.canImport).toBe(false)
-    expect(unknown.decision.blockers).toEqual(['Unsupported broker action category: UNKNOWN'])
-
-    const overlap = decide([], [openCall], {
-      count: 4,
-      first: utcDay('2026-02-03'),
-      last: utcDay('2026-02-05'),
-    })
-    expect(overlap.decision.canImport).toBe(false)
-    expect(overlap.decision.blockers[0]).toContain('4 fill(s) from the older import path between 2026-02-03 and 2026-02-05')
+  test('unknown broker actions block import with a reason', () => {
+    const { decision } = decide([openCall], ['2/10/2026,Mystery Action,ORCL,SOMETHING,1,"$1.00 ",,"$1.00 "'])
+    expect(decision.canImport).toBe(false)
+    expect(decision.blockers).toEqual(['Unsupported broker action category: UNKNOWN'])
   })
 })

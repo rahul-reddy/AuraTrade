@@ -9,7 +9,6 @@ import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
 import {
   evaluateAccountImport,
-  findLegacyExecutionOverlap,
   previewStatementImport,
 } from '@/lib/engine/account-ledger-rebuild'
 
@@ -69,8 +68,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Use the persisted createdAt: it decides day ownership in the rebuild too.
+    const { createdAt } = await prisma.brokerStatementImport.findUniqueOrThrow({
+      where: { id: statementImportId },
+      select: { createdAt: true },
+    })
     const impact = await previewStatementImport(prisma, account.id, {
       id: statementImportId,
+      createdAt,
       sourceFormat: dryRun.sourceFormat,
       coverageFrom: dryRun.coverage?.from ?? null,
       coverageTo: dryRun.coverage?.to ?? null,
@@ -103,14 +108,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const legacyOverlap = dryRun.coverage
-      ? await findLegacyExecutionOverlap(prisma, account.id, dryRun.coverage)
-      : null
     const decision = evaluateAccountImport({
       dryRun,
       impact,
       supportReasons: importSupport.reasons,
-      legacyOverlap,
     })
     const summary = {
       canImport: decision.canImport,

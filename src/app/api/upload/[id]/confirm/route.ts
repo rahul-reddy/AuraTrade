@@ -9,7 +9,6 @@ import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
 import {
   evaluateAccountImport,
-  findLegacyExecutionOverlap,
   lockAccountLedger,
   previewStatementImport,
   rebuildLedgerTradesForAccount,
@@ -21,9 +20,9 @@ import {
  * account are rebuilt through the account-level ledger (carry-in positions
  * pair across files; overlapping statements never double-count).
  *
- * The legacy Execution import path no longer accepts new files. Accounts that
- * still hold Execution-backed trades keep them; a statement overlapping those
- * dates is refused so the same fills cannot be counted twice.
+ * The legacy Execution import path no longer accepts new files. Executions it
+ * created earlier enter the same ledger (see mapLegacyExecutionsToStatement),
+ * so they pair with new statements and overlapping days are owned once.
  */
 export async function POST(
   req: NextRequest,
@@ -84,20 +83,23 @@ export async function POST(
       ledger: buildBrokerPositionLedger(dryRun.rows),
     })
 
-    // Same decision as the preview (see evaluateAccountImport).
+    // Same decision as the preview (see evaluateAccountImport), using the
+    // persisted createdAt that the rebuild will also use for day ownership.
+    const { createdAt } = await prisma.brokerStatementImport.findUniqueOrThrow({
+      where: { id: statementImportId },
+      select: { createdAt: true },
+    })
     const decision = evaluateAccountImport({
       dryRun,
       impact: await previewStatementImport(prisma, accountId, {
         id: statementImportId,
+        createdAt,
         sourceFormat: dryRun.sourceFormat,
         coverageFrom: dryRun.coverage?.from ?? null,
         coverageTo: dryRun.coverage?.to ?? null,
         rows: dryRun.rows,
       }),
       supportReasons: importSupport.reasons,
-      legacyOverlap: dryRun.coverage
-        ? await findLegacyExecutionOverlap(prisma, accountId, dryRun.coverage)
-        : null,
     })
     if (!decision.canImport) {
       return NextResponse.json(
