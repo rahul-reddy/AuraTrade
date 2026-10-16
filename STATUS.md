@@ -35,8 +35,14 @@
   both now use the persisted value; (3) tags/notes were lost when a date-only trade became
   a timestamped TOS trade — annotations fall back to (symbol, direction, trading day) when
   unambiguous.
+- **Cross-review round 4 (codex):** 2 blocking findings, both fixed: (1) the synthetic
+  legacy input could outrank real statements when its coverage ended later — it now ranks
+  below every real statement and never owns lifecycle events; (2) statement-imported
+  trades had no per-trade fills, so charts lost fill markers and the classifier lost
+  scale-in/average-down signals — the ledger now writes `TradeFill` rows (migration
+  `20261016210000_trade_fills`) that both consumers read.
 - **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
-  `npm test` 224/224; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm test` 232/232; fresh-DB `prisma migrate deploy` + drift check: no difference;
   `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
   two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
   0 blocked, all option fills matched to their own contract's fee row.
