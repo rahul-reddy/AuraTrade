@@ -225,6 +225,19 @@ describe('analyzeTosAccountStatement', () => {
     expect(dryRun.importSupported).toBe(false)
   })
 
+  test('reads statement coverage from the "since … through …" header', () => {
+    const dryRun = analyzeTosAccountStatement(
+      makeStatement({
+        fills: [',1/15/26 09:30:00,STOCK,BUY,+5,TO OPEN,ABC,,,STOCK,10.00,10.00,MKT'],
+        cash: [],
+      }),
+    )
+    // header says since 1/1/26 through 12/31/26 — wider than the single fill
+    expect(dryRun.coverage?.from.toISOString()).toBe('2026-01-01T00:00:00.000Z')
+    expect(dryRun.coverage?.to.toISOString()).toBe('2026-12-31T00:00:00.000Z')
+    expect(dryRun.dateRange?.from.toISOString()).toBe('2026-01-15T14:30:00.000Z')
+  })
+
   test('returns an empty dry run when the trade history section is missing', () => {
     const dryRun = analyzeTosAccountStatement('Account Statement for X\n\nCash Balance\n')
     expect(dryRun.totalRows).toBe(0)

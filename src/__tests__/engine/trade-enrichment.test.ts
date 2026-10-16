@@ -9,7 +9,7 @@ import {
   type DailyCandle,
   type EnrichmentDataSource,
 } from '@/lib/engine/trade-enrichment'
-import type { PrismaClient } from '@/generated/prisma'
+import { Prisma, type PrismaClient } from '@/generated/prisma'
 
 // ─── helpers ──────────────────────────────────────────────────────────
 
@@ -339,6 +339,71 @@ describe('runEnrichment', () => {
         riskSource: 'ATR',
       }),
     })
+  })
+
+  it('skips a trade deleted mid-job by a rebuild, keeps enriching the rest, and reruns once', async () => {
+    const candles = makeCandles(320, {
+      startDate: new Date('2023-01-01T00:00:00.000Z'),
+      basePrice: 100,
+      trend: 0.5,
+    })
+    const trade = (id: string, entry: string) => ({
+      id,
+      symbol: 'AAPL',
+      direction: 'LONG',
+      entryPrice: { toNumber: () => 100 },
+      totalQty: { toNumber: () => 10 },
+      entryTime: new Date(entry),
+      durationSeconds: 0,
+      isOpen: false,
+      initialRisk: 1,
+      executions: [],
+    })
+    const findMany = jest.fn().mockResolvedValue([
+      trade('vanished', '2023-06-01T00:00:00.000Z'),
+      trade('survivor', '2023-07-03T00:00:00.000Z'),
+    ])
+    const tradeContextUpsert = jest
+      .fn<Promise<unknown>, [{ where: { tradeId: string } }]>()
+      .mockImplementation(async (args) => {
+        if (args.where.tradeId === 'vanished') {
+          throw new Prisma.PrismaClientKnownRequestError('Foreign key constraint violated', {
+            code: 'P2003',
+            clientVersion: 'test',
+          })
+        }
+        return undefined
+      })
+
+    const db = {
+      roundTripTrade: { findMany, update: jest.fn().mockResolvedValue(undefined) },
+      tradeContext: { upsert: tradeContextUpsert },
+      tradeClassification: { upsert: jest.fn().mockResolvedValue(undefined) },
+    } as unknown as PrismaClient
+    const dataSource: EnrichmentDataSource = {
+      fetchDailyHistory: async () => candles,
+      fetchEarningsDates: async () => [],
+    }
+
+    const progress = await runEnrichment('acct-vanish', db, dataSource)
+
+    expect(progress.errorCount).toBe(0)
+    expect(progress.tradesEnriched).toBe(1)
+    expect(tradeContextUpsert.mock.calls.map(([args]) => args.where.tradeId)).toEqual([
+      'vanished',
+      'survivor',
+    ])
+    // The finished job started one follow-up run. Here the mock keeps failing
+    // the same trade, so that follow-up must NOT start a third run.
+    const followUp = getEnrichmentProgress('acct-vanish')
+    expect(followUp).not.toBe(progress)
+    expect(followUp?.isVanishRerun).toBe(true)
+    for (let i = 0; i < 100 && !getEnrichmentProgress('acct-vanish')?.done; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    expect(getEnrichmentProgress('acct-vanish')).toBe(followUp)
+    expect(followUp?.done).toBe(true)
+    expect(findMany).toHaveBeenCalledTimes(2)
   })
 
   it('fetches candle history across the full symbol trade span instead of only the latest trade window', async () => {

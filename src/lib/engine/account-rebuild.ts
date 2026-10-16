@@ -47,9 +47,13 @@ export async function rebuildTradesForAccount(
     data: { tradeId: null },
   })
 
+  // Only Execution-backed legacy trades. Statement-derived trades are owned by
+  // rebuildLedgerTradesForAccount and carry a brokerStatementImportId (their
+  // brokerStatementPositionId is null since the account-level ledger).
   await tx.roundTripTrade.deleteMany({
     where: {
       accountId,
+      brokerStatementImportId: null,
       brokerStatementPositionId: null,
     },
   })

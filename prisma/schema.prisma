@@ -152,8 +152,17 @@ model BrokerStatementImport {
   optionRows                 Int                  @default(0)
   skippedRows                Int                  @default(0)
   importSupported            Boolean              @default(false)
+  sourceFormat               String               @default("SCHWAB_TRANSACTION_HISTORY")
   dateFrom                   DateTime?
   dateTo                     DateTime?
+  // Trading-date span the statement claims to cover (TOS header "since X through Y";
+  // Transaction History falls back to first/last row date). Drives day ownership
+  // when statements overlap.
+  coverageFrom               DateTime?            @db.Date
+  coverageTo                 DateTime?            @db.Date
+  // Set when the user confirms the import. Only confirmed statements feed the
+  // account-level ledger; previews alone never create trades.
+  confirmedAt                DateTime?
   warnings                   String[]
   blockers                   String[]
   assumptions                String[]

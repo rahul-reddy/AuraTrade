@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { rebuildTradesForAccount } from '@/lib/engine/account-rebuild'
+import { rebuildLedgerTradesForAccount } from '@/lib/engine/account-ledger-rebuild'
 import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
 import { startEnrichment } from '@/lib/engine/trade-enrichment'
 import { prisma } from '@/lib/prisma'
@@ -66,13 +67,14 @@ export async function POST(req: NextRequest) {
     if (parsed.action === 'reprocess_trades') {
       const result = await prisma.$transaction(async (tx) => {
         const tradeRebuild = await rebuildTradesForAccount(tx, account.id)
+        const ledgerRebuild = await rebuildLedgerTradesForAccount(tx, account.id)
         const snapshotRebuild = await rebuildDailySnapshotsForAccount(
           tx,
           account.id,
           account.startingBalance,
         )
 
-        return { tradeRebuild, snapshotRebuild }
+        return { tradeRebuild, ledgerRebuild, snapshotRebuild }
       }, { timeout: 60_000 })
 
       startEnrichment(account.id)
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
         action: parsed.action,
         accountId: account.id,
         tradeRebuild: result.tradeRebuild,
+        ledgerRebuild: result.ledgerRebuild,
         snapshotRebuild: result.snapshotRebuild,
         enrichmentStarted: true,
       })

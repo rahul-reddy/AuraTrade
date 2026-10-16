@@ -72,6 +72,11 @@ export interface StatementDryRun {
   skippedRows: number
   symbols: string[]
   dateRange: { from: Date; to: Date } | null
+  /**
+   * Trading dates the statement claims to cover, as UTC-midnight dates. Wider
+   * than dateRange when the export period includes days without activity.
+   */
+  coverage: { from: Date; to: Date } | null
   warnings: string[]
   blockers: string[]
   assumptions: string[]
@@ -435,7 +440,10 @@ export function analyzeSchwabStatement(rawContent: string): StatementDryRun {
 export function buildStatementDryRun(
   rows: AnalyzedStatementRow[],
   assumptions: string[],
-  options: { sourceFormat?: StatementSourceFormat } = {},
+  options: {
+    sourceFormat?: StatementSourceFormat
+    coverage?: { from: Date; to: Date } | null
+  } = {},
 ): StatementDryRun {
   const sourceFormat = options.sourceFormat ?? 'SCHWAB_TRANSACTION_HISTORY'
   const actionMap = new Map<string, StatementActionBreakdown>()
@@ -525,6 +533,9 @@ export function buildStatementDryRun(
     skippedRows,
     symbols: [...symbols].sort(),
     dateRange,
+    // Transaction History rows are already UTC-midnight dates, so the row span
+    // is the best available coverage when the file states none.
+    coverage: options.coverage ?? dateRange,
     warnings: [...warnings],
     blockers: [...blockers],
     assumptions,

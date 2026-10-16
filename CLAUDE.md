@@ -65,6 +65,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/lib/parser/broker-statement-store.ts` | Persists dry-run broker statement imports, raw rows, ledger positions, and warnings |
 | `src/lib/upload/pending-upload.ts` | Reuses existing pending upload rows for same-file preview retries instead of creating duplicate Upload records |
 | `src/lib/engine/broker-position-ledger.ts` | Instrument-aware dry-run ledger for equities/options/transfers/expirations |
+| `src/lib/engine/account-ledger-rebuild.ts` | Account-level ledger: rebuilds all statement-derived trades from every confirmed statement (carry-in + overlap day-ownership rules) |
 | `src/lib/engine/broker-trade-importer.ts` | Canonical import bridge from persisted ledger positions into RoundTripTrade |
 | `src/lib/engine/trade-grouper.ts` | FIFO trade grouping |
 | `src/components/trades/TradesTable.tsx` | Trades list table + pagination UI |

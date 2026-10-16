@@ -12,10 +12,8 @@ import { persistBrokerStatementImport } from '@/lib/parser/broker-statement-stor
 import { rebuildTradesForAccount } from '@/lib/engine/account-rebuild'
 import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
-import {
-  evaluateStatementImportSupport,
-  mapBrokerPositionToTradeCreateInput,
-} from '@/lib/engine/broker-trade-importer'
+import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
+import { rebuildLedgerTradesForAccount } from '@/lib/engine/account-ledger-rebuild'
 
 /** Map ParsedExecution side/posEffect/direction → Prisma Side enum string. */
 function toPrismaside(
@@ -175,48 +173,14 @@ export async function POST(
             return null
           }
 
-          await tx.roundTripTrade.deleteMany({
-            where: { brokerStatementImportId: statementImport.id },
+          // Statement trades are rebuilt account-wide from every confirmed
+          // statement so carry-in positions pair across files and overlapping
+          // statements never double-count (see account-ledger-rebuild.ts).
+          await tx.brokerStatementImport.update({
+            where: { id: statementImport.id },
+            data: { confirmedAt: new Date() },
           })
-
-          for (const position of statementImport.positions) {
-            await tx.roundTripTrade.create({
-              data: mapBrokerPositionToTradeCreateInput(
-                accountId,
-                statementImport.id,
-                position.id,
-                {
-                  instrumentKey: position.instrumentKey,
-                  instrumentType: position.instrumentType as 'EQUITY' | 'OPTION',
-                  symbol: position.symbol,
-                  side: position.side as 'LONG' | 'SHORT',
-                  totalQty: position.totalQty.toNumber(),
-                  closedQty: position.closedQty.toNumber(),
-                  remainingQty: position.remainingQty.toNumber(),
-                  multiplier: position.multiplier,
-                  underlyingEquivalentQty: position.underlyingEquivalentQty.toNumber(),
-                  entryPrice: position.entryPrice.toNumber(),
-                  exitPrice: position.exitPrice?.toNumber() ?? null,
-                  grossPnl: position.grossPnl?.toNumber() ?? null,
-                  totalFees: position.totalFees.toNumber(),
-                  netPnl: position.netPnl?.toNumber() ?? null,
-                  isOpen: position.isOpen,
-                  openRows: position.openRows,
-                  closeRows: position.closeRows,
-                  openingActions: position.openingActions,
-                  closingActions: position.closingActions,
-                  entryTime: position.entryTime,
-                  exitTime: position.exitTime,
-                  closeKind: position.closeKind as
-                    | 'TRADE'
-                    | 'EXPIRATION'
-                    | 'TRANSFER'
-                    | 'MIXED'
-                    | null,
-                },
-              ),
-            })
-          }
+          const ledgerRebuild = await rebuildLedgerTradesForAccount(tx, accountId)
 
           const snapshotResult = await rebuildDailySnapshotsForAccount(
             tx,
@@ -241,7 +205,9 @@ export async function POST(
             totalTrades: importedTrades.length - openPositions,
             openPositions,
             estimatedPnl: Math.round(estimatedPnl * 100) / 100,
-            warnings: statementImport.ledgerWarnings.map((warning) => warning.message),
+            // Account-level warnings: carry-in closes that pair with an
+            // earlier statement no longer appear here.
+            warnings: ledgerRebuild.warnings,
             snapshotsRebuilt: snapshotResult.snapshotsWritten,
           }
         }

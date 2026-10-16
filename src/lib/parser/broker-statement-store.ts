@@ -138,8 +138,13 @@ export async function persistBrokerStatementImport(
       optionRows: args.dryRun.optionRows,
       skippedRows: args.dryRun.skippedRows,
       importSupported: args.dryRun.importSupported,
+      sourceFormat: args.dryRun.sourceFormat,
       dateFrom: args.dryRun.dateRange?.from ?? null,
       dateTo: args.dryRun.dateRange?.to ?? null,
+      coverageFrom: args.dryRun.coverage?.from ?? null,
+      coverageTo: args.dryRun.coverage?.to ?? null,
+      // confirmedAt is deliberately absent: re-previewing a confirmed file must
+      // not un-confirm it, and previews never confirm.
       warnings: args.dryRun.warnings,
       blockers: args.dryRun.blockers,
       assumptions: args.dryRun.assumptions,

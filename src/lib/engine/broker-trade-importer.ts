@@ -65,8 +65,8 @@ export function evaluateStatementImportSupport(
 
 export function mapBrokerPositionToTradeCreateInput(
   accountId: string,
-  brokerStatementImportId: string,
-  brokerStatementPositionId: string,
+  brokerStatementImportId: string | null,
+  brokerStatementPositionId: string | null,
   position: BrokerLedgerPosition,
 ): Prisma.RoundTripTradeUncheckedCreateInput {
   const optionSymbol = position.instrumentType === 'OPTION'

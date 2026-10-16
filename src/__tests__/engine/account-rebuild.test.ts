@@ -22,6 +22,7 @@ describe('rebuildTradesForAccount', () => {
     expect(roundTripTradeDeleteMany).toHaveBeenCalledWith({
       where: {
         accountId: 'acct_1',
+        brokerStatementImportId: null,
         brokerStatementPositionId: null,
       },
     })

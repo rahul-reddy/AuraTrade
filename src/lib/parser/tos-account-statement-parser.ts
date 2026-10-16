@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import { fromZonedTime } from 'date-fns-tz'
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import {
   buildStatementDryRun,
   type AnalyzedStatementRow,
@@ -61,6 +61,30 @@ interface CashTradeRow {
 
 export interface TosAccountStatementOptions {
   timeZone?: string
+}
+
+/** Calendar trading date (yyyy-MM-dd) of a fill instant in the statement's time zone. */
+export function tosTradingDate(
+  instant: Date,
+  timeZone: string = TOS_ACCOUNT_STATEMENT_DEFAULT_TIME_ZONE,
+): string {
+  return formatInTimeZone(instant, timeZone, 'yyyy-MM-dd')
+}
+
+function parseShortDate(raw: string): Date | null {
+  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
+  if (!match) return null
+  const [, month, day, year] = match.map(Number)
+  return new Date(Date.UTC(2000 + year, month - 1, day))
+}
+
+/** Header "Account Statement for … since 3/13/26 through 10/16/26" → UTC-midnight dates. */
+function parseCoverage(firstLine: string): { from: Date; to: Date } | null {
+  const match = firstLine.match(/since (\d{1,2}\/\d{1,2}\/\d{2}) through (\d{1,2}\/\d{1,2}\/\d{2})/)
+  if (!match) return null
+  const from = parseShortDate(match[1])
+  const to = parseShortDate(match[2])
+  return from && to ? { from, to } : null
 }
 
 export function isTosAccountStatement(rawContent: string): boolean {
@@ -248,11 +272,15 @@ export function analyzeTosAccountStatement(
   ]
 
   const lines = rawContent.replace(/^﻿/, '').split(/\r?\n/)
+  const coverage = parseCoverage(lines[0] ?? '')
   const tradeHistory = extractSection(lines, TRADE_HISTORY_TITLE)
   const cashTrades = indexCashTrades(extractSection(lines, CASH_BALANCE_TITLE))
 
   if (!tradeHistory) {
-    return buildStatementDryRun([], assumptions, { sourceFormat: 'TOS_ACCOUNT_STATEMENT' })
+    return buildStatementDryRun([], assumptions, {
+      sourceFormat: 'TOS_ACCOUNT_STATEMENT',
+      coverage,
+    })
   }
 
   // Statement is newest-first; reverse to chronological so rowIndex is a valid
@@ -385,8 +413,13 @@ export function analyzeTosAccountStatement(
     assumptions.push('Option multiplier defaulted to 100 where the cash row did not state it.')
   }
 
+  if (!coverage) {
+    assumptions.push('Statement header had no "since … through …" period; coverage falls back to first/last fill date.')
+  }
+
   const dryRun = buildStatementDryRun(rows, assumptions, {
     sourceFormat: 'TOS_ACCOUNT_STATEMENT',
+    coverage,
   })
   // The shared builder emits Transaction-History-era blockers for option rows.
   // Here options are explicit TO OPEN / TO CLOSE fills the ledger models

@@ -65,6 +65,26 @@ export async function POST(req: NextRequest) {
       ledger: brokerLedger,
     })
 
+    if (dryRun.coverage) {
+      const overlapping = await prisma.brokerStatementImport.findMany({
+        where: {
+          accountId: account.id,
+          fileHash: { not: fileHash },
+          confirmedAt: { not: null },
+          coverageFrom: { lte: dryRun.coverage.to },
+          coverageTo: { gte: dryRun.coverage.from },
+        },
+        select: { fileName: true, coverageFrom: true, coverageTo: true },
+      })
+      for (const statement of overlapping) {
+        const from = statement.coverageFrom?.toISOString().slice(0, 10)
+        const to = statement.coverageTo?.toISOString().slice(0, 10)
+        blockedPreviewWarnings.push(
+          `Overlaps previously imported ${statement.fileName} (${from} → ${to}). Each overlapping day uses one statement's fills (timestamped thinkorswim first, then the newest export), so nothing is double-counted.`,
+        )
+      }
+    }
+
     if (dryRun.totalRows === 0) {
       return NextResponse.json(
         { error: 'empty_file', message: 'No rows were found in this file.', statementImportId },
