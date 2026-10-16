@@ -15,11 +15,16 @@
   never-migrated foreign keys (schema drift), and the 4 failing Jest tests (same-timestamp
   ledger ordering, store-test mock).
 - **Local results on this revision:** cross-review self-test passed; skill validation
-  passed; `npm run lint` 0 errors (3 warnings); `npm run typecheck` clean; `npm test`
-  160/160; fresh-DB `prisma migrate deploy` + drift check: no difference; `npm run build`
-  passed; Playwright 6/6 against `next start` (dashboard needed one retry → its data-wait
-  raised to 15s, then 5/5 with no retries); `docker build` passed and the container served
-  `/login`, redirected signed-out `/dashboard`, and wrote a user through Prisma.
+  passed; `npm run lint` 0 errors (2 warnings); `npm run typecheck` clean; `npm test`
+  165/165; fresh-DB `prisma migrate deploy` + drift check: no difference; `npm run build`
+  passed; Playwright 8/8 with no retries against `next start` (dashboard data-wait raised
+  to 15s; auth-nav waits for the page transition to leave one empty-state element);
+  `docker build` passed and the container served `/login`, redirected signed-out
+  `/dashboard`, and wrote a user through Prisma.
+- **Cross-review round 1 (codex, critical tier):** 2 blocking findings, both fixed: the
+  money-market sweep exclusion now has boundary tests (mixed-statement totals, unpaired
+  redemption, BOXX/FXAIX/ABCDXX still tracked), and the sidebar keeps an in-memory value
+  when localStorage writes throw (browser test with a throwing Storage).
 - **Remaining:** merge this PR through `scripts/merge-pr.ps1`; then rebase
   `feat/tos-account-statement-import` (TOS importer + account-level ledger) onto main and
   take it through the same gate. No hosting target exists yet — see `docs/DEPLOYMENT.md`.
