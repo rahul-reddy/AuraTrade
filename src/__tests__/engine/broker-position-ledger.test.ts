@@ -412,3 +412,61 @@ describe('buildBrokerPositionLedger', () => {
     expect(result.positions[0].isOpen).toBe(true)
   })
 })
+
+describe('buildBrokerPositionLedger money-market sweep exclusion', () => {
+  test('ignores sweep fund rows while keeping equity and option positions and their P&L', () => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([
+        '3/05/2026,Sell to Close,ORCL 08/21/2026 150.00 C,CALL ORACLE CORP $150 EXP 08/21/26,1,"$30.00 ","$0.66 ","$2,999.34 "',
+        '3/04/2026,Sell,SNSXX,SCHWAB TREASURY MONEY FUND,1000.47,"$1.00 ",,"$1,000.47 "',
+        '3/04/2026,Sell,AAA,AAA INC,100,"$12.00 ","$0.10 ","$1,199.90 "',
+        '3/03/2026,Buy,AAA,AAA INC,100,"$10.00 ",,"($1,000.00)"',
+        '3/02/2026,Buy,SNSXX,SCHWAB TREASURY MONEY FUND,1000,"$1.00 ",,"($1,000.00)"',
+        '3/02/2026,Buy to Open,ORCL 08/21/2026 150.00 C,CALL ORACLE CORP $150 EXP 08/21/26,1,"$25.00 ","$0.66 ","($2,500.66)"',
+      ]),
+    )
+
+    const result = buildBrokerPositionLedger(dryRun.rows)
+    const summary = summarizeBrokerLedger(result)
+
+    // The 1000.47-share redemption (with accrued dividends) would be an
+    // "oversized close" if the fund were tracked; it must not warn at all.
+    expect(result.warnings).toEqual([])
+    expect(result.positions.map((position) => position.instrumentKey).sort()).toEqual([
+      'EQUITY:AAA',
+      'OPTION:ORCL 08/21/2026 150.00 C',
+    ])
+    expect(result.positions.some((position) => position.symbol === 'SNSXX')).toBe(false)
+
+    const equity = result.positions.find((position) => position.symbol === 'AAA')
+    const option = result.positions.find((position) => position.instrumentType === 'OPTION')
+    // (12.00 − 10.00) × 100 − 0.10
+    expect(equity?.netPnl).toBeCloseTo(199.9, 10)
+    // (30.00 − 25.00) × 1 contract × 100 − (0.66 + 0.66)
+    expect(option?.netPnl).toBeCloseTo(498.68, 10)
+    expect(summary).toMatchObject({ closedTradeLikePositions: 2, openPositions: 0 })
+    expect(summary.estimatedPnl).toBeCloseTo(698.58, 10)
+  })
+
+  test('an unpaired sweep redemption does not produce an orphaned-close warning', () => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv(['3/04/2026,Sell,SWVXX,SCHWAB VALUE ADVANTAGE MONEY FUND,500,"$1.00 ",,"$500.00 "']),
+    )
+    const result = buildBrokerPositionLedger(dryRun.rows)
+    expect(result.warnings).toEqual([])
+    expect(result.positions).toEqual([])
+  })
+
+  test.each([
+    ['BOXX', 'four-letter ETF ending in XX'],
+    ['FXAIX', 'mutual fund ending in a single X'],
+    ['ABCDXX', 'six-letter symbol ending in XX'],
+  ])('still tracks %s (%s)', (symbol) => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([`3/03/2026,Buy,${symbol},TEST SECURITY,10,"$100.00 ",,"($1,000.00)"`]),
+    )
+    const result = buildBrokerPositionLedger(dryRun.rows)
+    expect(result.positions).toHaveLength(1)
+    expect(result.positions[0]).toMatchObject({ symbol, isOpen: true, remainingQty: 10 })
+  })
+})

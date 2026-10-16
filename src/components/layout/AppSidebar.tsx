@@ -80,17 +80,28 @@ function KbdHint({ hint }: { hint: string }) {
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed'
 const sidebarListeners = new Set<() => void>()
+// The value this tab last chose. It is the snapshot whenever set, so the toggle
+// keeps working when localStorage is unavailable (private mode, blocked site
+// data). null means "read from localStorage".
+let sessionCollapsed: boolean | null = null
 
 function subscribeSidebarCollapsed(onChange: () => void): () => void {
+  // Another tab changed the stored value: drop this tab's snapshot and re-read.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== SIDEBAR_COLLAPSED_KEY) return
+    sessionCollapsed = null
+    onChange()
+  }
   sidebarListeners.add(onChange)
-  window.addEventListener('storage', onChange)
+  window.addEventListener('storage', onStorage)
   return () => {
     sidebarListeners.delete(onChange)
-    window.removeEventListener('storage', onChange)
+    window.removeEventListener('storage', onStorage)
   }
 }
 
 function readSidebarCollapsed(): boolean {
+  if (sessionCollapsed !== null) return sessionCollapsed
   try {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
   } catch {
@@ -99,10 +110,11 @@ function readSidebarCollapsed(): boolean {
 }
 
 function writeSidebarCollapsed(collapsed: boolean): void {
+  sessionCollapsed = collapsed
   try {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed))
   } catch {
-    // Storage unavailable (private mode, blocked site data): keep it in-memory only.
+    // Not persisted across reloads; this tab still uses sessionCollapsed.
   }
   sidebarListeners.forEach((listener) => listener())
 }
@@ -223,6 +235,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
         onClick={toggleCollapsed}
         className="absolute -right-3 top-[72px] flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-zinc-400 shadow-md transition-colors hover:border-zinc-600 hover:text-zinc-100"
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </button>
