@@ -27,8 +27,16 @@
   shared `evaluateAccountImport` counts lifecycle rows; (3) date-only Expired rows sorted
   before same-day TOS fills — placed at end of trading day (ET); (4) missing/malformed fee
   columns became $0 — both fee headers required, malformed cells block.
+- **Cross-review round 3 (codex):** 3 blocking findings, all fixed: (1) legacy Execution
+  inventory could not be closed by new statements — legacy executions now enter the
+  account ledger as a synthetic oldest-precedence statement, the ledger owns every trade,
+  executions are re-linked to rebuilt trades, the Execution-only rebuild is removed;
+  (2) preview stamped the candidate "now" while the rebuild used its stored createdAt —
+  both now use the persisted value; (3) tags/notes were lost when a date-only trade became
+  a timestamped TOS trade — annotations fall back to (symbol, direction, trading day) when
+  unambiguous.
 - **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
-  `npm test` 218/218; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm test` 224/224; fresh-DB `prisma migrate deploy` + drift check: no difference;
   `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
   two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
   0 blocked, all option fills matched to their own contract's fee row.
