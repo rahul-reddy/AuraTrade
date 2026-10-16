@@ -1,0 +1,15 @@
+.git
+.github
+.agents
+.local
+.next
+node_modules
+src/generated
+coverage
+playwright-report
+test-results
+documents
+docs
+scripts
+*.md
+.env*
