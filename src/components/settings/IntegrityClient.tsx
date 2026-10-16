@@ -25,6 +25,12 @@ interface IntegrityActionResponse {
     openPositions: number
     warnings: string[]
   }
+  ledgerRebuild?: {
+    statementsUsed: number
+    closedTrades: number
+    openPositions: number
+    warnings: string[]
+  }
   snapshotRebuild?: {
     snapshotsWritten: number
     tradesProcessed: number
@@ -140,8 +146,11 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
     mutationFn: ({ action }: { action: IntegrityAction }) => runIntegrityAction(accountId, action),
     onSuccess: async (result) => {
       if (result.action === 'reprocess_trades') {
+        const statementTrades =
+          (result.ledgerRebuild?.closedTrades ?? 0) + (result.ledgerRebuild?.openPositions ?? 0)
+        const totalTrades = (result.tradeRebuild?.totalTrades ?? 0) + statementTrades
         toast.success(
-          `Reprocessed ${result.tradeRebuild?.totalTrades ?? 0} trades and rebuilt ${result.snapshotRebuild?.snapshotsWritten ?? 0} snapshots.`,
+          `Reprocessed ${totalTrades} trades from ${result.ledgerRebuild?.statementsUsed ?? 0} statement(s) and rebuilt ${result.snapshotRebuild?.snapshotsWritten ?? 0} snapshots.`,
         )
       } else {
         toast.success(`Rebuilt ${result.snapshotRebuild?.snapshotsWritten ?? 0} daily snapshots.`)
