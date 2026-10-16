@@ -8,6 +8,7 @@ import { createOrReusePendingUpload } from '@/lib/upload/pending-upload'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
 import {
+  evaluateAccountImport,
   findLegacyExecutionOverlap,
   previewStatementImport,
 } from '@/lib/engine/account-ledger-rebuild'
@@ -102,26 +103,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const blockers = [...importSupport.reasons]
     const legacyOverlap = dryRun.coverage
       ? await findLegacyExecutionOverlap(prisma, account.id, dryRun.coverage)
       : null
-    if (legacyOverlap) {
-      blockers.push(
-        `This account already has ${legacyOverlap.count} fill(s) from the older import path between ${legacyOverlap.first.toISOString().slice(0, 10)} and ${legacyOverlap.last.toISOString().slice(0, 10)}. Importing this statement would count them twice.`,
-      )
-    }
-
-    // Trade rows of every kind. Transaction History counts option rows as
-    // "blocked" for the retired Execution path, but the ledger models them;
-    // rows that truly cannot import are reported through importSupport.
-    const tradeRows = dryRun.importableTradeRows + dryRun.blockedTradeRows
-    const touchedTrades = impact.closedTradeLikePositions + impact.openPositions + impact.transferredPositions
-    const canImport = blockers.length === 0 && tradeRows > 0 && touchedTrades > 0
+    const decision = evaluateAccountImport({
+      dryRun,
+      impact,
+      supportReasons: importSupport.reasons,
+      legacyOverlap,
+    })
     const summary = {
-      canImport,
+      canImport: decision.canImport,
       totalRows: dryRun.totalRows,
-      totalExecutions: tradeRows,
+      totalExecutions: decision.ledgerRows,
       importableTradeRows: dryRun.importableTradeRows,
       blockedTradeRows: dryRun.blockedTradeRows,
       nonTradeRows: dryRun.nonTradeRows,
@@ -135,11 +129,11 @@ export async function POST(req: NextRequest) {
       estimatedPnl: Math.round(impact.estimatedPnl * 100) / 100,
       warnings,
       assumptions: dryRun.assumptions,
-      blockers,
+      blockers: decision.blockers,
       actionBreakdown: dryRun.actions,
     }
 
-    if (tradeRows === 0 || touchedTrades === 0) {
+    if (decision.ledgerRows === 0 || decision.touchedPositions === 0) {
       return NextResponse.json(
         {
           error: 'no_supported_trades',
@@ -153,7 +147,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!canImport) {
+    if (!decision.canImport) {
       return NextResponse.json({ statementImportId, uploadId: null, accountId: account.id, summary })
     }
 
@@ -174,7 +168,7 @@ export async function POST(req: NextRequest) {
       fileName: file.name,
       status: 'PENDING',
       totalRows: dryRun.totalRows,
-      newRows: touchedTrades,
+      newRows: decision.touchedPositions,
       skippedRows: dryRun.skippedRows,
       dateFrom: dryRun.dateRange?.from ?? null,
       dateTo: dryRun.dateRange?.to ?? null,

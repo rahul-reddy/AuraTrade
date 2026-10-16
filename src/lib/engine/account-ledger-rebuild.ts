@@ -8,11 +8,16 @@ import {
 import { mapBrokerPositionToTradeCreateInput } from '@/lib/engine/broker-trade-importer'
 import type {
   AnalyzedStatementRow,
+  StatementDryRun,
   StatementActionCategory,
   StatementInstrumentType,
   StatementSourceFormat,
 } from '@/lib/parser/schwab-statement-analyzer'
-import { tosTradingDate } from '@/lib/parser/tos-account-statement-parser'
+import { fromZonedTime } from 'date-fns-tz'
+import {
+  TOS_ACCOUNT_STATEMENT_DEFAULT_TIME_ZONE,
+  tosTradingDate,
+} from '@/lib/parser/tos-account-statement-parser'
 
 /**
  * Account-level broker ledger.
@@ -84,6 +89,28 @@ export function tradingDateOf(
     : row.date.toISOString().slice(0, 10)
 }
 
+/**
+ * Transaction History has no time of day, so its rows sit at UTC midnight —
+ * before every timestamped TOS fill on the same trading day. An option
+ * expiration settles after the close, so a date-only Expired row is placed at
+ * the end of its trading day (exchange time). Otherwise a contract bought on
+ * expiration day (TOS fill) would be "expired" before it was opened. Other
+ * rows keep their stored date.
+ */
+function placeDateOnlyEvent(
+  row: AnalyzedStatementRow,
+  format: StatementSourceFormat,
+  tradingDay: string,
+): AnalyzedStatementRow {
+  if (format !== 'SCHWAB_TRANSACTION_HISTORY' || row.actionCategory !== 'OPTION_LIFECYCLE') {
+    return row
+  }
+  return {
+    ...row,
+    date: fromZonedTime(`${tradingDay}T23:59:59.999`, TOS_ACCOUNT_STATEMENT_DEFAULT_TIME_ZONE),
+  }
+}
+
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
@@ -151,15 +178,16 @@ export function selectAccountLedgerRows(
         continue
       }
       if (ownerOf(day, rowClass(row)) === statement.id) {
-        selected.push({ row, statementId: statement.id })
+        selected.push({ row: placeDateOnlyEvent(row, statement.sourceFormat, day), statementId: statement.id })
       } else {
         replacedRows += 1
       }
     }
   }
 
-  // Chronological; ties keep each statement's own row order. A date-only EVENT
-  // row (UTC midnight) sorts before that day's timestamped TOS fills.
+  // Chronological; ties keep each statement's own row order. Date-only rows sit
+  // at UTC midnight (before that day's timestamped TOS fills), except
+  // expirations, which placeDateOnlyEvent moves to the end of the trading day.
   selected.sort((left, right) => {
     const byTime = (left.row.date?.getTime() ?? 0) - (right.row.date?.getTime() ?? 0)
     if (byTime !== 0) return byTime
@@ -281,6 +309,53 @@ export function summarizeStatementImpact(
   }
 }
 
+export interface AccountImportDecision {
+  canImport: boolean
+  /** Rows the ledger models: fills plus position-affecting events. */
+  ledgerRows: number
+  /** Positions this statement opens, closes, expires or transfers. */
+  touchedPositions: number
+  blockers: string[]
+}
+
+/**
+ * Whether a statement can be confirmed into the account ledger. Shared by the
+ * upload preview and confirm routes so they can never disagree.
+ *
+ * Counts expirations, transfers and mergers as well as fills, so a follow-up
+ * statement holding only an option's Expired row (or only a transfer-out)
+ * imports and closes the position opened earlier.
+ */
+export function evaluateAccountImport(args: {
+  dryRun: Pick<
+    StatementDryRun,
+    'importableTradeRows' | 'blockedTradeRows' | 'positionAffectingNonTradeRows'
+  >
+  impact: BrokerLedgerPreviewSummary
+  supportReasons: string[]
+  legacyOverlap: { count: number; first: Date; last: Date } | null
+}): AccountImportDecision {
+  const { dryRun, impact, supportReasons, legacyOverlap } = args
+  // Transaction History marks option rows "blocked" only for the retired
+  // Execution path; rows that truly cannot import arrive via supportReasons.
+  const ledgerRows =
+    dryRun.importableTradeRows + dryRun.blockedTradeRows + dryRun.positionAffectingNonTradeRows
+  const touchedPositions =
+    impact.closedTradeLikePositions + impact.openPositions + impact.transferredPositions
+  const blockers = [...supportReasons]
+  if (legacyOverlap) {
+    blockers.push(
+      `This account already has ${legacyOverlap.count} fill(s) from the older import path between ${legacyOverlap.first.toISOString().slice(0, 10)} and ${legacyOverlap.last.toISOString().slice(0, 10)}. Importing this statement would count them twice.`,
+    )
+  }
+  return {
+    canImport: blockers.length === 0 && ledgerRows > 0 && touchedPositions > 0,
+    ledgerRows,
+    touchedPositions,
+    blockers,
+  }
+}
+
 // ─── database access ────────────────────────────────────────────────
 
 type LedgerDb = Prisma.TransactionClient
@@ -342,6 +417,17 @@ export async function findLegacyExecutionOverlap(
     db.execution.findFirst({ where, orderBy: { execTime: 'desc' }, select: { execTime: true } }),
   ])
   return { count, first: first?.execTime ?? coverage.from, last: last?.execTime ?? coverage.to }
+}
+
+/**
+ * Serializes account-ledger writers for the rest of the transaction. Every
+ * caller that confirms a statement or rebuilds ledger trades takes this lock
+ * BEFORE reading confirmed statements, so two concurrent confirmations cannot
+ * each rebuild from a snapshot missing the other's statement. Transaction-scoped
+ * advisory locks release on commit or rollback; other accounts are unaffected.
+ */
+export async function lockAccountLedger(tx: LedgerDb, accountId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`account-ledger:${accountId}`}, 0))`
 }
 
 // ─── database rebuild ───────────────────────────────────────────────

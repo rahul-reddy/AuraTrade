@@ -151,6 +151,42 @@ describe('analyzeTosAccountStatement', () => {
     )
   })
 
+  test('treats blank fee cells as a genuine $0 fee', () => {
+    const dryRun = analyzeTosAccountStatement(
+      makeStatement({
+        fills: [',1/15/26 09:30:00,STOCK,BUY,+5,TO OPEN,ABC,,,STOCK,10.00,10.00,MKT'],
+        cash: ['1/15/26,09:30:00,TRD,="1",BOT +5 ABC @10.00,,,-50.00,"1.00"'],
+      }),
+    )
+    expect(dryRun.rows[0]).toMatchObject({ actionCategory: 'EQUITY_TRADE', fees: 0 })
+  })
+
+  test.each(['abc', '--', 'n/a'])('blocks a fill whose fee cell is malformed (%s)', (badFee) => {
+    const dryRun = analyzeTosAccountStatement(
+      makeStatement({
+        fills: [',1/15/26 09:30:00,STOCK,SELL,-5,TO CLOSE,ABC,,,STOCK,10.00,10.00,MKT'],
+        cash: [`1/15/26,09:30:00,TRD,="1",SOLD -5 ABC @10.00,${badFee},,50.00,"1.00"`],
+      }),
+    )
+    expect(dryRun.rows[0]).toMatchObject({ actionCategory: 'UNKNOWN', blocksCanonicalImport: true })
+    expect(evaluateStatementImportSupport(dryRun).supported).toBe(false)
+  })
+
+  test.each(['Misc Fees', 'Commissions & Fees'])(
+    'blocks every fill when the Cash Balance header lacks the %s column',
+    (missing) => {
+      const statement = makeStatement({
+        fills: [',1/15/26 09:30:00,STOCK,SELL,-5,TO CLOSE,ABC,,,STOCK,10.00,10.00,MKT'],
+        cash: ['1/15/26,09:30:00,TRD,="1",SOLD -5 ABC @10.00,-0.01,,50.00,"1.00"'],
+      }).replace(`${missing},`, 'Other,')
+      expect(statement).not.toContain(`${missing},`)
+
+      const dryRun = analyzeTosAccountStatement(statement)
+      expect(dryRun.rows[0]).toMatchObject({ actionCategory: 'UNKNOWN', blocksCanonicalImport: true })
+      expect(dryRun.importableTradeRows).toBe(0)
+    },
+  )
+
   test('blocks every fill when the Cash Balance section is missing entirely', () => {
     const statement = makeStatement({
       fills: [',1/15/26 09:30:00,STOCK,BUY,+5,TO OPEN,ABC,,,STOCK,10.00,10.00,MKT'],

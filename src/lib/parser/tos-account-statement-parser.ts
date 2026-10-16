@@ -184,9 +184,24 @@ function fillKey(args: {
 }
 
 /** Index Cash Balance TRD rows by fill key; duplicates (identical fills) queue FIFO. */
+const FEE_COLUMNS = ['Misc Fees', 'Commissions & Fees'] as const
+
+/**
+ * Reads one fee cell. A blank cell is a genuine $0 fee; anything else must
+ * parse as a number. Returns null when the value is not usable evidence.
+ */
+function parseFeeCell(raw: string): number | null {
+  if (raw.trim() === '') return 0
+  const value = parseNumber(raw)
+  return value == null ? null : Math.abs(value)
+}
+
 function indexCashTrades(section: Section | null): Map<string, CashTradeRow[]> {
   const index = new Map<string, CashTradeRow[]>()
   if (!section) return index
+  // Without both fee columns there is no fee evidence for any fill: index
+  // nothing, so every fill blocks rather than importing with a $0 fee.
+  if (!FEE_COLUMNS.every((name) => section.header.includes(name))) return index
 
   for (const row of section.rows) {
     if (column(section, row, 'TYPE') !== 'TRD') continue
@@ -214,10 +229,13 @@ function indexCashTrades(section: Section | null): Map<string, CashTradeRow[]> {
       }),
       price,
     })
-    const misc = parseNumber(column(section, row, 'Misc Fees')) ?? 0
-    const commission = parseNumber(column(section, row, 'Commissions & Fees')) ?? 0
+    const misc = parseFeeCell(column(section, row, 'Misc Fees'))
+    const commission = parseFeeCell(column(section, row, 'Commissions & Fees'))
+    // A malformed fee cell leaves this fill without a usable cash match, so it
+    // blocks import instead of understating fees.
+    if (misc == null || commission == null) continue
     const entry: CashTradeRow = {
-      fees: Math.abs(misc) + Math.abs(commission),
+      fees: misc + commission,
       amount: parseNumber(column(section, row, 'AMOUNT')),
       multiplier: multiplierRaw ? Number(multiplierRaw) : null,
       refNumber: parseNumber(column(section, row, 'REF #'))?.toString() ?? '',

@@ -1,5 +1,6 @@
 import { Prisma, type BrokerStatementRow } from '@/generated/prisma'
 import {
+  evaluateAccountImport,
   findLegacyExecutionOverlap,
   mapStoredRowToAnalyzedRow,
   rebuildLedgerTradesForAccount,
@@ -9,6 +10,8 @@ import {
   type LedgerStatementInput,
 } from '@/lib/engine/account-ledger-rebuild'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
+import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
+import { analyzeSchwabStatement } from '@/lib/parser/schwab-statement-analyzer'
 import type {
   AnalyzedStatementRow,
   StatementActionCategory,
@@ -251,6 +254,61 @@ describe('mapStoredRowToAnalyzedRow', () => {
   })
 })
 
+describe('date-only expirations next to timestamped fills', () => {
+  const contract = {
+    underlying: 'ORCL',
+    expiration: '03/20/2026',
+    strike: 150,
+    optionType: 'CALL' as const,
+    quantityContracts: 2,
+    multiplier: 100,
+    underlyingEquivalentQty: 200,
+  }
+  const optionRow = (args: { date: Date; action: string; quantity: number; price: number | null; fees?: number; category: StatementActionCategory }) => ({
+    ...row({ ...args, symbol: 'ORCL 03/20/2026 150.00 C' }),
+    instrumentType: 'OPTION' as const,
+    optionContract: contract,
+  })
+
+  test('a contract bought on expiration day (TOS) expires after the fill, realizing the full loss', () => {
+    const selection = selectAccountLedgerRows([
+      // Transaction History covering the day supplies the expiration (date-only).
+      statement('th', 'SCHWAB_TRANSACTION_HISTORY', ['2026-03-20', '2026-03-20'], '2026-03-21', [
+        optionRow({ date: utcDay('2026-03-20'), action: 'Expired', quantity: -2, price: null, category: 'OPTION_LIFECYCLE' }),
+      ]),
+      // TOS owns that day's fills: bought 2 contracts at 10:15 ET for $0.40.
+      statement('tos', 'TOS_ACCOUNT_STATEMENT', ['2026-03-20', '2026-03-20'], '2026-03-21', [
+        optionRow({ date: new Date('2026-03-20T14:15:00Z'), action: 'Buy to Open', quantity: 2, price: 0.4, fees: 1.3, category: 'OPTION_TRADE' }),
+      ]),
+    ])
+
+    expect(selection.rows.map((r) => r.action)).toEqual(['Buy to Open', 'Expired'])
+    // 23:59:59.999 America/New_York on 3/20 (EDT, UTC-4)
+    expect(selection.rows[1].date?.toISOString()).toBe('2026-03-21T03:59:59.999Z')
+
+    const ledger = buildBrokerPositionLedger(selection.rows)
+    expect(ledger.warnings).toEqual([])
+    expect(ledger.positions).toHaveLength(1)
+    const [position] = ledger.positions
+    expect(position).toMatchObject({ isOpen: false, closeKind: 'EXPIRATION' })
+    // (0 − 0.40) × 2 contracts × 100 − 1.30
+    expect(position.netPnl).toBeCloseTo(-81.3, 10)
+  })
+
+  test('leaves date-only fills and non-expiration events at their stored date', () => {
+    const selection = selectAccountLedgerRows([
+      statement('th', 'SCHWAB_TRANSACTION_HISTORY', ['2026-03-20', '2026-03-20'], '2026-03-21', [
+        row({ date: utcDay('2026-03-20'), action: 'Buy', quantity: 1 }),
+        row({ date: utcDay('2026-03-20'), action: 'Journaled Shares', quantity: 1, price: null, category: 'POSITION_TRANSFER' }),
+      ]),
+    ])
+    expect(selection.rows.map((r) => r.date?.toISOString())).toEqual([
+      '2026-03-20T00:00:00.000Z',
+      '2026-03-20T00:00:00.000Z',
+    ])
+  })
+})
+
 describe('summarizeStatementImpact', () => {
   test('credits a close-only statement with the carry-in trade it completes', () => {
     const selection = selectAccountLedgerRows([
@@ -346,5 +404,71 @@ describe('findLegacyExecutionOverlap', () => {
       first: utcDay('2026-03-14'),
       last: utcDay('2026-03-20'),
     })
+  })
+})
+
+describe('evaluateAccountImport', () => {
+  const header = 'Date,Action,Symbol,Description,Quantity,Price,Fees & Comm,Amount'
+  const csv = (rows: string[]) => [header, ...rows].join('\n')
+
+  function decide(earlier: string[], followUp: string[], legacyOverlap: Parameters<typeof evaluateAccountImport>[0]['legacyOverlap'] = null) {
+    const first = analyzeSchwabStatement(csv(earlier))
+    const second = analyzeSchwabStatement(csv(followUp))
+    const selection = selectAccountLedgerRows([
+      { id: 'earlier', sourceFormat: 'SCHWAB_TRANSACTION_HISTORY', coverageFrom: first.coverage?.from ?? null, coverageTo: first.coverage?.to ?? null, createdAt: new Date('2026-01-01'), rows: first.rows },
+      { id: 'followUp', sourceFormat: 'SCHWAB_TRANSACTION_HISTORY', coverageFrom: second.coverage?.from ?? null, coverageTo: second.coverage?.to ?? null, createdAt: new Date('2026-02-01'), rows: second.rows },
+    ])
+    const ledger = buildBrokerPositionLedger(selection.rows)
+    return {
+      ledger,
+      decision: evaluateAccountImport({
+        dryRun: second,
+        impact: summarizeStatementImpact(selection, ledger, 'followUp'),
+        supportReasons: evaluateStatementImportSupport(second).reasons,
+        legacyOverlap,
+      }),
+    }
+  }
+
+  const openCall = '2/04/2026,Buy to Open,ORCL 02/20/2026 150.00 C,CALL ORACLE CORP $150 EXP 02/20/26,1,"$2.00 ","$0.66 ","($200.66)"'
+
+  test('an expiration-only follow-up statement imports and closes the earlier option', () => {
+    const { ledger, decision } = decide(
+      [openCall],
+      ['2/23/2026 as of 2/20/2026,Expired,ORCL 02/20/2026 150.00 C,CALL ORACLE CORP $150 EXP 02/20/26,-1,,,'],
+    )
+    expect(decision).toMatchObject({ canImport: true, ledgerRows: 1, touchedPositions: 1, blockers: [] })
+    expect(ledger.warnings).toEqual([])
+    expect(ledger.positions[0]).toMatchObject({ isOpen: false, closeKind: 'EXPIRATION' })
+    // (0 − 2.00) × 1 contract × 100 − 0.66
+    expect(ledger.positions[0].netPnl).toBeCloseTo(-200.66, 10)
+  })
+
+  test('a transfer-only follow-up statement imports and closes the earlier position', () => {
+    const { ledger, decision } = decide(
+      ['2/04/2026,Buy,CLSK,CLEANSPARK INC,10,"$10.00 ",,"($100.00)"'],
+      ['2/10/2026,Journaled Shares,CLSK,TDA TRAN - TRANSFER OF SECURITY OR OPTION OUT (CLSK),10,,,'],
+    )
+    expect(decision).toMatchObject({ canImport: true, ledgerRows: 1, touchedPositions: 1 })
+    expect(ledger.positions[0]).toMatchObject({ isOpen: false, closeKind: 'TRANSFER' })
+  })
+
+  test('a statement that touches no position cannot be imported', () => {
+    const { decision } = decide([openCall], ['2/10/2026,Credit Interest,,SCHWAB1 INT,,,,"$0.88 "'])
+    expect(decision).toMatchObject({ canImport: false, ledgerRows: 0, touchedPositions: 0 })
+  })
+
+  test('unknown broker actions and legacy overlaps block import with a reason', () => {
+    const unknown = decide([openCall], ['2/10/2026,Mystery Action,ORCL,SOMETHING,1,"$1.00 ",,"$1.00 "'])
+    expect(unknown.decision.canImport).toBe(false)
+    expect(unknown.decision.blockers).toEqual(['Unsupported broker action category: UNKNOWN'])
+
+    const overlap = decide([], [openCall], {
+      count: 4,
+      first: utcDay('2026-02-03'),
+      last: utcDay('2026-02-05'),
+    })
+    expect(overlap.decision.canImport).toBe(false)
+    expect(overlap.decision.blockers[0]).toContain('4 fill(s) from the older import path between 2026-02-03 and 2026-02-05')
   })
 })

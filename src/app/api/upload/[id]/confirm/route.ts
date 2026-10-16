@@ -8,7 +8,10 @@ import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
 import {
+  evaluateAccountImport,
   findLegacyExecutionOverlap,
+  lockAccountLedger,
+  previewStatementImport,
   rebuildLedgerTradesForAccount,
 } from '@/lib/engine/account-ledger-rebuild'
 
@@ -81,37 +84,38 @@ export async function POST(
       ledger: buildBrokerPositionLedger(dryRun.rows),
     })
 
-    // Option rows from Transaction History count as "blocked" only for the
-    // retired Execution path; importSupport reports rows that truly block.
-    const tradeRows = dryRun.importableTradeRows + dryRun.blockedTradeRows
-    if (!importSupport.supported || tradeRows === 0) {
+    // Same decision as the preview (see evaluateAccountImport).
+    const decision = evaluateAccountImport({
+      dryRun,
+      impact: await previewStatementImport(prisma, accountId, {
+        id: statementImportId,
+        sourceFormat: dryRun.sourceFormat,
+        coverageFrom: dryRun.coverage?.from ?? null,
+        coverageTo: dryRun.coverage?.to ?? null,
+        rows: dryRun.rows,
+      }),
+      supportReasons: importSupport.reasons,
+      legacyOverlap: dryRun.coverage
+        ? await findLegacyExecutionOverlap(prisma, accountId, dryRun.coverage)
+        : null,
+    })
+    if (!decision.canImport) {
       return NextResponse.json(
         {
           error: 'not_importable',
-          message: 'This statement has no importable trades or contains rows that block import.',
-          blockers: importSupport.reasons,
+          message: 'This statement has nothing to import into the account or contains rows that block import.',
+          blockers: decision.blockers,
         },
         { status: 422 },
       )
     }
 
-    if (dryRun.coverage) {
-      const legacyOverlap = await findLegacyExecutionOverlap(prisma, accountId, dryRun.coverage)
-      if (legacyOverlap) {
-        return NextResponse.json(
-          {
-            error: 'overlaps_legacy_import',
-            message: `This account already has ${legacyOverlap.count} fill(s) from the older import path in this statement's date range. Importing it would count them twice.`,
-          },
-          { status: 409 },
-        )
-      }
-    }
-
     const result = await prisma.$transaction(
       async (tx) => {
-        // Atomically claim the upload so concurrent confirms cannot both run
-        // the rebuild and produce duplicate trades.
+        // Serialize with every other ledger writer for this account before
+        // reading anything, then atomically claim the upload so a repeated
+        // confirm of the same upload is a no-op.
+        await lockAccountLedger(tx, accountId)
         const claimed = await tx.upload.updateMany({
           where: { id: uploadId, status: { not: 'COMPLETE' } },
           data: { status: 'COMPLETE', completedAt: new Date() },
