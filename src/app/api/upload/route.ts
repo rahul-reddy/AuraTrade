@@ -112,12 +112,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Trade rows of every kind. Transaction History counts option rows as
+    // "blocked" for the retired Execution path, but the ledger models them;
+    // rows that truly cannot import are reported through importSupport.
+    const tradeRows = dryRun.importableTradeRows + dryRun.blockedTradeRows
     const touchedTrades = impact.closedTradeLikePositions + impact.openPositions + impact.transferredPositions
-    const canImport = blockers.length === 0 && dryRun.importableTradeRows > 0 && touchedTrades > 0
+    const canImport = blockers.length === 0 && tradeRows > 0 && touchedTrades > 0
     const summary = {
       canImport,
       totalRows: dryRun.totalRows,
-      totalExecutions: dryRun.importableTradeRows,
+      totalExecutions: tradeRows,
       importableTradeRows: dryRun.importableTradeRows,
       blockedTradeRows: dryRun.blockedTradeRows,
       nonTradeRows: dryRun.nonTradeRows,
@@ -135,7 +139,7 @@ export async function POST(req: NextRequest) {
       actionBreakdown: dryRun.actions,
     }
 
-    if (dryRun.importableTradeRows === 0 || touchedTrades === 0) {
+    if (tradeRows === 0 || touchedTrades === 0) {
       return NextResponse.json(
         {
           error: 'no_supported_trades',

@@ -81,7 +81,10 @@ export async function POST(
       ledger: buildBrokerPositionLedger(dryRun.rows),
     })
 
-    if (!importSupport.supported || dryRun.importableTradeRows === 0) {
+    // Option rows from Transaction History count as "blocked" only for the
+    // retired Execution path; importSupport reports rows that truly block.
+    const tradeRows = dryRun.importableTradeRows + dryRun.blockedTradeRows
+    if (!importSupport.supported || tradeRows === 0) {
       return NextResponse.json(
         {
           error: 'not_importable',
