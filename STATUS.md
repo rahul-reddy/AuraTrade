@@ -20,10 +20,17 @@
   account-level impact; (3) unmatched fee rows became $0 fees — now block import;
   (4) option fee join ignored contract identity — key now includes expiry/strike/type;
   (5) unsupported instrument types imported as equity — only STOCK/ETF allowed.
+- **Cross-review round 2 (codex):** 4 blocking findings, all fixed: (1) concurrent
+  same-account confirms could rebuild from stale snapshots — account-level Postgres advisory
+  lock in confirm and integrity reprocess (verified serializing on Postgres; concurrent
+  Playwright test); (2) expiration-/transfer-only follow-up statements were rejected —
+  shared `evaluateAccountImport` counts lifecycle rows; (3) date-only Expired rows sorted
+  before same-day TOS fills — placed at end of trading day (ET); (4) missing/malformed fee
+  columns became $0 — both fee headers required, malformed cells block.
 - **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
-  `npm test` 206/206; fresh-DB `prisma migrate deploy` + drift check: no difference;
-  `npm run build` passed; Playwright 10/10 with no retries against `next start` (adds a
-  two-statement carry-in import). Real 703-fill statement unchanged: 702 importable,
+  `npm test` 218/218; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
+  two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
   0 blocked, all option fills matched to their own contract's fee row.
 - **Local data:** the owner's database is migrated (checksum of the rebased feature
   migration realigned; the guarded FK migration applied as a no-op; 16 test-account
