@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -34,6 +34,38 @@ interface DashboardClientProps {
   userName?: string | null
   initialDateFrom?: string
   initialDateTo?: string
+}
+
+/**
+ * Equity curve with running-peak drawdown:
+ *   equity_t   = startingBalance + cumulativePnl_t
+ *   peak_t     = max(startingBalance, equity_1..t)
+ *   drawdown_t = peak_t − equity_t ; drawdownPct_t = drawdown_t / peak_t × 100
+ * A pure function so the component render has no mutable closure state.
+ */
+function buildEquityCurve(
+  startingBalance: number,
+  dailySeries: DashboardPayload['dailySeries'],
+) {
+  const curve: Array<{
+    date: string
+    cumulativePnl: number
+    drawdown: number
+    drawdownPct: number
+  }> = []
+  let peakEquity = startingBalance
+  for (const point of dailySeries) {
+    const equity = startingBalance + point.cumulativePnl
+    peakEquity = Math.max(peakEquity, equity)
+    const drawdown = peakEquity - equity
+    curve.push({
+      date: point.date,
+      cumulativePnl: point.cumulativePnl,
+      drawdown,
+      drawdownPct: peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0,
+    })
+  }
+  return curve
 }
 
 function formatPercent(value: number | null | undefined, digits = 1): string {
@@ -241,10 +273,18 @@ export default function DashboardClient({
   const [dateFromInput, setDateFromInput] = useState(initialDateFrom ?? '')
   const [dateToInput, setDateToInput] = useState(initialDateTo ?? '')
 
-  useEffect(() => {
+  // When the URL filters change (navigation, Clear), reset the inputs to match.
+  // Done during render per React's "adjusting state when a prop changes"
+  // pattern, which avoids an extra effect-driven render pass.
+  const [syncedFilters, setSyncedFilters] = useState({
+    from: initialDateFrom,
+    to: initialDateTo,
+  })
+  if (syncedFilters.from !== initialDateFrom || syncedFilters.to !== initialDateTo) {
+    setSyncedFilters({ from: initialDateFrom, to: initialDateTo })
     setDateFromInput(initialDateFrom ?? '')
     setDateToInput(initialDateTo ?? '')
-  }, [initialDateFrom, initialDateTo])
+  }
 
   const dashboardQuery = useQuery({
     queryKey: ['dashboard', accountId, initialDateFrom ?? '', initialDateTo ?? ''],
@@ -301,21 +341,7 @@ export default function DashboardClient({
     router.replace(`/dashboard?accountId=${accountId}`)
   }
 
-  const equityCurve = (() => {
-    let peakEquity = data.account.startingBalance
-    return data.dailySeries.map((point) => {
-      const equity = data.account.startingBalance + point.cumulativePnl
-      peakEquity = Math.max(peakEquity, equity)
-      const drawdown = peakEquity - equity
-
-      return {
-        date: point.date,
-        cumulativePnl: point.cumulativePnl,
-        drawdown,
-        drawdownPct: peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0,
-      }
-    })
-  })()
+  const equityCurve = buildEquityCurve(data.account.startingBalance, data.dailySeries)
 
   const currentAvgSizeLabel =
     insights.avgPositionSizeFraction != null

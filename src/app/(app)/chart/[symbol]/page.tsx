@@ -19,6 +19,32 @@ function getParam(
   return typeof v === "string" && v ? v : undefined;
 }
 
+/**
+ * Market-data window around a symbol's trades: the trade span padded by 30%
+ * (min 30 days) on each side, capped at tomorrow. Open trades extend to now.
+ * Kept outside the component so render stays pure.
+ */
+function getChartDateRange(
+  trades: Array<{ entryTime: Date; exitTime: Date | null }>,
+): { from: Date; to: Date } {
+  if (trades.length === 0) return getDefaultMarketDataRange("1d");
+  const now = Date.now();
+  const earliest = trades.reduce(
+    (min, t) => Math.min(min, t.entryTime.getTime()),
+    Infinity,
+  );
+  const latest = trades.reduce(
+    (max, t) => Math.max(max, t.exitTime?.getTime() ?? now),
+    -Infinity,
+  );
+  const spanMs = Math.max(latest - earliest, 30 * 86_400_000);
+  const padMs = Math.max(spanMs * 0.3, 30 * 86_400_000);
+  return {
+    from: new Date(earliest - padMs),
+    to: new Date(Math.min(latest + padMs, now + 86_400_000)),
+  };
+}
+
 export default async function SymbolChartPage({ params, searchParams }: ChartPageProps) {
   const session = await getRequiredSession();
   const userId = session.user.id;
@@ -88,27 +114,7 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
 
   // ── Compute date range for initial market data ─────────────────────────────
 
-  let from: Date;
-  let to: Date;
-
-  if (rawTrades.length > 0) {
-    const earliest = rawTrades.reduce(
-      (min, t) => Math.min(min, t.entryTime.getTime()),
-      Infinity,
-    );
-    const latest = rawTrades.reduce(
-      (max, t) => Math.max(max, t.exitTime?.getTime() ?? Date.now()),
-      -Infinity,
-    );
-    const spanMs = Math.max(latest - earliest, 30 * 86_400_000);
-    const padMs = Math.max(spanMs * 0.3, 30 * 86_400_000);
-    from = new Date(earliest - padMs);
-    to = new Date(Math.min(latest + padMs, Date.now() + 86_400_000));
-  } else {
-    const defaultRange = getDefaultMarketDataRange("1d");
-    from = defaultRange.from;
-    to = defaultRange.to;
-  }
+  const { from, to } = getChartDateRange(rawTrades);
 
   // ── Fetch initial daily candles ───────────────────────────────────────────
 

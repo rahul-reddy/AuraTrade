@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { useState, useEffect } from 'react'
+import { useSyncExternalStore } from 'react'
 import {
   LayoutDashboard,
   LineChart,
@@ -76,23 +76,63 @@ function KbdHint({ hint }: { hint: string }) {
   )
 }
 
+// ─── Collapsed-state store (localStorage) ────────────────────────────────────
+
+const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed'
+const sidebarListeners = new Set<() => void>()
+// The value this tab last chose. It is the snapshot whenever set, so the toggle
+// keeps working when localStorage is unavailable (private mode, blocked site
+// data). null means "read from localStorage".
+let sessionCollapsed: boolean | null = null
+
+function subscribeSidebarCollapsed(onChange: () => void): () => void {
+  // Another tab changed the stored value: drop this tab's snapshot and re-read.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== SIDEBAR_COLLAPSED_KEY) return
+    sessionCollapsed = null
+    onChange()
+  }
+  sidebarListeners.add(onChange)
+  window.addEventListener('storage', onStorage)
+  return () => {
+    sidebarListeners.delete(onChange)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
+function readSidebarCollapsed(): boolean {
+  if (sessionCollapsed !== null) return sessionCollapsed
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function writeSidebarCollapsed(collapsed: boolean): void {
+  sessionCollapsed = collapsed
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed))
+  } catch {
+    // Not persisted across reloads; this tab still uses sessionCollapsed.
+  }
+  sidebarListeners.forEach((listener) => listener())
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
-
-  // Persist collapsed state
-  useEffect(() => {
-    const stored = localStorage.getItem('sidebar-collapsed')
-    if (stored === 'true') setCollapsed(true)
-  }, [])
+  // Persisted in localStorage and read via useSyncExternalStore: the server
+  // render (and first hydration pass) sees "expanded", then the stored value.
+  const collapsed = useSyncExternalStore(
+    subscribeSidebarCollapsed,
+    readSidebarCollapsed,
+    () => false,
+  )
 
   const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      localStorage.setItem('sidebar-collapsed', String(!prev))
-      return !prev
-    })
+    writeSidebarCollapsed(!collapsed)
   }
 
   return (
@@ -195,6 +235,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
         onClick={toggleCollapsed}
         className="absolute -right-3 top-[72px] flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-zinc-400 shadow-md transition-colors hover:border-zinc-600 hover:text-zinc-100"
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </button>

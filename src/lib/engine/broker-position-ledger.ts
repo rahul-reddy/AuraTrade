@@ -99,49 +99,26 @@ function sortRows(rows: AnalyzedStatementRow[]): AnalyzedStatementRow[] {
   })
 }
 
-function getSameDayActionPriority(row: AnalyzedStatementRow): number {
-  if (
-    row.action === 'Buy' ||
-    row.action === 'Buy to Open' ||
-    row.action === 'Sell Short' ||
-    row.action === 'Sell to Open'
-  ) {
-    return 0
-  }
-
-  if (row.action === 'Journaled Shares') {
-    const transferDirection = inferTransferDirection(row.description)
-    if (transferDirection === 'OUT') return 1
-    if (transferDirection === 'IN') return 3
-  }
-
-  if (row.action === 'Stock Merger') {
-    if ((row.quantity ?? 0) < 0) return 1
-    if ((row.quantity ?? 0) > 0) return 3
-  }
-
-  if (
-    row.action === 'Sell' ||
-    row.action === 'Sell to Close' ||
-    row.action === 'Buy to Cover' ||
-    row.action === 'Buy to Close' ||
-    row.action === 'Expired'
-  ) {
-    return 2
-  }
-
-  return 1
-}
-
 function inferInstrumentType(row: AnalyzedStatementRow): 'EQUITY' | 'OPTION' | null {
   if (row.optionContract) return 'OPTION'
   if (row.symbol) return 'EQUITY'
   return null
 }
 
+/**
+ * US money-market fund tickers are five letters ending in "XX" (SNSXX, SWVXX,
+ * SPAXX…). They are the account's cash sweep, not trades: Transaction History
+ * logs their purchases as "Buy" while the TOS statement logs redemptions as
+ * FUND rows, so tracking them would leave phantom open positions.
+ */
+function isMoneyMarketFund(symbol: string): boolean {
+  return /^[A-Z]{3}XX$/.test(symbol)
+}
+
 function getInstrumentKey(row: AnalyzedStatementRow): string | null {
   const instrumentType = inferInstrumentType(row)
   if (!instrumentType || !row.symbol) return null
+  if (instrumentType === 'EQUITY' && isMoneyMarketFund(row.symbol)) return null
   return `${instrumentType}:${row.symbol}`
 }
 
@@ -391,6 +368,50 @@ function consumeCloseEvent(
   return active.fifoQueue.length === 0
 }
 
+function groupByTimestamp(rows: AnalyzedStatementRow[]): AnalyzedStatementRow[][] {
+  const groups: AnalyzedStatementRow[][] = []
+  for (const row of rows) {
+    const last = groups[groups.length - 1]
+    if (last && last[0].date?.getTime() === row.date?.getTime()) last.push(row)
+    else groups.push([row])
+  }
+  return groups
+}
+
+function closedSideOf(row: AnalyzedStatementRow): BrokerPositionSide | null {
+  if (row.action === 'Sell' || row.action === 'Sell to Close') return 'LONG'
+  if (row.action === 'Buy to Cover' || row.action === 'Buy to Close') return 'SHORT'
+  return null
+}
+
+function opensSide(row: AnalyzedStatementRow, side: BrokerPositionSide): boolean {
+  return side === 'LONG'
+    ? row.action === 'Buy' || row.action === 'Buy to Open'
+    : row.action === 'Sell Short' || row.action === 'Sell to Open'
+}
+
+/**
+ * True when an ordinary close cannot be covered by current inventory but a
+ * later row in the same timestamp group opens that instrument/side.
+ */
+function shouldDeferClose(
+  row: AnalyzedStatementRow,
+  laterInGroup: AnalyzedStatementRow[],
+  activeByInstrumentSide: Map<string, ActivePosition>,
+): boolean {
+  const side = closedSideOf(row)
+  const instrumentKey = getInstrumentKey(row)
+  if (!side || !instrumentKey) return false
+
+  const active = activeByInstrumentSide.get(getActiveKey(instrumentKey, side))
+  const openQty = active?.fifoQueue.reduce((sum, lot) => sum + lot.qty, 0) ?? 0
+  if (openQty >= getRowQty(row)) return false
+
+  return laterInGroup.some(
+    (candidate) => getInstrumentKey(candidate) === instrumentKey && opensSide(candidate, side),
+  )
+}
+
 export function buildBrokerPositionLedger(
   rows: AnalyzedStatementRow[],
 ): BrokerLedgerResult {
@@ -399,17 +420,17 @@ export function buildBrokerPositionLedger(
   const activeByInstrumentSide = new Map<string, ActivePosition>()
   const orderedRows = sortRows(rows)
 
-  for (const row of orderedRows) {
+  const processRow = (row: AnalyzedStatementRow): void => {
     if (!row.date) {
       warnings.push({
         message: 'Skipped row with no parsed date.',
         rowIndex: row.rowIndex,
       })
-      continue
+      return
     }
 
     const instrumentKey = getInstrumentKey(row)
-    if (!instrumentKey) continue
+    if (!instrumentKey) return
 
     const openSide =
       row.action === 'Buy' || row.action === 'Buy to Open' ? 'LONG'
@@ -418,7 +439,7 @@ export function buildBrokerPositionLedger(
 
     if (openSide) {
       const event = buildOpenEvent(row, openSide)
-      if (!event) continue
+      if (!event) return
       const active = activeByInstrumentSide.get(getActiveKey(instrumentKey, openSide))
       const oppositeSide = openSide === 'LONG' ? 'SHORT' : 'LONG'
       const oppositeActive = activeByInstrumentSide.get(
@@ -456,7 +477,7 @@ export function buildBrokerPositionLedger(
             createActivePosition(openEvent),
           )
         }
-        continue
+        return
       }
 
       if (!active) {
@@ -464,7 +485,7 @@ export function buildBrokerPositionLedger(
           getActiveKey(instrumentKey, openSide),
           createActivePosition(event),
         )
-        continue
+        return
       }
 
       active.openingEvents.push(event)
@@ -474,13 +495,13 @@ export function buildBrokerPositionLedger(
         active.fifoQueue.reduce((sum, lot) => sum + lot.qty, 0),
       )
       active.totalFees += event.fees
-      continue
+      return
     }
 
     let closeSide: BrokerPositionSide | null = null
     let closeKind: 'CLOSE' | 'EXPIRATION' | 'TRANSFER_OUT' | null = null
-    let active = activeByInstrumentSide.get(getActiveKey(instrumentKey, 'LONG'))
-    let oppositeActive = activeByInstrumentSide.get(getActiveKey(instrumentKey, 'SHORT'))
+    const active = activeByInstrumentSide.get(getActiveKey(instrumentKey, 'LONG'))
+    const oppositeActive = activeByInstrumentSide.get(getActiveKey(instrumentKey, 'SHORT'))
 
     if (row.action === 'Sell' || row.action === 'Sell to Close') {
       closeSide = 'LONG'
@@ -506,7 +527,7 @@ export function buildBrokerPositionLedger(
           getActiveKey(instrumentKey, 'LONG'),
         )
         const event = buildOpenEvent(row, sameSideActive?.side ?? 'LONG')
-        if (!event) continue
+        if (!event) return
         if (!sameSideActive) {
           activeByInstrumentSide.set(
             getActiveKey(instrumentKey, 'LONG'),
@@ -521,9 +542,9 @@ export function buildBrokerPositionLedger(
           )
           sameSideActive.totalFees += event.fees
         }
-        continue
+        return
       } else {
-        continue
+        return
       }
     } else if (row.action === 'Journaled Shares') {
       const transferDirection = inferTransferDirection(row.description)
@@ -532,7 +553,7 @@ export function buildBrokerPositionLedger(
           getActiveKey(instrumentKey, 'LONG'),
         )
         const event = buildOpenEvent(row, sameSideActive?.side ?? 'LONG')
-        if (!event) continue
+        if (!event) return
         if (!sameSideActive) {
           activeByInstrumentSide.set(
             getActiveKey(instrumentKey, 'LONG'),
@@ -547,18 +568,18 @@ export function buildBrokerPositionLedger(
           )
           sameSideActive.totalFees += event.fees
         }
-        continue
+        return
       }
 
       if (transferDirection === 'OUT') {
         closeSide = 'LONG'
         closeKind = 'TRANSFER_OUT'
       } else {
-        continue
+        return
       }
     }
 
-    if (!closeSide || !closeKind) continue
+    if (!closeSide || !closeKind) return
 
     let resolvedActive = activeByInstrumentSide.get(getActiveKey(instrumentKey, closeSide))
     if (
@@ -608,7 +629,7 @@ export function buildBrokerPositionLedger(
         rowIndex: row.rowIndex,
         instrumentKey,
       })
-      continue
+      return
     }
 
     if (resolvedActive.side !== closeSide) {
@@ -617,12 +638,12 @@ export function buildBrokerPositionLedger(
         rowIndex: row.rowIndex,
         instrumentKey,
       })
-      continue
+      return
     }
 
     const openQty = resolvedActive.fifoQueue.reduce((sum, lot) => sum + lot.qty, 0)
     const event = buildCloseEvent(row, closeSide, closeKind, openQty)
-    if (!event) continue
+    if (!event) return
 
     const fullyClosed = consumeCloseEvent(resolvedActive, event, warnings)
     if (fullyClosed) {
@@ -631,6 +652,24 @@ export function buildBrokerPositionLedger(
         getActiveKey(resolvedActive.instrumentKey, resolvedActive.side),
       )
     }
+  }
+
+  for (const group of groupByTimestamp(orderedRows)) {
+    // Rows sharing an identical timestamp have no trustworthy internal order
+    // (date-only exports put a whole day on one timestamp, and newest-first
+    // files reverse it). A close that the current inventory cannot cover is
+    // deferred until after the group's matching opens; a close that it CAN
+    // cover runs in file order, so "sell the carried position, rebuy later"
+    // is not inverted. Distinct timestamps are never reordered.
+    const deferred: AnalyzedStatementRow[] = []
+    group.forEach((row, index) => {
+      if (shouldDeferClose(row, group.slice(index + 1), activeByInstrumentSide)) {
+        deferred.push(row)
+      } else {
+        processRow(row)
+      }
+    })
+    deferred.forEach(processRow)
   }
 
   for (const position of activeByInstrumentSide.values()) {

@@ -20,9 +20,12 @@ async function registerAndSignIn(page: Page) {
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await page.waitForURL(/\/dashboard(?:\?.*)?$/, { timeout: 30_000 });
-  await expect(page.getByText("No trading account found.")).toBeVisible({
+  // AnimatePresence keeps the exiting page mounted during the transition, so
+  // the empty state briefly exists twice; wait for exactly one, then check it.
+  await expect(page.getByText("No trading account found.")).toHaveCount(1, {
     timeout: 15_000,
   });
+  await expect(page.getByText("No trading account found.")).toBeVisible();
 
   return { email };
 }
@@ -38,6 +41,7 @@ test("user can register, sign in, and navigate core authenticated pages", async 
 
   await page.goto("/trades");
   await expect(page).toHaveURL(/\/trades$/);
+  await expect(page.getByText("No trading account found.")).toHaveCount(1);
   await expect(page.getByText("No trading account found.")).toBeVisible();
 
   await page.goto("/dashboard");
