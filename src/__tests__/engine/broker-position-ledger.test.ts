@@ -369,4 +369,46 @@ describe('buildBrokerPositionLedger', () => {
       remainingQty: 242,
     })
   })
+
+  test('does not defer a same-day close that carried inventory already covers (close carried, reopen later)', () => {
+    // Newest-first file: the afternoon re-buy is listed above the morning sell.
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([
+        '3/11/2026,Buy,ABC,ABC INC,50,"$12.00 ",,"($600.00)"',
+        '3/11/2026,Sell,ABC,ABC INC,100,"$11.00 ","$0.10 ","$1,099.90 "',
+        '3/10/2026,Buy,ABC,ABC INC,100,"$10.00 ",,"($1,000.00)"',
+      ]),
+    )
+
+    const result = buildBrokerPositionLedger(dryRun.rows)
+
+    expect(result.warnings).toHaveLength(0)
+    expect(result.positions).toHaveLength(2)
+    const [carried, reopened] = result.positions
+    expect(carried).toMatchObject({ isOpen: false, totalQty: 100, closedQty: 100 })
+    // (11.00 − 10.00) × 100 − 0.10
+    expect(carried.netPnl).toBeCloseTo(99.9, 10)
+    expect(reopened).toMatchObject({ isOpen: true, totalQty: 50, remainingQty: 50, entryPrice: 12 })
+  })
+
+  test('never reorders rows with distinct timestamps', () => {
+    const at = (iso: string) => new Date(iso)
+    const dryRun = analyzeSchwabStatement(
+      makeCsv(['3/10/2026,Buy,ABC,ABC INC,1,"$1.00 ",,"($1.00)"']),
+    )
+    const [template] = dryRun.rows
+    const rows = [
+      { ...template, rowIndex: 0, action: 'Sell', date: at('2026-03-11T14:00:00Z'), quantity: 10 },
+      { ...template, rowIndex: 1, action: 'Buy', date: at('2026-03-11T15:00:00Z'), quantity: 10 },
+    ]
+
+    const result = buildBrokerPositionLedger(rows)
+
+    // A real 10:00 sell before an 11:00 buy is an orphan close, not something to "fix".
+    expect(result.warnings.map((warning) => warning.message)).toEqual([
+      'Orphaned close on EQUITY:ABC: no open position found for Sell.',
+    ])
+    expect(result.positions).toHaveLength(1)
+    expect(result.positions[0].isOpen).toBe(true)
+  })
 })

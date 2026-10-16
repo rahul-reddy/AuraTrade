@@ -192,7 +192,7 @@ function logGamma(z: number): number {
   }
 
   let x = 0.9999999999998099
-  let denom = z - 1
+  const denom = z - 1
   for (let index = 0; index < coefficients.length; index += 1) {
     x += coefficients[index] / (denom + index + 1)
   }
@@ -211,9 +211,9 @@ function incompleteBetaContinuedFraction(a: number, b: number, x: number): numbe
   const epsilon = 0.0000003
   const minValue = 1e-30
 
-  let qab = a + b
-  let qap = a + 1
-  let qam = a - 1
+  const qab = a + b
+  const qap = a + 1
+  const qam = a - 1
   let c = 1
   let d = 1 - (qab * x) / qap
   if (Math.abs(d) < minValue) d = minValue

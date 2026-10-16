@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { useState, useEffect } from 'react'
+import { useSyncExternalStore } from 'react'
 import {
   LayoutDashboard,
   LineChart,
@@ -76,23 +76,51 @@ function KbdHint({ hint }: { hint: string }) {
   )
 }
 
+// ─── Collapsed-state store (localStorage) ────────────────────────────────────
+
+const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed'
+const sidebarListeners = new Set<() => void>()
+
+function subscribeSidebarCollapsed(onChange: () => void): () => void {
+  sidebarListeners.add(onChange)
+  window.addEventListener('storage', onChange)
+  return () => {
+    sidebarListeners.delete(onChange)
+    window.removeEventListener('storage', onChange)
+  }
+}
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function writeSidebarCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed))
+  } catch {
+    // Storage unavailable (private mode, blocked site data): keep it in-memory only.
+  }
+  sidebarListeners.forEach((listener) => listener())
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
-
-  // Persist collapsed state
-  useEffect(() => {
-    const stored = localStorage.getItem('sidebar-collapsed')
-    if (stored === 'true') setCollapsed(true)
-  }, [])
+  // Persisted in localStorage and read via useSyncExternalStore: the server
+  // render (and first hydration pass) sees "expanded", then the stored value.
+  const collapsed = useSyncExternalStore(
+    subscribeSidebarCollapsed,
+    readSidebarCollapsed,
+    () => false,
+  )
 
   const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      localStorage.setItem('sidebar-collapsed', String(!prev))
-      return !prev
-    })
+    writeSidebarCollapsed(!collapsed)
   }
 
   return (

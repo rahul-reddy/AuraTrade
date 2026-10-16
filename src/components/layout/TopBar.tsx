@@ -1,7 +1,15 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
+
+// The platform never changes during a session, so there is nothing to subscribe to.
+const subscribeNever = () => () => {}
+
+/** Command-palette shortcut label for this client's platform (server renders ⌘K). */
+function getClientModKey(): string {
+  return navigator.platform.toUpperCase().includes('MAC') ? '⌘K' : 'Ctrl K'
+}
 import { Search, Layers } from 'lucide-react'
 
 // ─── Context label ─────────────────────────────────────────────────────────────
@@ -29,12 +37,7 @@ export default function TopBar({ onOpenPalette, accountName }: TopBarProps) {
   const contextLabel = getContextLabel(pathname, accountName)
 
   // Detect platform on the client to show the correct modifier key
-  const [modKey, setModKey] = useState('⌘K')
-  useEffect(() => {
-    if (!navigator.platform.toUpperCase().includes('MAC')) {
-      setModKey('Ctrl K')
-    }
-  }, [])
+  const modKey = useSyncExternalStore(subscribeNever, getClientModKey, () => '⌘K')
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/80 px-5 backdrop-blur">
