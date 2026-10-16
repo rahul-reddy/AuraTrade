@@ -150,7 +150,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
           (result.ledgerRebuild?.closedTrades ?? 0) + (result.ledgerRebuild?.openPositions ?? 0)
         const totalTrades = (result.tradeRebuild?.totalTrades ?? 0) + statementTrades
         toast.success(
-          `Reprocessed ${totalTrades} trades from ${result.ledgerRebuild?.statementsUsed ?? 0} statement(s) and rebuilt ${result.snapshotRebuild?.snapshotsWritten ?? 0} snapshots.`,
+          `Reprocessed ${totalTrades} trades and rebuilt ${result.snapshotRebuild?.snapshotsWritten ?? 0} snapshots.`,
         )
       } else {
         toast.success(`Rebuilt ${result.snapshotRebuild?.snapshotsWritten ?? 0} daily snapshots.`)
