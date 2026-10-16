@@ -335,12 +335,34 @@ model RoundTripTrade {
 
   account        TradingAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   executions     Execution[]
+  fills          TradeFill[]
   context        TradeContext?
   classification TradeClassification?
 
   @@index([accountId, symbol])
   @@index([accountId, entryTime])
   @@index([accountId, isOpen])
+}
+
+/// Fills (and lifecycle events) the account ledger applied to a trade, written
+/// by every ledger rebuild. qty/fees are the portion attributed to this trade,
+/// so a reversal row split across two trades appears once in each. Charts and
+/// the setup classifier read fills from here.
+model TradeFill {
+  id        String    @id @default(cuid())
+  tradeId   String
+  seq       Int       // order within the trade: opens first, then closes
+  time      DateTime
+  kind      String    // OPEN | CLOSE | EXPIRATION | TRANSFER_IN | TRANSFER_OUT
+  posEffect PosEffect
+  side      Side
+  qty       Decimal   @db.Decimal(14, 4)
+  price     Decimal?  @db.Decimal(14, 4)
+  fees      Decimal   @db.Decimal(10, 4) @default(0)
+
+  trade RoundTripTrade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+
+  @@index([tradeId, seq])
 }
 
 model TradeContext {

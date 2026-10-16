@@ -52,4 +52,11 @@ test('thinkorswim Account Statement imports timestamped trades via the broker le
   await expect(page.getByRole('heading', { name: 'Trade History' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'TOSA' })).toBeVisible()
   await expect(page.getByText('TOSB').first()).toBeVisible()
+
+  // The chart draws every ledger fill of the imported trade: TOSA was bought
+  // in two fills (60 + 40) and sold in one, so it has three markers.
+  await page.goto('/chart/TOSA')
+  await expect(page.getByTestId('chart-workspace')).toHaveAttribute('data-fill-count', '3', {
+    timeout: 20_000,
+  })
 })

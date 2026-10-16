@@ -470,3 +470,63 @@ describe('buildBrokerPositionLedger money-market sweep exclusion', () => {
     expect(result.positions[0]).toMatchObject({ symbol, isOpen: true, remainingQty: 10 })
   })
 })
+
+describe('buildBrokerPositionLedger fills', () => {
+  const fillView = (fill: { kind: string; posEffect: string; side: string; qty: number; price: number | null; fees: number }) =>
+    [fill.kind, fill.posEffect, fill.side, fill.qty, fill.price, Number(fill.fees.toFixed(10))]
+
+  test('records each opening and closing fill of a scale-in trade in order', () => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([
+        '3/12/2026,Sell,AAA,AAA INC,200,"$11.00 ","$0.10 ","$2,199.90 "',
+        '3/11/2026,Buy,AAA,AAA INC,100,"$9.00 ",,"($900.00)"',
+        '3/10/2026,Buy,AAA,AAA INC,100,"$10.00 ",,"($1,000.00)"',
+      ]),
+    )
+    const [position] = buildBrokerPositionLedger(dryRun.rows).positions
+    expect(position.fills.map(fillView)).toEqual([
+      ['OPEN', 'OPEN', 'BUY', 100, 10, 0],
+      ['OPEN', 'OPEN', 'BUY', 100, 9, 0],
+      ['CLOSE', 'CLOSE', 'SELL', 200, 11, 0.1],
+    ])
+    expect(position.fills.map((fill) => fill.time.toISOString().slice(0, 10))).toEqual([
+      '2026-03-10',
+      '2026-03-11',
+      '2026-03-12',
+    ])
+  })
+
+  test('splits a reversal row between the closed and the newly opened trade, fees pro rata', () => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([
+        '3/11/2026,Sell Short,AAA,AAA INC,15,"$12.00 ","$0.30 ","$179.70 "',
+        '3/10/2026,Buy,AAA,AAA INC,10,"$10.00 ",,"($100.00)"',
+      ]),
+    )
+    const positions = buildBrokerPositionLedger(dryRun.rows).positions
+    const long = positions.find((position) => position.side === 'LONG')
+    const short = positions.find((position) => position.side === 'SHORT')
+    // 10 of the 15 shares close the long: fee 0.30 × 10/15 = 0.20
+    expect(long?.fills.map(fillView)).toEqual([
+      ['OPEN', 'OPEN', 'BUY', 10, 10, 0],
+      ['CLOSE', 'CLOSE', 'SELL', 10, 12, 0.2],
+    ])
+    // the remaining 5 open the short: fee 0.30 × 5/15 = 0.10
+    expect(short?.fills.map(fillView)).toEqual([['OPEN', 'OPEN', 'SELL_SHORT', 5, 12, 0.1]])
+  })
+
+  test('records an expiration as a priced-at-zero EXPIRATION close', () => {
+    const dryRun = analyzeSchwabStatement(
+      makeCsv([
+        '12/16/2024 as of 12/13/2024,Expired,RDFN 12/13/2024 11.50 C,CALL REDFIN CORP $11.5 EXP 12/13/24,-10,,,',
+        '11/21/2024,Buy to Open,RDFN 12/13/2024 11.50 C,CALL REDFIN CORP $11.5 EXP 12/13/24,10,$0.06 ,$6.61 ,($66.61)',
+      ]),
+    )
+    const [position] = buildBrokerPositionLedger(dryRun.rows).positions
+    expect(position.fills.map((fill) => [fill.kind, fill.side, fill.qty, fill.price])).toEqual([
+      ['OPEN', 'BUY', 10, 0.06],
+      ['EXPIRATION', 'SELL', 10, 0],
+    ])
+  })
+})
+

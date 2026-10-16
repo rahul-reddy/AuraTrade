@@ -34,6 +34,7 @@ function basePosition(
     entryTime: new Date('2026-03-12T00:00:00.000Z'),
     exitTime: new Date('2026-03-12T00:00:00.000Z'),
     closeKind: 'TRADE',
+    fills: [],
     ...overrides,
   }
 }

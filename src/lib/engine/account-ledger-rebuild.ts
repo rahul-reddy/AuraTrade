@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { Prisma, type BrokerStatementRow } from '@/generated/prisma'
 import {
   buildBrokerPositionLedger,
@@ -27,7 +28,8 @@ import {
  * (carry-in), and overlapping statements never double-count.
  *
  * Overlap rule — each trading date is owned by exactly one statement per row
- * class, so no fuzzy fill matching across files is needed:
+ * class, so no fuzzy fill matching across files is needed (legacy executions,
+ * if any, rank below every real statement and never own events):
  *   - FILL rows (equity/option trades): thinkorswim Account Statement beats
  *     Schwab Transaction History (per-second times beat date-only), then the
  *     statement whose coverage ends latest, then the most recently created.
@@ -45,6 +47,12 @@ export interface LedgerStatementInput {
   coverageTo: Date | null
   createdAt: Date
   rows: AnalyzedStatementRow[]
+  /**
+   * Synthetic input built from legacy Execution rows. It ranks below every
+   * real statement whatever its coverage, and never owns lifecycle events
+   * (legacy executions are equity fills only).
+   */
+  isLegacy?: boolean
 }
 
 export interface AccountLedgerSelection {
@@ -71,8 +79,9 @@ function rowClass(row: AnalyzedStatementRow): RowClass {
     : 'EVENT'
 }
 
-function canProvide(format: StatementSourceFormat, cls: RowClass): boolean {
-  return cls === 'FILL' || format === 'SCHWAB_TRANSACTION_HISTORY'
+function canProvide(statement: LedgerStatementInput, cls: RowClass): boolean {
+  if (cls === 'FILL') return true
+  return statement.sourceFormat === 'SCHWAB_TRANSACTION_HISTORY' && !statement.isLegacy
 }
 
 /**
@@ -131,6 +140,9 @@ export function selectAccountLedgerRows(
       }
     })
     .sort((left, right) => {
+      // Legacy executions only fill days no real statement covers.
+      const byLegacy = Number(left.statement.isLegacy ?? false) - Number(right.statement.isLegacy ?? false)
+      if (byLegacy !== 0) return byLegacy
       const byFormat =
         FORMAT_RANK[right.statement.sourceFormat] - FORMAT_RANK[left.statement.sourceFormat]
       if (byFormat !== 0) return byFormat
@@ -150,7 +162,7 @@ export function selectAccountLedgerRows(
     const owner =
       ranked.find(
         ({ statement, from, to }) =>
-          canProvide(statement.sourceFormat, cls) &&
+          canProvide(statement, cls) &&
           from != null &&
           to != null &&
           from <= day &&
@@ -421,6 +433,7 @@ export function mapLegacyExecutionsToStatement(
       coverageTo: ordered[ordered.length - 1].execTime,
       createdAt: new Date(0),
       rows,
+      isLegacy: true,
     },
     executionIds: ordered.map((execution) => execution.id),
   }
@@ -677,12 +690,13 @@ export async function rebuildLedgerTradesForAccount(
   await tx.execution.updateMany({ where: { accountId }, data: { tradeId: null } })
   await tx.roundTripTrade.deleteMany({ where: { accountId } })
 
-  const unlinked: Prisma.RoundTripTradeUncheckedCreateInput[] = []
-  const linked: Array<{
-    data: Prisma.RoundTripTradeUncheckedCreateInput
-    executionIds: string[]
-  }> = []
+  // Ids are assigned here so trades, their fills and legacy execution links
+  // can each be written in bulk.
+  const trades: Prisma.RoundTripTradeCreateManyInput[] = []
+  const fills: Prisma.TradeFillCreateManyInput[] = []
+  const executionLinks: Array<{ tradeId: string; executionIds: string[] }> = []
   ledger.positions.forEach((position, index) => {
+    const tradeId = randomUUID()
     const statementId = originOf(position)?.statementId ?? null
     const input = mapBrokerPositionToTradeCreateInput(
       accountId,
@@ -691,32 +705,38 @@ export async function rebuildLedgerTradesForAccount(
       position,
     )
     const annotation = annotations.get(index)
-    const data = annotation
-      ? {
-          ...input,
-          tags: annotation.tags,
-          notes: annotation.notes,
-          notesUpdatedAt: annotation.notesUpdatedAt,
-        }
-      : input
+    trades.push({
+      ...input,
+      id: tradeId,
+      ...(annotation
+        ? { tags: annotation.tags, notes: annotation.notes, notesUpdatedAt: annotation.notesUpdatedAt }
+        : {}),
+    })
+    position.fills.forEach((fill, seq) => {
+      fills.push({
+        tradeId,
+        seq,
+        time: fill.time,
+        kind: fill.kind,
+        posEffect: fill.posEffect,
+        side: fill.side,
+        qty: new Prisma.Decimal(fill.qty),
+        price: fill.price == null ? null : new Prisma.Decimal(fill.price),
+        fees: new Prisma.Decimal(fill.fees),
+      })
+    })
     const executionIds = [...position.openRows, ...position.closeRows]
       .map((row) => selection.rowOrigins[row])
       .filter((rowOrigin) => rowOrigin?.statementId === LEGACY_EXECUTIONS_STATEMENT_ID)
       .map((rowOrigin) => legacyExecutionIds[rowOrigin.rowIndex])
       .filter((id): id is string => id != null)
-    if (executionIds.length > 0) linked.push({ data, executionIds })
-    else unlinked.push(data)
+    if (executionIds.length > 0) executionLinks.push({ tradeId, executionIds })
   })
 
-  if (unlinked.length > 0) {
-    await tx.roundTripTrade.createMany({ data: unlinked })
-  }
-  for (const { data, executionIds } of linked) {
-    const created = await tx.roundTripTrade.create({ data, select: { id: true } })
-    await tx.execution.updateMany({
-      where: { id: { in: executionIds } },
-      data: { tradeId: created.id },
-    })
+  if (trades.length > 0) await tx.roundTripTrade.createMany({ data: trades })
+  if (fills.length > 0) await tx.tradeFill.createMany({ data: fills })
+  for (const { tradeId, executionIds } of executionLinks) {
+    await tx.execution.updateMany({ where: { id: { in: executionIds } }, data: { tradeId } })
   }
 
   const openPositions = ledger.positions.filter((position) => position.isOpen).length

@@ -331,6 +331,10 @@ async function runEnrichmentJob(
         durationSeconds: true,
         isOpen: true,
         initialRisk: true,
+        fills: {
+          select: { kind: true, time: true, posEffect: true, side: true, price: true, qty: true, seq: true },
+          orderBy: { seq: 'asc' },
+        },
         executions: {
           select: {
             execTime: true,
@@ -494,14 +498,7 @@ async function runEnrichmentJob(
             daysToEarnings: earnings.daysToEarnings,
             marketRegime: regime,
           }
-          const classificationExecutions: ClassifierExecution[] = trade.executions.map((execution) => ({
-            execTime: execution.execTime,
-            posEffect: execution.posEffect,
-            side: execution.side,
-            price: execution.price.toNumber(),
-            qty: execution.qty.toNumber(),
-            daySeq: execution.daySeq,
-          }))
+          const classificationExecutions = toClassifierExecutions(trade)
           const classification = classifyTrade(
             classificationTrade,
             classificationContext,
@@ -564,6 +561,52 @@ async function runEnrichmentJob(
       startEnrichment(accountId, db, dataSource, { isVanishRerun })
     }
   }
+}
+
+/**
+ * Fills the classifier sees for a trade. Ledger fills are canonical (priced
+ * events only: expirations and transfers are not executions); executions are
+ * a fallback for trades written before fills existed.
+ */
+export function toClassifierExecutions(trade: {
+  fills: Array<{
+    kind: string
+    time: Date
+    posEffect: ClassifierExecution['posEffect']
+    side: ClassifierExecution['side']
+    price: { toNumber(): number } | null
+    qty: { toNumber(): number }
+    seq: number
+  }>
+  executions: Array<{
+    execTime: Date
+    posEffect: ClassifierExecution['posEffect']
+    side: ClassifierExecution['side']
+    price: { toNumber(): number }
+    qty: { toNumber(): number }
+    daySeq: number
+  }>
+}): ClassifierExecution[] {
+  if (trade.fills.length > 0) {
+    return trade.fills
+      .filter((fill) => (fill.kind === 'OPEN' || fill.kind === 'CLOSE') && fill.price != null)
+      .map((fill) => ({
+        execTime: fill.time,
+        posEffect: fill.posEffect,
+        side: fill.side,
+        price: fill.price?.toNumber() ?? 0,
+        qty: fill.qty.toNumber(),
+        daySeq: fill.seq,
+      }))
+  }
+  return trade.executions.map((execution) => ({
+    execTime: execution.execTime,
+    posEffect: execution.posEffect,
+    side: execution.side,
+    price: execution.price.toNumber(),
+    qty: execution.qty.toNumber(),
+    daySeq: execution.daySeq,
+  }))
 }
 
 /** FK violation (P2003) or missing record (P2025): the trade was deleted mid-job. */

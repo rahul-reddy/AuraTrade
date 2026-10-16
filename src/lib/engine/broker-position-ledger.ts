@@ -3,6 +3,23 @@ import type { AnalyzedStatementRow } from '@/lib/parser/schwab-statement-analyze
 export type BrokerPositionSide = 'LONG' | 'SHORT'
 export type BrokerPositionCloseKind = 'TRADE' | 'EXPIRATION' | 'TRANSFER' | 'MIXED'
 
+/**
+ * One fill (or lifecycle event) as the ledger applied it to a position. Unlike
+ * the source row, qty and fees are the portion attributed to THIS position
+ * (a reversal row is split between the closed and the newly opened side; an
+ * oversized close is capped at the inventory it consumed).
+ */
+export interface BrokerLedgerFill {
+  rowIndex: number
+  kind: 'OPEN' | 'CLOSE' | 'EXPIRATION' | 'TRANSFER_IN' | 'TRANSFER_OUT'
+  posEffect: 'OPEN' | 'CLOSE'
+  side: 'BUY' | 'SELL' | 'SELL_SHORT' | 'BUY_TO_COVER'
+  time: Date
+  qty: number
+  price: number | null
+  fees: number
+}
+
 export interface BrokerLedgerPosition {
   instrumentKey: string
   instrumentType: 'EQUITY' | 'OPTION'
@@ -26,6 +43,8 @@ export interface BrokerLedgerPosition {
   entryTime: Date
   exitTime: Date | null
   closeKind: BrokerPositionCloseKind | null
+  /** Opening then closing events, each in the order the ledger applied them. */
+  fills: BrokerLedgerFill[]
 }
 
 export interface BrokerLedgerWarning {
@@ -243,6 +262,31 @@ function finalizePosition(pos: ActivePosition, isOpen: boolean): BrokerLedgerPos
     entryTime,
     exitTime,
     closeKind,
+    fills: [
+      ...pos.openingEvents.map((event) => toLedgerFill(event, 'OPEN', pos.side)),
+      ...pos.closingEvents.map((event) => toLedgerFill(event, 'CLOSE', pos.side)),
+    ],
+  }
+}
+
+function toLedgerFill(
+  event: NormalizedLedgerEvent,
+  posEffect: 'OPEN' | 'CLOSE',
+  side: BrokerPositionSide,
+): BrokerLedgerFill {
+  return {
+    rowIndex: event.row.rowIndex,
+    kind: event.kind,
+    posEffect,
+    side:
+      side === 'LONG'
+        ? posEffect === 'OPEN' ? 'BUY' : 'SELL'
+        : posEffect === 'OPEN' ? 'SELL_SHORT' : 'BUY_TO_COVER',
+    // Undated rows never reach a position (the ledger skips them).
+    time: event.row.date ?? new Date(0),
+    qty: event.qty,
+    price: event.price,
+    fees: event.fees,
   }
 }
 

@@ -414,6 +414,48 @@ describe('legacy executions in the account ledger', () => {
   })
 })
 
+describe('legacy executions rank below every real statement', () => {
+  test('a real statement owns its days even when legacy coverage ends later, including its events', () => {
+    // Legacy executions span Jan 15 → Oct 10, so their coverage ends later
+    // than the February statement's; legacy must still lose February.
+    const legacy = mapLegacyExecutionsToStatement([
+      { id: 'jan', execTime: utcDay('2026-01-15'), daySeq: 0, symbol: 'AAA', side: 'BUY', qty: 10, price: 50, commission: 0 },
+      { id: 'feb', execTime: utcDay('2026-02-10'), daySeq: 0, symbol: 'AAA', side: 'SELL', qty: 10, price: 55, commission: 0 },
+      { id: 'oct', execTime: utcDay('2026-10-10'), daySeq: 0, symbol: 'BBB', side: 'BUY', qty: 1, price: 5, commission: 0 },
+    ])!.statement
+    const february = statement('feb-th', 'SCHWAB_TRANSACTION_HISTORY', ['2026-02-01', '2026-02-28'], '2026-03-01', [
+      row({ date: utcDay('2026-02-10'), action: 'Sell', quantity: 10, price: 55 }),
+      row({ date: utcDay('2026-02-20'), action: 'Expired', symbol: 'OPT', quantity: -1, price: null, category: 'OPTION_LIFECYCLE' }),
+    ])
+    expect(legacy.coverageTo!.getTime()).toBeGreaterThan(february.coverageTo!.getTime())
+
+    const selection = selectAccountLedgerRows([legacy, february])
+    const origins = selection.rowOrigins.map((origin, index) => `${origin.statementId}:${selection.rows[index].action}`)
+    expect(origins).toEqual([
+      'legacy-executions:Buy', // Jan 15: only legacy covers it
+      'feb-th:Sell', // Feb 10: the real statement owns the fill
+      'feb-th:Expired', // Feb 20: events always come from a real statement
+      'legacy-executions:Buy', // Oct 10: only legacy covers it
+    ])
+    expect(selection.replacedRows).toBe(1) // legacy's Feb 10 sell
+  })
+
+  test('a real statement covering a day is authoritative for it, even with no fills that day', () => {
+    // Any real statement that carries an event covers that day, so it also
+    // owns the day's fills: the broker reports no trades there, and the
+    // overlapping legacy fill is not counted.
+    const legacy = mapLegacyExecutionsToStatement([
+      { id: 'jan', execTime: utcDay('2026-01-15'), daySeq: 0, symbol: 'AAA', side: 'BUY', qty: 10, price: 50, commission: 0 },
+    ])!.statement
+    const eventOnly = statement('events', 'SCHWAB_TRANSACTION_HISTORY', null, '2026-03-01', [
+      row({ date: utcDay('2026-01-15'), action: 'Journaled Shares', quantity: 5, price: null, category: 'POSITION_TRANSFER' }),
+    ])
+    const selection = selectAccountLedgerRows([legacy, eventOnly])
+    expect(selection.rowOrigins.map((origin) => origin.statementId)).toEqual(['events'])
+    expect(selection.replacedRows).toBe(1)
+  })
+})
+
 describe('matchAnnotations', () => {
   const note = (overrides: Partial<TradeAnnotation>): TradeAnnotation => ({
     symbol: 'AAA',
@@ -473,7 +515,7 @@ describe('rebuildLedgerTradesForAccount', () => {
       executionUpdateMany: jest.fn().mockResolvedValue({ count: 0 }),
       tradeDeleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       tradeCreateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      tradeCreate: jest.fn().mockResolvedValue({ id: 'trade_new' }),
+      fillCreateMany: jest.fn().mockResolvedValue({ count: 0 }),
       statementFindMany: jest.fn().mockResolvedValue(args.statements ?? []),
     }
     const tx = {
@@ -486,8 +528,8 @@ describe('rebuildLedgerTradesForAccount', () => {
         findMany: jest.fn().mockResolvedValue(args.annotated ?? []),
         deleteMany: calls.tradeDeleteMany,
         createMany: calls.tradeCreateMany,
-        create: calls.tradeCreate,
       },
+      tradeFill: { createMany: calls.fillCreateMany },
     } as unknown as Prisma.TransactionClient
     return { tx, calls }
   }
@@ -507,7 +549,7 @@ describe('rebuildLedgerTradesForAccount', () => {
     expect(result.impact).toMatchObject({ closedTradeLikePositions: 0, openPositions: 0 })
   })
 
-  test('re-links legacy executions to the trade rebuilt from them and keeps its annotation', async () => {
+  test('re-links legacy executions and writes the ledger fills for the rebuilt trade', async () => {
     const decimal = (value: number) => new Prisma.Decimal(value)
     const { tx, calls } = mockTx({
       executions: [
@@ -521,15 +563,23 @@ describe('rebuildLedgerTradesForAccount', () => {
 
     const result = await rebuildLedgerTradesForAccount(tx, 'acct_1')
 
-    expect(calls.tradeCreateMany).not.toHaveBeenCalled()
-    expect(calls.tradeCreate).toHaveBeenCalledTimes(1)
-    const created = calls.tradeCreate.mock.calls[0][0] as {
-      data: { brokerStatementImportId: string | null; tags: string[]; isOpen: boolean }
-    }
-    expect(created.data).toMatchObject({ brokerStatementImportId: null, tags: ['swing'], isOpen: false })
+    const [[{ data: trades }]] = calls.tradeCreateMany.mock.calls as [[{
+      data: Array<{ id: string; brokerStatementImportId: string | null; tags?: string[]; isOpen: boolean }>
+    }]]
+    expect(trades).toHaveLength(1)
+    const [trade] = trades
+    expect(trade).toMatchObject({ brokerStatementImportId: null, tags: ['swing'], isOpen: false })
+
+    const [[{ data: fills }]] = calls.fillCreateMany.mock.calls as [[{
+      data: Array<{ tradeId: string; seq: number; kind: string; posEffect: string; side: string; qty: Prisma.Decimal; price: Prisma.Decimal | null; fees: Prisma.Decimal }>
+    }]]
+    expect(fills.map((fill) => [fill.tradeId, fill.seq, fill.kind, fill.side, fill.qty.toNumber(), fill.price?.toNumber(), fill.fees.toNumber()])).toEqual([
+      [trade.id, 0, 'OPEN', 'BUY', 100, 50, 0],
+      [trade.id, 1, 'CLOSE', 'SELL', 100, 52, 0.1],
+    ])
     expect(calls.executionUpdateMany).toHaveBeenLastCalledWith({
       where: { id: { in: ['exec_buy', 'exec_sell'] } },
-      data: { tradeId: 'trade_new' },
+      data: { tradeId: trade.id },
     })
     expect(result).toMatchObject({ closedTrades: 1, openPositions: 0, annotationsPreserved: 1 })
   })
