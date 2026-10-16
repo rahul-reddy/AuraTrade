@@ -42,6 +42,13 @@ const CASH_BALANCE_TITLE = 'Cash Balance'
 const CASH_TRD_DESCRIPTION_RE =
   /^(BOT|SOLD) ([+-]?[\d,]+(?:\.\d+)?) (\S+)(?: (\d+) (\d{1,2} [A-Z]{3} \d{2}) ([\d.]+) (CALL|PUT))?.*?@([\d,]+(?:\.\d+)?)/
 
+/**
+ * Account Trade History `Type` values imported as equities (Spread must be
+ * STOCK). Observed on real exports: STOCK, ETF. Anything else (futures, bonds,
+ * forex, unknown types) is blocked rather than guessed into an equity trade.
+ */
+const SUPPORTED_EQUITY_TYPES = new Set(['STOCK', 'ETF'])
+
 const MONTHS: Record<string, string> = {
   JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
   JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12',
@@ -144,18 +151,34 @@ function wallClockSeconds(execTime: string): number | null {
 // Exec Time (e.g. fill 09:30:00 → cash 09:30:01). Exact second is tried first.
 const CASH_MATCH_OFFSETS_SECONDS = [0, 1, -1, 2, -2]
 
+/**
+ * Instrument identity used to join a fill to its cash row. Options include the
+ * whole contract, so two contracts on one underlying that trade in the same
+ * second at the same price can never swap fees or multipliers.
+ */
+function instrumentId(args: {
+  symbol: string
+  expiration?: string
+  strike?: string
+  optionType?: string
+}): string {
+  if (!args.expiration || !args.strike || !args.optionType) return args.symbol
+  const strike = Number(args.strike)
+  return [args.symbol, args.expiration.trim(), String(strike), args.optionType].join(' ')
+}
+
 function fillKey(args: {
   wallSeconds: number
   side: 'BUY' | 'SELL'
   qty: number
-  symbol: string
+  instrument: string
   price: number
 }): string {
   return [
     String(args.wallSeconds),
     args.side,
     String(Math.abs(args.qty)),
-    args.symbol,
+    args.instrument,
     normalizePrice(args.price),
   ].join('|')
 }
@@ -171,7 +194,7 @@ function indexCashTrades(section: Section | null): Map<string, CashTradeRow[]> {
     const match = description.match(CASH_TRD_DESCRIPTION_RE)
     if (!match) continue
 
-    const [, verb, qtyRaw, symbol, multiplierRaw, , , , priceRaw] = match
+    const [, verb, qtyRaw, symbol, multiplierRaw, expRaw, strikeRaw, typeRaw, priceRaw] = match
     const qty = parseNumber(qtyRaw)
     const price = parseNumber(priceRaw)
     const wallSeconds = wallClockSeconds(
@@ -183,7 +206,12 @@ function indexCashTrades(section: Section | null): Map<string, CashTradeRow[]> {
       wallSeconds,
       side: verb === 'BOT' ? 'BUY' : 'SELL',
       qty,
-      symbol,
+      instrument: instrumentId({
+        symbol,
+        expiration: expRaw,
+        strike: strikeRaw,
+        optionType: typeRaw,
+      }),
       price,
     })
     const misc = parseNumber(column(section, row, 'Misc Fees')) ?? 0
@@ -204,16 +232,16 @@ function indexCashTrades(section: Section | null): Map<string, CashTradeRow[]> {
 
 function takeCashMatch(
   cashTrades: Map<string, CashTradeRow[]>,
-  fill: { execTime: string; side: string; qty: number | null; symbol: string; price: number | null },
+  fill: { execTime: string; side: string; qty: number | null; instrument: string; price: number | null },
 ): CashTradeRow | null {
-  const { side, qty, symbol, price } = fill
+  const { side, qty, instrument, price } = fill
   const wallSeconds = wallClockSeconds(fill.execTime)
   if (qty == null || price == null || wallSeconds == null) return null
   if (side !== 'BUY' && side !== 'SELL') return null
 
   for (const offset of CASH_MATCH_OFFSETS_SECONDS) {
     const queue = cashTrades.get(
-      fillKey({ wallSeconds: wallSeconds + offset, side, qty, symbol, price }),
+      fillKey({ wallSeconds: wallSeconds + offset, side, qty, instrument, price }),
     )
     const match = queue?.shift()
     if (match) return match
@@ -311,7 +339,14 @@ export function analyzeTosAccountStatement(
       execTime: execTimeRaw,
       side,
       qty: quantity,
-      symbol: baseSymbol,
+      instrument: isOption
+        ? instrumentId({
+            symbol: baseSymbol,
+            expiration: column(tradeHistory, cells, 'Exp'),
+            strike: column(tradeHistory, cells, 'Strike'),
+            optionType: type,
+          })
+        : baseSymbol,
       price,
     })
 
@@ -373,7 +408,10 @@ export function analyzeTosAccountStatement(
     }
 
     const action = mapAction({ isOption, side, posEffect })
-    if (!action || (isOption && !optionContract)) {
+    const supportedInstrument = isOption
+      ? optionContract != null
+      : SUPPORTED_EQUITY_TYPES.has(type) && spread === 'STOCK'
+    if (!action || !supportedInstrument) {
       rows.push({
         ...base,
         action: action ?? `${side} ${posEffect}`.trim(),
@@ -387,15 +425,30 @@ export function analyzeTosAccountStatement(
       continue
     }
 
+    // Fees must come from the broker. Without the matching cash row there is
+    // no fee evidence, so the fill blocks import instead of assuming $0.
     if (!cashMatch) {
       unmatchedFeeRows += 1
-      notes.push('No matching Cash Balance TRD row; fees assumed $0.')
+      rows.push({
+        ...base,
+        action,
+        fees: 0,
+        instrumentType: isOption ? 'OPTION' : 'EQUITY',
+        actionCategory: 'UNKNOWN',
+        isImportTradeRow: false,
+        blocksCanonicalImport: true,
+        notes: [
+          ...notes,
+          'No matching Cash Balance TRD row, so the broker fee is unknown. Export the full Account Statement (including Cash Balance) to import this fill.',
+        ],
+      })
+      continue
     }
 
     rows.push({
       ...base,
       action,
-      fees: cashMatch?.fees ?? 0,
+      fees: cashMatch.fees,
       instrumentType: isOption ? 'OPTION' : 'EQUITY',
       actionCategory: isOption ? 'OPTION_TRADE' : 'EQUITY_TRADE',
       isImportTradeRow: true,
@@ -406,7 +459,7 @@ export function analyzeTosAccountStatement(
 
   if (unmatchedFeeRows > 0) {
     assumptions.push(
-      `${unmatchedFeeRows} fill(s) had no matching Cash Balance TRD row; their fees were set to $0.`,
+      `${unmatchedFeeRows} fill(s) had no matching Cash Balance TRD row; import is blocked until their broker fees are available.`,
     )
   }
   if (defaultedMultiplier) {

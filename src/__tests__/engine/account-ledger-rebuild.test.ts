@@ -1,7 +1,10 @@
 import { Prisma, type BrokerStatementRow } from '@/generated/prisma'
 import {
+  findLegacyExecutionOverlap,
   mapStoredRowToAnalyzedRow,
+  rebuildLedgerTradesForAccount,
   selectAccountLedgerRows,
+  summarizeStatementImpact,
   tradingDateOf,
   type LedgerStatementInput,
 } from '@/lib/engine/account-ledger-rebuild'
@@ -245,5 +248,103 @@ describe('mapStoredRowToAnalyzedRow', () => {
     expect(mapped.instrumentType).toBe('UNKNOWN')
     expect(mapped.actionCategory).toBe('UNKNOWN')
     expect(mapped.optionContract).toBeNull()
+  })
+})
+
+describe('summarizeStatementImpact', () => {
+  test('credits a close-only statement with the carry-in trade it completes', () => {
+    const selection = selectAccountLedgerRows([
+      statement('opens', 'TOS_ACCOUNT_STATEMENT', ['2026-03-01', '2026-03-12'], '2026-03-13', [
+        row({ date: new Date('2026-03-10T14:00:00Z'), action: 'Buy', quantity: 10, price: 50 }),
+      ]),
+      statement('closes', 'TOS_ACCOUNT_STATEMENT', ['2026-03-13', '2026-03-31'], '2026-04-01', [
+        row({ date: new Date('2026-03-20T14:00:00Z'), action: 'Sell', quantity: 10, price: 55, fees: 0.05 }),
+      ]),
+    ])
+    const ledger = buildBrokerPositionLedger(selection.rows)
+
+    const closes = summarizeStatementImpact(selection, ledger, 'closes')
+    // (55 − 50) × 10 − 0.05
+    expect(closes).toMatchObject({ closedTradeLikePositions: 1, openPositions: 0, warnings: [] })
+    expect(closes.estimatedPnl).toBeCloseTo(49.95, 10)
+
+    // The same position also belongs to the statement that opened it.
+    expect(summarizeStatementImpact(selection, ledger, 'opens').closedTradeLikePositions).toBe(1)
+    expect(summarizeStatementImpact(selection, ledger, 'unrelated').closedTradeLikePositions).toBe(0)
+  })
+
+  test('reports only warnings raised on its own rows', () => {
+    const selection = selectAccountLedgerRows([
+      statement('a', 'TOS_ACCOUNT_STATEMENT', ['2026-03-01', '2026-03-12'], '2026-03-13', [
+        row({ date: new Date('2026-03-10T14:00:00Z'), action: 'Sell', symbol: 'ORPHAN', quantity: 5 }),
+      ]),
+      statement('b', 'TOS_ACCOUNT_STATEMENT', ['2026-03-13', '2026-03-31'], '2026-04-01', [
+        row({ date: new Date('2026-03-20T14:00:00Z'), action: 'Buy', quantity: 1 }),
+      ]),
+    ])
+    const ledger = buildBrokerPositionLedger(selection.rows)
+    expect(summarizeStatementImpact(selection, ledger, 'a').warnings).toEqual([
+      'Orphaned close on EQUITY:ORPHAN: no open position found for Sell.',
+    ])
+    expect(summarizeStatementImpact(selection, ledger, 'b').warnings).toEqual([])
+  })
+})
+
+describe('rebuildLedgerTradesForAccount ownership', () => {
+  test('reads only confirmed statements and never deletes Execution-backed trades', async () => {
+    const findStatements = jest.fn().mockResolvedValue([])
+    const deleteMany = jest.fn().mockResolvedValue({ count: 0 })
+    const tx = {
+      brokerStatementImport: { findMany: findStatements },
+      roundTripTrade: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany,
+        createMany: jest.fn(),
+      },
+    } as unknown as Prisma.TransactionClient
+
+    const result = await rebuildLedgerTradesForAccount(tx, 'acct_1', { impactFor: 'stmt_1' })
+
+    expect(findStatements).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { accountId: 'acct_1', confirmedAt: { not: null } } }),
+    )
+    // Legacy trades have brokerStatementImportId = null and must survive.
+    expect(deleteMany).toHaveBeenCalledTimes(1)
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { accountId: 'acct_1', brokerStatementImportId: { not: null } },
+    })
+    expect(result.impact).toMatchObject({ closedTradeLikePositions: 0, openPositions: 0 })
+  })
+})
+
+describe('findLegacyExecutionOverlap', () => {
+  const coverage = { from: utcDay('2026-03-13'), to: utcDay('2026-03-31') }
+
+  test('returns null when no legacy executions fall in the coverage window', async () => {
+    const count = jest.fn().mockResolvedValue(0)
+    const db = { execution: { count, findFirst: jest.fn() } } as unknown as Prisma.TransactionClient
+    expect(await findLegacyExecutionOverlap(db, 'acct_1', coverage)).toBeNull()
+    // The window includes the whole last coverage day.
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        accountId: 'acct_1',
+        execTime: { gte: utcDay('2026-03-13'), lt: utcDay('2026-04-01') },
+      },
+    })
+  })
+
+  test('reports the count and span of overlapping legacy executions', async () => {
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({ execTime: utcDay('2026-03-14') })
+      .mockResolvedValueOnce({ execTime: utcDay('2026-03-20') })
+    const db = {
+      execution: { count: jest.fn().mockResolvedValue(3), findFirst },
+    } as unknown as Prisma.TransactionClient
+    expect(await findLegacyExecutionOverlap(db, 'acct_1', coverage)).toEqual({
+      count: 3,
+      first: utcDay('2026-03-14'),
+      last: utcDay('2026-03-20'),
+    })
   })
 })

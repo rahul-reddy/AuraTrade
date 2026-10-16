@@ -1,5 +1,10 @@
 import { Prisma, type BrokerStatementRow } from '@/generated/prisma'
-import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
+import {
+  buildBrokerPositionLedger,
+  summarizeBrokerLedger,
+  type BrokerLedgerPreviewSummary,
+  type BrokerLedgerResult,
+} from '@/lib/engine/broker-position-ledger'
 import { mapBrokerPositionToTradeCreateInput } from '@/lib/engine/broker-trade-importer'
 import type {
   AnalyzedStatementRow,
@@ -245,6 +250,100 @@ export function mapStoredRowToAnalyzedRow(row: BrokerStatementRow): AnalyzedStat
   }
 }
 
+// ─── statement impact ───────────────────────────────────────────────
+
+export interface StatementImpact extends BrokerLedgerPreviewSummary {
+  /** Ledger warnings raised on this statement's own rows. */
+  warnings: string[]
+}
+
+/**
+ * What one statement contributes to the account-level ledger: every position
+ * it opens OR closes. A close-only statement (its opens live in an earlier
+ * statement) therefore reports the trades it completes, with their realized
+ * P&L, instead of looking empty.
+ */
+export function summarizeStatementImpact(
+  selection: AccountLedgerSelection,
+  ledger: BrokerLedgerResult,
+  statementId: string,
+): StatementImpact {
+  const ownsRow = (rowIndex: number) => selection.rowOrigins[rowIndex]?.statementId === statementId
+  const touched = ledger.positions.filter(
+    (position) => position.openRows.some(ownsRow) || position.closeRows.some(ownsRow),
+  )
+  const warnings = ledger.warnings
+    .filter((warning) => warning.rowIndex != null && ownsRow(warning.rowIndex))
+    .map((warning) => warning.message)
+  return {
+    ...summarizeBrokerLedger({ positions: touched, warnings: [] }),
+    warnings,
+  }
+}
+
+// ─── database access ────────────────────────────────────────────────
+
+type LedgerDb = Prisma.TransactionClient
+
+async function loadConfirmedStatements(
+  db: LedgerDb,
+  accountId: string,
+): Promise<LedgerStatementInput[]> {
+  const statements = await db.brokerStatementImport.findMany({
+    where: { accountId, confirmedAt: { not: null } },
+    include: { rows: { orderBy: { rowIndex: 'asc' } } },
+    orderBy: { createdAt: 'asc' },
+  })
+  return statements.map((statement) => ({
+    id: statement.id,
+    sourceFormat: asSourceFormat(statement.sourceFormat),
+    coverageFrom: statement.coverageFrom,
+    coverageTo: statement.coverageTo,
+    createdAt: statement.createdAt,
+    rows: statement.rows.map(mapStoredRowToAnalyzedRow),
+  }))
+}
+
+/**
+ * Previews confirming `candidate` against the account's confirmed statements,
+ * without writing anything. The candidate is treated as the newest statement.
+ */
+export async function previewStatementImport(
+  db: LedgerDb,
+  accountId: string,
+  candidate: Omit<LedgerStatementInput, 'createdAt'>,
+): Promise<StatementImpact> {
+  const confirmed = (await loadConfirmedStatements(db, accountId)).filter(
+    (statement) => statement.id !== candidate.id,
+  )
+  const selection = selectAccountLedgerRows([
+    ...confirmed,
+    { ...candidate, createdAt: new Date() },
+  ])
+  return summarizeStatementImpact(selection, buildBrokerPositionLedger(selection.rows), candidate.id)
+}
+
+/**
+ * Execution-backed (legacy import path) trades and ledger statements must not
+ * cover the same dates, or the same fills would be counted twice. Returns the
+ * legacy executions inside the coverage window, if any.
+ */
+export async function findLegacyExecutionOverlap(
+  db: LedgerDb,
+  accountId: string,
+  coverage: { from: Date; to: Date },
+): Promise<{ count: number; first: Date; last: Date } | null> {
+  const dayAfter = new Date(coverage.to.getTime() + 86_400_000)
+  const where = { accountId, execTime: { gte: coverage.from, lt: dayAfter } }
+  const count = await db.execution.count({ where })
+  if (count === 0) return null
+  const [first, last] = await Promise.all([
+    db.execution.findFirst({ where, orderBy: { execTime: 'asc' }, select: { execTime: true } }),
+    db.execution.findFirst({ where, orderBy: { execTime: 'desc' }, select: { execTime: true } }),
+  ])
+  return { count, first: first?.execTime ?? coverage.from, last: last?.execTime ?? coverage.to }
+}
+
 // ─── database rebuild ───────────────────────────────────────────────
 
 export interface LedgerRebuildResult {
@@ -256,6 +355,8 @@ export interface LedgerRebuildResult {
   annotationsPreserved: number
   warnings: string[]
   earliestEntry: Date | null
+  /** Contribution of `impactFor`'s statement, when requested. */
+  impact: StatementImpact | null
 }
 
 function annotationKey(symbol: string, direction: string, entryTime: Date): string {
@@ -272,25 +373,12 @@ function annotationKey(symbol: string, direction: string, entryTime: Date): stri
  * TradeClassification) cascade-delete and are recreated by enrichment.
  */
 export async function rebuildLedgerTradesForAccount(
-  tx: Prisma.TransactionClient,
+  tx: LedgerDb,
   accountId: string,
+  options: { impactFor?: string } = {},
 ): Promise<LedgerRebuildResult> {
-  const statements = await tx.brokerStatementImport.findMany({
-    where: { accountId, confirmedAt: { not: null } },
-    include: { rows: { orderBy: { rowIndex: 'asc' } } },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  const selection = selectAccountLedgerRows(
-    statements.map((statement) => ({
-      id: statement.id,
-      sourceFormat: asSourceFormat(statement.sourceFormat),
-      coverageFrom: statement.coverageFrom,
-      coverageTo: statement.coverageTo,
-      createdAt: statement.createdAt,
-      rows: statement.rows.map(mapStoredRowToAnalyzedRow),
-    })),
-  )
+  const statements = await loadConfirmedStatements(tx, accountId)
+  const selection = selectAccountLedgerRows(statements)
   const ledger = buildBrokerPositionLedger(selection.rows)
 
   const existing = await tx.roundTripTrade.findMany({
@@ -348,5 +436,8 @@ export async function rebuildLedgerTradesForAccount(
     annotationsPreserved,
     warnings: ledger.warnings.map((warning) => warning.message),
     earliestEntry,
+    impact: options.impactFor
+      ? summarizeStatementImpact(selection, ledger, options.impactFor)
+      : null,
   }
 }

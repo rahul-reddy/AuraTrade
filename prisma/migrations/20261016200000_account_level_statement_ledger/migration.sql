@@ -17,14 +17,10 @@ UPDATE "BrokerStatementImport"
 SET "coverageFrom" = "dateFrom"::date,
     "coverageTo" = "dateTo"::date;
 
--- Backfill: a statement counts as confirmed if it already produced trades or
--- has a completed upload for the same file.
+-- Backfill: a statement feeds the account-level ledger only if it already owns
+-- ledger trades. Statements imported through the legacy Execution path stay
+-- unconfirmed: their trades are Execution-backed, and confirming them here would
+-- count the same fills twice.
 UPDATE "BrokerStatementImport" AS b
 SET "confirmedAt" = b."updatedAt"
-WHERE EXISTS (SELECT 1 FROM "RoundTripTrade" t WHERE t."brokerStatementImportId" = b."id")
-   OR EXISTS (
-     SELECT 1 FROM "Upload" u
-     WHERE u."accountId" = b."accountId"
-       AND u."fileHash" = b."fileHash"
-       AND u."status" = 'COMPLETE'
-   );
+WHERE EXISTS (SELECT 1 FROM "RoundTripTrade" t WHERE t."brokerStatementImportId" = b."id");
