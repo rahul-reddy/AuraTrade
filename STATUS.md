@@ -4,31 +4,26 @@
 
 ## Current handoff (2026-10-16)
 
-- **Branch / revision:** `feat/workflow-harness` (PR pending). Verified locally on this
-  worktree before pushing; CI results are recorded on the PR.
-- **What changed:** adopted the TenFold workflow — cross-model review harness
-  (`scripts/`), `AGENTS.md` contract, CI (`Verify AuraTrade` + Windows harness), container
-  delivery to GHCR, repository skill, PR template. To make `main` pass its own CI this PR
-  also fixes: lint (ESLint scanned generated Prisma code; 5 React purity errors),
-  `next build` (middleware pulled Prisma into the Edge runtime — split into
-  `src/lib/auth.config.ts`), a migration that failed on any fresh database, two
-  never-migrated foreign keys (schema drift), and the 4 failing Jest tests (same-timestamp
-  ledger ordering, store-test mock).
-- **Local results on this revision:** cross-review self-test passed; skill validation
-  passed; `npm run lint` 0 errors (2 warnings); `npm run typecheck` clean; `npm test`
-  165/165; fresh-DB `prisma migrate deploy` + drift check: no difference; `npm run build`
-  passed; Playwright 8/8 with no retries against `next start` (dashboard data-wait raised
-  to 15s; auth-nav waits for the page transition to leave one empty-state element);
-  `docker build` passed and the container served `/login`, redirected signed-out
-  `/dashboard`, and wrote a user through Prisma.
-- **Cross-review round 1 (codex, critical tier):** 2 blocking findings, both fixed: the
-  money-market sweep exclusion now has boundary tests (mixed-statement totals, unpaired
-  redemption, BOXX/FXAIX/ABCDXX still tracked), and the sidebar keeps an in-memory value
-  when localStorage writes throw (browser test with a throwing Storage).
-- **Remaining:** merge this PR through `scripts/merge-pr.ps1`; then rebase
-  `feat/tos-account-statement-import` (TOS importer + account-level ledger) onto main and
-  take it through the same gate. No hosting target exists yet — see `docs/DEPLOYMENT.md`.
-- **Next action:** owner confirms the critical-path list in AGENTS.md and chooses a host.
+- **Branch / revision:** `feat/tos-account-statement-import`, rebased onto `main` at
+  `83fd9eb` (workflow harness, PR #13). Verified locally at the rebased head before push;
+  CI results are recorded on the PR.
+- **What changed:** thinkorswim Account Statement importer (per-second fill times, fees
+  joined from Cash Balance rows); account-level statement ledger (carry-in positions pair
+  across files, overlapping statements never double-count, tags/notes survive rebuilds);
+  `BrokerStatementImport` gains `sourceFormat`, `coverageFrom/To`, `confirmedAt`; enrichment
+  survives a concurrent rebuild. On rebase, the feature migration dropped its two foreign
+  keys, which `main` now creates in the guarded `20261016190000` migration.
+- **Local results on this revision:** cross-review self-test passed; `npm run lint` 0
+  errors; `npm run typecheck` clean; `npm test` 192/192; fresh-DB `prisma migrate deploy` +
+  drift check: no difference; `npm run build` passed; Playwright 9/9 with no retries
+  against `next start` (includes the TOS import spec).
+- **Local data:** the owner's database is migrated (checksum of the rebased feature
+  migration realigned; the guarded FK migration applied as a no-op). After merge, run
+  Settings → Data Integrity → Reprocess trades to rebuild trades account-wide.
+- **Delivery:** `ghcr.io/rahul-reddy/auratrade-web:83fd9eb35692c0450ccc90b1465c1db0dfc0c592`
+  published by the first main run. No hosting target exists yet (`docs/DEPLOYMENT.md`).
+- **Next action:** merge this PR through `scripts/merge-pr.ps1`; owner confirms the
+  critical-path list in AGENTS.md and chooses a host.
 
 ## Current Phase
 **Post-phase follow-up: timestamped thinkorswim Account Statement import** (branch `feat/tos-account-statement-import`)
