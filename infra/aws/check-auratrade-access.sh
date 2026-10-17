@@ -11,8 +11,10 @@
 #   - tag-resource project=auratrade on auratrade-1, which already carries exactly that;
 #   - get-bucket-access-keys on a bucket name that does not exist;
 #   - iam get-user, read-only, on the TenFold user.
-# A probe counts as "allowed" when the error is anything but AccessDenied (for
-# example NotFound): authorization passed even if the call itself could not.
+# Outcomes: "allowed" when the call succeeds, or fails with NotFound (authorization
+# passed, the target did not exist); "denied" on an AccessDenied error; anything
+# else (network, expired credentials, throttling, validation) is "inconclusive" and
+# fails the run, so a broken call is never mistaken for working access.
 set -eu
 profile=${AWS_PROFILE_NAME:-auratrade}
 export AWS_DEFAULT_REGION=us-east-2
@@ -41,11 +43,18 @@ failures=0
 probe() {
     expected=$1; label=$2; shift 2
     if out=$("$@" 2>&1); then got=allowed
-    elif printf '%s' "$out" | grep -qE 'AccessDenied|not authorized|UnauthorizedOperation'; then got=denied
-    else got=allowed
+    elif printf '%s' "$out" | grep -qE 'AccessDenied|is not authorized to perform|UnauthorizedOperation'; then got=denied
+    # Authorization passed and the target was then not found (the bucket probe).
+    elif printf '%s' "$out" | grep -qE 'NotFoundException|DoesNotExist'; then got=allowed
+    # Network, credential, throttling or validation errors prove nothing either way.
+    else got=inconclusive
     fi
     if [ "$got" = "$expected" ]; then echo "ok    $expected  $label"
-    else echo "FAIL  expected $expected, got $got  $label"; failures=$((failures + 1)); fi
+    else
+        echo "FAIL  expected $expected, got $got  $label"
+        [ "$got" = inconclusive ] && printf '      %s\n' "$(printf '%s' "$out" | head -n 3)"
+        failures=$((failures + 1))
+    fi
 }
 
 port22='fromPort=22,toPort=22,protocol=tcp,cidrs=0.0.0.0/0'
