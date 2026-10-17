@@ -172,11 +172,14 @@ and to read costs.
   `GetBucketAccessKeys` (bucket secrets, account-wide only) and
   `GetInstanceAccessDetails` (temporary SSH access to any instance). The latter is
   granted only on tagged instances.
-- **Admin-only (console):** creating or deleting the server, the static IP or key pairs,
-  restoring from a snapshot, enabling or disabling automatic snapshots, deleting
-  automatic snapshots. Lightsail only allows these account-wide (`Resource: "*"`, per
-  the AWS Service Authorization Reference), so granting any of them would also reach
-  TenFold's server.
+- **Admin-only (console), for two different reasons** (per the AWS Service
+  Authorization Reference):
+  - *Account-wide only* (`Resource: "*"`), so granting them would also reach TenFold:
+    creating a server, allocating a static IP, importing a key pair, enabling or
+    disabling automatic snapshots, deleting automatic snapshots.
+  - *Could be tag-scoped, but are destructive or create spend*, so they stay with an
+    admin by choice: deleting the server, releasing the static IP, deleting a key pair,
+    restoring a server from a snapshot.
 - **Manual snapshots are admin-only too.** A snapshot made from the CLI does not inherit
   the instance's tags, so one made without `--tags` would sit outside both boundaries:
   this user could not tag or delete it, and TenFold's deny would not cover it. Letting
