@@ -21,7 +21,7 @@ aws_p() { aws --profile "$profile" "$@"; }
 
 me=$(aws_p sts get-caller-identity --query Arn --output text)
 case "$me" in
-    */user/AuraTrade) echo "Probing as $me" ;;
+    arn:aws:iam::[0-9]*:user/AuraTrade) echo "Probing as $me" ;;
     *) echo "Profile '$profile' is $me, not the AuraTrade user; refusing." >&2; exit 2 ;;
 esac
 
