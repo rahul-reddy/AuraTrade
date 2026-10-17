@@ -28,7 +28,7 @@ export class LoginThrottle {
     const key = this.key(email);
     const entry = this.entries.get(key);
     if (entry !== undefined) return entry.lockedUntil > now;
-    // Fail closed: when every slot holds an active lock (someone sprayed
+    // Fail closed: when every slot holds a live count or lock (someone sprayed
     // failures across MAX_TRACKED addresses), an address with no slot cannot
     // be counted, so it is treated as locked until slots free up. Otherwise
     // the spray would grant unlimited guesses at any untracked address.
@@ -60,8 +60,8 @@ export class LoginThrottle {
     }
     if (!this.entries.has(key) && this.entries.size >= MAX_TRACKED) {
       this.prune(now);
-      // Every slot holds an active lock: leave them all in place rather than
-      // evict one. isLocked() refuses untracked addresses meanwhile.
+      // Every slot holds a live count or lock, none of which may be dropped.
+      // isLocked() refuses untracked addresses meanwhile.
       if (this.entries.size >= MAX_TRACKED) return;
     }
     this.entries.set(key, entry);
@@ -71,18 +71,14 @@ export class LoginThrottle {
     this.entries.delete(this.key(email));
   }
 
+  // Drops only records that no longer affect any decision: the lock (if any)
+  // has expired and the failure window has passed. A live count is never
+  // evicted, or spraying other addresses could reset it below the threshold.
   private prune(now: number): void {
     for (const [key, entry] of this.entries) {
       if (entry.lockedUntil <= now && now - entry.firstFailureAt >= WINDOW_MS) {
         this.entries.delete(key);
       }
-    }
-    // Still full: drop the oldest unlocked counts (Map keeps insertion order).
-    // Active locks are never evicted, so a flood of other addresses cannot
-    // unlock one.
-    for (const [key, entry] of this.entries) {
-      if (this.entries.size < MAX_TRACKED) break;
-      if (entry.lockedUntil <= now) this.entries.delete(key);
     }
   }
 }

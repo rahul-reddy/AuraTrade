@@ -65,6 +65,23 @@ describe("LoginThrottle", () => {
     expect(throttle.isLocked(email, 1)).toBe(true);
   });
 
+  it("keeps an unlocked count when other addresses fill the tracker", () => {
+    const throttle = new LoginThrottle();
+    for (let i = 0; i < MAX_FAILURES - 1; i++) throttle.recordFailure(email, 0);
+    for (let i = 0; i < MAX_TRACKED; i++) throttle.recordFailure(`spray-${i}@example.com`, 1);
+    // The spray must not have reset the count: the next failure locks.
+    throttle.recordFailure(email, 2);
+    expect(throttle.isLocked(email, 3)).toBe(true);
+  });
+
+  it("refuses untracked addresses while the tracker is full of live counts", () => {
+    const throttle = new LoginThrottle();
+    for (let i = 0; i < MAX_TRACKED; i++) throttle.recordFailure(`spray-${i}@example.com`, 0);
+    expect(throttle.isLocked(email, 1)).toBe(true);
+    // Once the spray's window passes, its records are pruned and the address is free.
+    expect(throttle.isLocked(email, WINDOW_MS)).toBe(false);
+  });
+
   it("keeps every lock when the tracker is full of locks", () => {
     const throttle = new LoginThrottle();
     for (let i = 0; i < MAX_TRACKED; i++) {
