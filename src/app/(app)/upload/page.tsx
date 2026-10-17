@@ -1,5 +1,6 @@
 'use client'
 
+import PageHeader from '@/components/layout/PageHeader'
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { toast } from 'sonner'
@@ -120,12 +121,12 @@ function DropZone({ onFile }: { onFile: (file: File) => void }) {
 
   return (
     <div
-      {...getRootProps()}
+      {...getRootProps({ role: 'button', 'aria-label': 'Choose broker CSV file' })}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={`
         flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed
-        cursor-pointer transition-all duration-150 p-12 w-full max-w-xl
+        cursor-pointer transition-all duration-150 min-h-[300px] p-8 sm:p-12 w-full
         ${active
           ? 'border-blue-500 bg-blue-500/5'
           : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500'
@@ -138,11 +139,11 @@ function DropZone({ onFile }: { onFile: (file: File) => void }) {
       </div>
       <div className="text-center">
         <p className="text-zinc-200 font-medium">
-          {isDragActive ? 'Drop your CSV here' : 'Drop your Schwab CSV here'}
+          {isDragActive ? 'Drop your CSV here' : 'Drop your broker CSV here'}
         </p>
         <p className="text-zinc-500 text-sm mt-1">or click to browse</p>
         <p className="text-zinc-600 text-xs mt-3">
-          Schwab / TDA Transaction History export (.csv)
+          thinkorswim Account Statement or Schwab Transaction History (.csv)
         </p>
       </div>
     </div>
@@ -661,15 +662,16 @@ export default function UploadPage() {
 
   return (
     <div className="text-white">
-      {/* Main content */}
-      <div className="flex flex-col items-center justify-center py-16 px-4">
-        <div className="w-full max-w-xl mb-8 text-center">
-          <h1 className="text-2xl font-semibold text-zinc-100">Import Trades</h1>
-          <p className="text-zinc-400 text-sm mt-2">
-            Upload your Schwab / TDA Transaction History CSV export.
-          </p>
-        </div>
-
+      <div className="workspace-page">
+        <PageHeader eyebrow="Workspace / Import center" title="Import Trades" description="Bring your trading history into focus. Review every statement before it becomes part of your account." />
+        <ol aria-label="Import progress" className="mb-8 flex flex-wrap gap-6 border-b border-zinc-800 pb-5 text-xs sm:gap-10">
+          {['Choose statement', 'Review preview', 'Explore trades'].map((label, index) => {
+            const step = phase.kind === 'success' ? 2 : phase.kind === 'preview' || phase.kind === 'confirming' ? 1 : 0
+            return <li key={label} aria-current={step === index ? 'step' : undefined} className={`flex items-center gap-2.5 ${step === index ? 'text-blue-300' : 'text-zinc-500'}`}><span className={`flex h-6 w-6 items-center justify-center rounded-full border font-mono text-[10px] ${step === index ? 'border-blue-500/50 bg-blue-500/10' : 'border-zinc-700'}`}>{index + 1}</span>{label}</li>
+          })}
+        </ol>
+        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex min-w-0 flex-col items-center [&>div]:max-w-none">
         {/* State machine rendering */}
         {phase.kind === 'idle' && <DropZone onFile={handleFile} />}
 
@@ -728,6 +730,18 @@ export default function UploadPage() {
             </CardContent>
           </Card>
         )}
+        </div>
+        <aside className="surface p-6">
+          <div className="mb-5 flex items-center gap-2 text-sm font-medium"><FileText size={16} className="text-blue-400" />Prepare your statement</div>
+          <p className="eyebrow mb-2">Recommended / thinkorswim</p>
+          <p className="text-sm leading-7 text-zinc-300">Open <strong className="font-medium text-white">Monitor → Account Statement</strong>. Set your date range, then export the statement as a CSV.</p>
+          <p className="mt-3 text-xs leading-6 text-zinc-400">Includes execution times for more precise trade history. Keep the Account Trade History and Cash Balance sections for fills and fees.</p>
+          <div className="my-5 border-t border-zinc-800" />
+          <p className="eyebrow mb-2">Also supported / Schwab</p>
+          <p className="text-xs leading-6 text-zinc-400">Export your Transaction History as CSV. This format includes dates without execution times.</p>
+          <div className="mt-6 rounded-lg border border-blue-500/15 bg-blue-500/5 p-4 text-xs leading-6 text-zinc-300"><CheckCircle size={15} className="mb-2 text-blue-400" />You’ll see a preview of trades, fees, and any warnings before you confirm.</div>
+        </aside>
+        </div>
       </div>
     </div>
   )

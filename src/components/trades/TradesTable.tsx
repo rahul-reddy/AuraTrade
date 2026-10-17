@@ -112,8 +112,8 @@ export function TradesTable({
 }: TradesTableProps) {
   return (
     <>
-      <div className="border border-zinc-800 rounded-lg overflow-hidden">
-        <Table>
+      <div className="surface trade-table overflow-hidden">
+        <Table className="min-w-[1050px]">
           <TableHeader>
             <TableRow className="border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900/60">
               <TableHead className="text-zinc-500 font-medium text-xs uppercase tracking-wider w-[90px]">

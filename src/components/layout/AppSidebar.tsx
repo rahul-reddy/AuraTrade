@@ -12,8 +12,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
 } from 'lucide-react'
+import Brand from '@/components/layout/Brand'
 import { cn } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -138,32 +138,27 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
   return (
     <aside
       className={cn(
-        'relative flex h-screen flex-col border-r border-zinc-800 bg-zinc-900/80 transition-[width] duration-200',
-        collapsed ? 'w-16' : 'w-[220px]',
+        'app-sidebar relative z-20 flex h-dvh shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/60 transition-[width] duration-200',
+        collapsed ? 'w-16' : 'w-[232px]',
       )}
     >
-      {/* Logo */}
-      <div className={cn('flex items-center gap-2.5 px-4 py-5', collapsed && 'justify-center px-0')}>
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.4)]">
-          <TrendingUp className="h-4 w-4 text-white" strokeWidth={2.5} />
-        </div>
-        {!collapsed && (
-          <span className="text-[15px] font-semibold tracking-tight text-white">AuraTrade</span>
-        )}
+      <div className={cn('sidebar-brand flex h-[76px] shrink-0 items-center px-5', collapsed && 'justify-center px-0')}>
+        <Brand compact={collapsed} className={collapsed ? '' : '[&>span:last-child]:max-md:hidden'} />
       </div>
+      {!collapsed && <p className="sidebar-expanded eyebrow px-6 pb-3 pt-6">Workspace</p>}
 
       {/* Nav */}
-      <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">
+      <nav className="flex flex-1 flex-col gap-1.5 px-3 py-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
           // Use exact match for root-like paths, prefix+slash for nested ones
           const isActive =
-            pathname === item.href || pathname.startsWith(item.href + '/')
+            pathname === item.href || pathname.startsWith(item.href + '/') || (item.label === 'Settings' && pathname.startsWith('/settings')) || (item.label === 'Trades' && pathname.startsWith('/chart/'))
 
           const itemClass = cn(
-            'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+            'group flex items-center gap-3 rounded-lg px-3 py-3 text-[13px] transition-colors',
             isActive
-              ? 'bg-zinc-800 text-white'
+              ? 'bg-blue-500/10 text-blue-300 ring-1 ring-inset ring-blue-400/15'
               : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100',
             item.disabled && 'opacity-40',
             collapsed && 'justify-center px-0',
@@ -174,9 +169,9 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <>
-                  <span>{item.label}</span>
+                  <span className="sidebar-expanded">{item.label}</span>
                   {item.hint && (
-                    <span className="ml-auto opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="sidebar-expanded ml-auto opacity-0 transition-opacity group-hover:opacity-100">
                       <KbdHint hint={item.hint} />
                     </span>
                   )}
@@ -190,7 +185,8 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
               key={item.href}
               href={item.href}
               className={itemClass}
-              aria-label={collapsed ? item.label : undefined}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
               title={collapsed ? item.label : undefined}
             >
               {inner}
@@ -200,7 +196,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
       </nav>
 
       {/* Footer */}
-      <div className={cn('border-t border-zinc-800 p-3', collapsed && 'flex justify-center')}>
+      <div className={cn('sidebar-footer border-t border-zinc-800 p-3', collapsed && 'flex justify-center')}>
         {collapsed ? (
           <button
             type="button"
@@ -213,17 +209,19 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
           </button>
         ) : (
           <div className="space-y-2">
-            <div className="rounded-lg bg-zinc-800/60 px-3 py-2">
+            <div className="sidebar-expanded rounded-lg bg-zinc-800/40 px-3 py-3">
               <p className="truncate text-[11px] font-medium text-zinc-100">{accountName}</p>
               <p className="truncate text-[10px] text-zinc-500">{userEmail}</p>
             </div>
             <button
               type="button"
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-red-400"
+              aria-label="Sign out"
+              title="Sign out"
+              className="sidebar-signout flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-red-400"
             >
               <LogOut className="h-3.5 w-3.5" />
-              Sign out
+              <span className="sidebar-expanded">Sign out</span>
             </button>
           </div>
         )}
@@ -233,7 +231,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
       <button
         type="button"
         onClick={toggleCollapsed}
-        className="absolute -right-3 top-[72px] flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-zinc-400 shadow-md transition-colors hover:border-zinc-600 hover:text-zinc-100"
+        className="sidebar-toggle absolute -right-3 top-[88px] flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-zinc-400 shadow-md transition-colors hover:border-zinc-600 hover:text-zinc-100"
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >

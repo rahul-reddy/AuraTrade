@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 export default function DashboardSkeleton() {
   return (
     <div className="text-white">
-      <div className="px-8 py-6 max-w-[1680px] mx-auto">
+      <div className="workspace-page">
         <div className="mb-6">
           <Skeleton className="h-8 w-56 mb-2 bg-zinc-800" />
           <Skeleton className="h-4 w-72 bg-zinc-800" />

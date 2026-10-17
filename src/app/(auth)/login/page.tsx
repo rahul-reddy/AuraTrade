@@ -1,3 +1,4 @@
+import AuthShell from "@/components/auth/AuthShell";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { isRegistrationOpen } from "@/lib/registration";
@@ -9,7 +10,7 @@ export default async function LoginPage() {
   const registrationOpen = isRegistrationOpen();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+    <AuthShell>
       <Suspense
         fallback={
           <div className="w-full max-w-md h-96 bg-zinc-900 border border-zinc-800 rounded-lg animate-pulse" />
@@ -17,6 +18,6 @@ export default async function LoginPage() {
       >
         <LoginForm registrationOpen={registrationOpen} />
       </Suspense>
-    </div>
+    </AuthShell>
   );
 }

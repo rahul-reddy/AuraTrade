@@ -2,7 +2,7 @@
 
 import { Component, useState, useEffect, useCallback, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { AnimatePresence, motion, type Transition } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion'
 import AppSidebar from '@/components/layout/AppSidebar'
 import TopBar from '@/components/layout/TopBar'
 import CommandPalette from '@/components/layout/CommandPalette'
@@ -63,7 +63,7 @@ class ShellErrorBoundary extends Component<
             <button
               type="button"
               onClick={() => this.setState({ hasError: false, message: '' })}
-              className="mt-4 rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400"
+              className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               Try again
             </button>
@@ -171,6 +171,7 @@ function useKeyboardShortcuts(onOpenPalette: () => void) {
 
 export default function AppShell({ children, userEmail, accountName }: AppShellProps) {
   const pathname = usePathname()
+  const reduceMotion = useReducedMotion()
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   const openPalette = useCallback(() => setPaletteOpen(true), [])
@@ -179,23 +180,24 @@ export default function AppShell({ children, userEmail, accountName }: AppShellP
   useKeyboardShortcuts(openPalette)
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-zinc-950 text-white">
+    <div className="flex h-dvh w-full overflow-hidden bg-zinc-950 text-white">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <AppSidebar userEmail={userEmail} accountName={accountName} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onOpenPalette={openPalette} accountName={accountName} />
 
-        <main className="flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="workspace-main min-w-0 flex-1 overflow-y-auto">
           <ShellErrorBoundary>
             {/* AnimatePresence without mode="wait" so main height never collapses */}
             <AnimatePresence initial={false}>
               <motion.div
                 key={pathname}
                 variants={pageVariants}
-                initial="initial"
+                initial={reduceMotion ? false : "initial"}
                 animate="animate"
                 exit="exit"
-                transition={pageTransition}
+                transition={reduceMotion ? { duration: 0 } : pageTransition}
               >
                 {children}
               </motion.div>
