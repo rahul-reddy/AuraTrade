@@ -7,7 +7,8 @@ Trade analytics platform for a discretionary equity trader: imports Schwab/think
 - src/components/: UI components (shadcn primitives in ui/).
 - src/lib/: engine/ (ledger, P&L, metrics, classifier), parser/ (broker statements), market-data/, auth, session and Prisma client.
 - src/__tests__/: Jest unit tests; playwright/: browser tests and synthetic fixtures.
-- prisma/: schema and migrations; scripts/: cross-review and merge harness.
+- prisma/: schema and migrations; scripts/: cross-review and merge harness, deploy.ps1.
+- deploy/: the hosted Lightsail stack (compose, Caddy, server scripts); runbook in docs/DEPLOYMENT.md.
 - docs/: plan and harness docs; .github/workflows/: CI and delivery; .agents/skills/: repository skill.
 
 ## Workflow

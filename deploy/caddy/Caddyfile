@@ -1,0 +1,22 @@
+{$AURATRADE_SITE_HOST} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		-X-Powered-By
+	}
+	# Broker statements are uploaded as files; cap request bodies well above
+	# any real statement so a runaway upload cannot fill the disk.
+	request_body {
+		max_size 50MB
+	}
+	reverse_proxy web:3000
+}
+
+# The www name redirects to the bare domain.
+www.{$AURATRADE_SITE_HOST} {
+	redir https://{$AURATRADE_SITE_HOST}{uri} permanent
+}
