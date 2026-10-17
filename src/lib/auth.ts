@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/lib/auth.config";
+import { loginThrottle } from "@/lib/login-throttle";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -26,6 +27,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
+        // Locked addresses are refused before the password is checked.
+        if (loginThrottle.isLocked(email)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email },
@@ -37,10 +40,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
 
-        if (!user || !user.passwordHash) return null;
+        if (!user || !user.passwordHash) {
+          loginThrottle.recordFailure(email);
+          return null;
+        }
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
-        if (!isValid) return null;
+        if (!isValid) {
+          loginThrottle.recordFailure(email);
+          return null;
+        }
+        // A check that began before concurrent failures set the lock is
+        // refused too; success never clears an active lock.
+        if (loginThrottle.isLocked(email)) return null;
+        loginThrottle.recordSuccess(email);
 
         return {
           id: user.id,

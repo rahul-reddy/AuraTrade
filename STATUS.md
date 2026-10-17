@@ -2,7 +2,36 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-16)
+## Current handoff (2026-10-17): hosted deployment
+
+- **Decision:** owner chose Option A (its own Lightsail server, TenFold's pattern) and the
+  domain `auratrades.quest` (Namecheap).
+- **Provisioned (live AWS, `us-east-2`):** `auratrade-1` (`small_3_0`, $12/month), static IP
+  `auratrade-ip` = `18.226.191.214`, ports 22/80/443 only, daily auto-snapshots 09:00 UTC,
+  key `~/.ssh/auratrade-lightsail`. Docker, swap and unattended-upgrades installed.
+- **Branch `feat/lightsail-deployment`:** `deploy/` stack (Postgres 16, web, migrate,
+  Caddy), Dockerfile `migrate` stage, `scripts/deploy.ps1` (clean worktree, sha on
+  origin/main, green `Verify AuraTrade`, typed `DEPLOY <sha7>`, `git archive` over SSH so
+  the server holds no GitHub credential), backup before every migrate plus daily dumps,
+  `deploy/set-user.mjs` (owner account, password on stdin). Sign-up switch
+  `AURATRADE_REGISTRATION` (pinned `closed` on the server; unknown values close it).
+  Failed sign-in lockout (5 per email per 15 min). Runbook rewritten: `docs/DEPLOYMENT.md`.
+- **Local results on this revision:** lint 0 errors; typecheck clean; `npm test` 261/261
+  (adds login-throttle and registration tests); fresh-DB migrate + `npm run build` +
+  Playwright 12/12 against `next start` (adds `login-lockout.spec.ts`). The deploy stack
+  itself ran locally in Docker with `localhost`: both images build, 12 migrations apply,
+  `set-user.mjs` creates an account and refuses a short password, `/login` 200, signed-out
+  `/dashboard` 307 → `/login`, register POST 403, `/register` shows "Sign-up is closed",
+  no sign-up link on `/login`, HTTP → HTTPS, HSTS/frame headers; a browser signed in, and
+  after five wrong passwords the right one was refused.
+- **Pending owner actions:** Namecheap DNS `A @ 18.226.191.214` and `CNAME www
+  auratrades.quest.`; raise the account-wide $20 "My Monthly Cost Budget" (two servers
+  ≈ $26–28/month; the TenFold IAM user cannot edit it); choose whether to copy the
+  workstation database to the server or start empty with `set-user.mjs`.
+- **Next action:** merge through `scripts/merge-pr.ps1`, then first deploy with
+  `scripts/deploy.ps1` once DNS resolves.
+
+## Previous handoff (2026-10-16)
 
 - **Branch / revision:** `feat/tos-account-statement-import`, rebased onto `main` at
   `83fd9eb` (workflow harness, PR #13). Verified locally at the rebased head before push;
