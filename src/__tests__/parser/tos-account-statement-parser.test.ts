@@ -5,6 +5,7 @@ import {
 import { analyzeBrokerStatement } from '@/lib/parser/analyze-broker-statement'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
+import { selectAccountLedgerRows } from '@/lib/engine/account-ledger-rebuild'
 
 const TRADE_HEADER =
   ',Exec Time,Spread,Side,Qty,Pos Effect,Symbol,Exp,Strike,Type,Price,Net Price,Order Type'
@@ -352,6 +353,42 @@ describe('analyzeTosAccountStatement', () => {
     expect(dryRun.coverage?.from.toISOString()).toBe('2026-01-01T00:00:00.000Z')
     expect(dryRun.coverage?.to.toISOString()).toBe('2026-12-31T00:00:00.000Z')
     expect(dryRun.dateRange?.from.toISOString()).toBe('2026-01-15T14:30:00.000Z')
+  })
+
+  test('without a header period, coverage falls back to ET trading days, keeping an after-hours first fill', () => {
+    // First fill 1/14/26 19:30 EST (= 1/15 00:30Z), closed the next morning.
+    const statement = makeStatement({
+      fills: [
+        ',1/15/26 10:00:00,STOCK,SELL,-10,TO CLOSE,ABC,,,STOCK,11.00,11.00,MKT',
+        ',1/14/26 19:30:00,STOCK,BUY,+10,TO OPEN,ABC,,,STOCK,10.00,10.00,LMT',
+      ],
+      cash: [
+        '1/14/26,19:30:00,TRD,="1",BOT +10 ABC @10.00,,,-100.00,"1.00"',
+        '1/15/26,10:00:00,TRD,="2",SOLD -10 ABC @11.00,-0.01,,109.99,"1.00"',
+      ],
+    }).replace(/since \S+ through \S+/, '')
+    expect(statement).not.toContain('since')
+
+    const dryRun = analyzeTosAccountStatement(statement)
+    expect(dryRun.coverage?.from.toISOString()).toBe('2026-01-14T00:00:00.000Z')
+    expect(dryRun.coverage?.to.toISOString()).toBe('2026-01-15T00:00:00.000Z')
+
+    const selection = selectAccountLedgerRows([
+      {
+        id: 'tos',
+        sourceFormat: 'TOS_ACCOUNT_STATEMENT',
+        coverageFrom: dryRun.coverage?.from ?? null,
+        coverageTo: dryRun.coverage?.to ?? null,
+        createdAt: new Date('2026-01-16'),
+        rows: dryRun.rows,
+      },
+    ])
+    expect(selection.rows).toHaveLength(2)
+    const ledger = buildBrokerPositionLedger(selection.rows)
+    expect(ledger.warnings).toEqual([])
+    // (11.00 − 10.00) × 10 − 0.01
+    expect(ledger.positions[0]).toMatchObject({ isOpen: false })
+    expect(ledger.positions[0].netPnl).toBeCloseTo(9.99, 10)
   })
 
   test('returns an empty dry run when the trade history section is missing', () => {

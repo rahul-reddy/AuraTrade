@@ -94,6 +94,27 @@ function parseCoverage(firstLine: string): { from: Date; to: Date } | null {
   return from && to ? { from, to } : null
 }
 
+/**
+ * Coverage from the first/last fill's TRADING date (exchange time zone), as
+ * UTC-midnight dates. The shared fallback would use the raw fill instants,
+ * whose UTC date can be a day later than the trading day (a 19:30 EST fill is
+ * 00:30Z the next day), putting a statement's own first fill outside it.
+ */
+function fillTradingDayCoverage(
+  rows: AnalyzedStatementRow[],
+  timeZone: string,
+): { from: Date; to: Date } | null {
+  const days = rows
+    .map((row) => (row.date ? tosTradingDate(row.date, timeZone) : null))
+    .filter((day): day is string => day != null)
+    .sort()
+  if (days.length === 0) return null
+  return {
+    from: new Date(`${days[0]}T00:00:00.000Z`),
+    to: new Date(`${days[days.length - 1]}T00:00:00.000Z`),
+  }
+}
+
 export function isTosAccountStatement(rawContent: string): boolean {
   const firstLine = rawContent.replace(/^﻿/, '').split(/\r?\n/, 1)[0] ?? ''
   return firstLine.trim().startsWith('Account Statement for')
@@ -485,12 +506,12 @@ export function analyzeTosAccountStatement(
   }
 
   if (!coverage) {
-    assumptions.push('Statement header had no "since … through …" period; coverage falls back to first/last fill date.')
+    assumptions.push('Statement header had no "since … through …" period; coverage falls back to first/last fill trading date.')
   }
 
   const dryRun = buildStatementDryRun(rows, assumptions, {
     sourceFormat: 'TOS_ACCOUNT_STATEMENT',
-    coverage,
+    coverage: coverage ?? fillTradingDayCoverage(rows, timeZone),
   })
   // The shared builder emits Transaction-History-era blockers for option rows.
   // Here options are explicit TO OPEN / TO CLOSE fills the ledger models
