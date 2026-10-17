@@ -534,7 +534,10 @@ export async function lockAccountLedger(tx: LedgerDb, accountId: string): Promis
 
 // ─── annotations ────────────────────────────────────────────────────
 
+/** A trade being replaced by a rebuild, with whatever the user wrote on it. */
 export interface TradeAnnotation {
+  /** "<statementId>:<rowIndex>" or "exec:<executionId>"; null before identities existed. */
+  sourceKey: string | null
   symbol: string
   direction: string
   entryTime: Date
@@ -545,6 +548,14 @@ export interface TradeAnnotation {
   notesUpdatedAt: Date | null
 }
 
+export interface RebuiltTradeIdentity {
+  sourceKey: string
+  symbol: string
+  direction: string
+  entryTime: Date
+  sourceFormat: StatementSourceFormat
+}
+
 function entryTradingDay(entryTime: Date, format: StatementSourceFormat): string {
   return format === 'TOS_ACCOUNT_STATEMENT'
     ? tosTradingDate(entryTime)
@@ -552,68 +563,72 @@ function entryTradingDay(entryTime: Date, format: StatementSourceFormat): string
 }
 
 /**
- * Matches user annotations (tags, notes) from the trades being replaced to the
- * rebuilt positions. Exact (symbol, direction, entry instant) first; otherwise
- * (symbol, direction, entry trading day) when exactly one old annotated trade
- * and exactly one new position share it. The fallback carries annotations
- * across a format upgrade, where a date-only entry (UTC midnight) becomes the
- * real fill instant. Ambiguous days are left unmatched rather than guessed.
+ * Carries tags/notes from the trades a rebuild replaces to the rebuilt ones.
+ *
+ * `previous` lists EVERY existing trade (annotated or not), so uniqueness is
+ * judged against all of them. Matching runs three passes, strongest first,
+ * and a pass only pairs a key that is unique on BOTH sides:
+ *   1. sourceKey — the statement row (or execution) that opened the trade;
+ *   2. symbol + direction + entry instant;
+ *   3. symbol + direction + entry trading day — carries annotations across a
+ *      format upgrade where a date-only entry becomes a timestamped fill.
+ * Repeated same-day round trips with identical keys are left unmatched rather
+ * than guessed, so an annotation never moves to a different trade.
+ *
+ * Returns rebuilt-trade index → annotation, for annotated trades only.
  */
 export function matchAnnotations(
-  annotations: TradeAnnotation[],
-  positions: Array<{
-    symbol: string
-    direction: string
-    entryTime: Date
-    sourceFormat: StatementSourceFormat
-  }>,
+  previous: TradeAnnotation[],
+  rebuilt: RebuiltTradeIdentity[],
 ): Map<number, TradeAnnotation> {
-  const exactKey = (symbol: string, direction: string, entryTime: Date) =>
-    `${symbol}|${direction}|${entryTime.toISOString()}`
-  const dayKey = (symbol: string, direction: string, day: string) =>
-    `${symbol}|${direction}|${day}`
+  const pairs = new Map<number, TradeAnnotation>()
+  const pairedOld = new Set<TradeAnnotation>()
 
-  const exact = new Map(
-    annotations.map((annotation) => [
-      exactKey(annotation.symbol, annotation.direction, annotation.entryTime),
-      annotation,
-    ]),
-  )
-  const matched = new Map<number, TradeAnnotation>()
-  const used = new Set<TradeAnnotation>()
-  positions.forEach((position, index) => {
-    const hit = exact.get(exactKey(position.symbol, position.direction, position.entryTime))
-    if (hit && !used.has(hit)) {
-      matched.set(index, hit)
-      used.add(hit)
+  const pass = (
+    oldKey: (trade: TradeAnnotation) => string | null,
+    newKey: (trade: RebuiltTradeIdentity) => string,
+  ) => {
+    const olds = new Map<string, TradeAnnotation[]>()
+    for (const trade of previous) {
+      if (pairedOld.has(trade)) continue
+      const key = oldKey(trade)
+      if (key != null) olds.set(key, [...(olds.get(key) ?? []), trade])
     }
-  })
+    const news = new Map<string, number[]>()
+    rebuilt.forEach((trade, index) => {
+      if (pairs.has(index)) return
+      const key = newKey(trade)
+      news.set(key, [...(news.get(key) ?? []), index])
+    })
+    for (const [key, oldTrades] of olds) {
+      const newIndices = news.get(key) ?? []
+      if (oldTrades.length === 1 && newIndices.length === 1) {
+        pairs.set(newIndices[0], oldTrades[0])
+        pairedOld.add(oldTrades[0])
+      }
+    }
+  }
 
-  const oldByDay = new Map<string, TradeAnnotation[]>()
-  for (const annotation of annotations) {
-    if (used.has(annotation)) continue
-    const key = dayKey(
-      annotation.symbol,
-      annotation.direction,
-      entryTradingDay(annotation.entryTime, annotation.sourceFormat),
-    )
-    oldByDay.set(key, [...(oldByDay.get(key) ?? []), annotation])
+  const instant = (symbol: string, direction: string, entryTime: Date) =>
+    `${symbol}|${direction}|${entryTime.toISOString()}`
+  const day = (symbol: string, direction: string, entryTime: Date, format: StatementSourceFormat) =>
+    `${symbol}|${direction}|${entryTradingDay(entryTime, format)}`
+
+  pass((trade) => trade.sourceKey, (trade) => trade.sourceKey)
+  pass(
+    (trade) => instant(trade.symbol, trade.direction, trade.entryTime),
+    (trade) => instant(trade.symbol, trade.direction, trade.entryTime),
+  )
+  pass(
+    (trade) => day(trade.symbol, trade.direction, trade.entryTime, trade.sourceFormat),
+    (trade) => day(trade.symbol, trade.direction, trade.entryTime, trade.sourceFormat),
+  )
+
+  const annotated = new Map<number, TradeAnnotation>()
+  for (const [index, trade] of pairs) {
+    if (trade.tags.length > 0 || trade.notes != null) annotated.set(index, trade)
   }
-  const newByDay = new Map<string, number[]>()
-  positions.forEach((position, index) => {
-    if (matched.has(index)) return
-    const key = dayKey(
-      position.symbol,
-      position.direction,
-      entryTradingDay(position.entryTime, position.sourceFormat),
-    )
-    newByDay.set(key, [...(newByDay.get(key) ?? []), index])
-  })
-  for (const [key, olds] of oldByDay) {
-    const news = newByDay.get(key) ?? []
-    if (olds.length === 1 && news.length === 1) matched.set(news[0], olds[0])
-  }
-  return matched
+  return annotated
 }
 
 // ─── database rebuild ───────────────────────────────────────────────
@@ -649,9 +664,11 @@ export async function rebuildLedgerTradesForAccount(
   const selection = selectAccountLedgerRows(statements)
   const ledger = buildBrokerPositionLedger(selection.rows)
 
-  const annotated = await tx.roundTripTrade.findMany({
-    where: { accountId, OR: [{ tags: { isEmpty: false } }, { notes: { not: null } }] },
+  // Every existing trade: annotation matching judges uniqueness against all.
+  const previous = await tx.roundTripTrade.findMany({
+    where: { accountId },
     select: {
+      sourceKey: true,
       symbol: true,
       direction: true,
       entryTime: true,
@@ -664,9 +681,18 @@ export async function rebuildLedgerTradesForAccount(
 
   const originOf = (position: BrokerLedgerResult['positions'][number]) =>
     selection.rowOrigins[position.openRows[0] ?? position.closeRows[0]]
+  // Stable identity of the input row that opened each rebuilt trade.
+  const sourceKeyOf = (position: BrokerLedgerResult['positions'][number]): string => {
+    const origin = originOf(position)
+    if (!origin) return `unknown:${position.instrumentKey}:${position.entryTime.toISOString()}`
+    return origin.statementId === LEGACY_EXECUTIONS_STATEMENT_ID
+      ? `exec:${legacyExecutionIds[origin.rowIndex]}`
+      : `${origin.statementId}:${origin.rowIndex}`
+  }
 
   const annotations = matchAnnotations(
-    annotated.map((trade) => ({
+    previous.map((trade) => ({
+      sourceKey: trade.sourceKey,
       symbol: trade.symbol,
       direction: trade.direction,
       entryTime: trade.entryTime,
@@ -678,6 +704,7 @@ export async function rebuildLedgerTradesForAccount(
       notesUpdatedAt: trade.notesUpdatedAt,
     })),
     ledger.positions.map((position) => ({
+      sourceKey: sourceKeyOf(position),
       symbol: position.symbol,
       direction: position.side,
       entryTime: position.entryTime,
@@ -708,6 +735,7 @@ export async function rebuildLedgerTradesForAccount(
     trades.push({
       ...input,
       id: tradeId,
+      sourceKey: sourceKeyOf(position),
       ...(annotation
         ? { tags: annotation.tags, notes: annotation.notes, notesUpdatedAt: annotation.notesUpdatedAt }
         : {}),

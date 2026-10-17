@@ -11,6 +11,7 @@ import {
   summarizeStatementImpact,
   tradingDateOf,
   type LedgerStatementInput,
+  type RebuiltTradeIdentity,
   type TradeAnnotation,
 } from '@/lib/engine/account-ledger-rebuild'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
@@ -457,51 +458,101 @@ describe('legacy executions rank below every real statement', () => {
 })
 
 describe('matchAnnotations', () => {
-  const note = (overrides: Partial<TradeAnnotation>): TradeAnnotation => ({
+  const old = (overrides: Partial<TradeAnnotation>): TradeAnnotation => ({
+    sourceKey: null,
     symbol: 'AAA',
     direction: 'LONG',
     entryTime: utcDay('2026-03-12'),
     sourceFormat: 'SCHWAB_TRANSACTION_HISTORY',
-    tags: ['breakout'],
-    notes: 'held too long',
-    notesUpdatedAt: utcDay('2026-03-13'),
+    tags: [],
+    notes: null,
+    notesUpdatedAt: null,
+    ...overrides,
+  })
+  const rebuilt = (overrides: Partial<RebuiltTradeIdentity>): RebuiltTradeIdentity => ({
+    sourceKey: 'stmt:0',
+    symbol: 'AAA',
+    direction: 'LONG',
+    entryTime: utcDay('2026-03-12'),
+    sourceFormat: 'SCHWAB_TRANSACTION_HISTORY',
     ...overrides,
   })
 
-  test('matches an unchanged trade on its exact entry instant', () => {
-    const matched = matchAnnotations([note({})], [
-      { symbol: 'AAA', direction: 'LONG', entryTime: utcDay('2026-03-12'), sourceFormat: 'SCHWAB_TRANSACTION_HISTORY' },
-    ])
+  test('keeps an annotation on the second of two identical same-day round trips', () => {
+    // Two date-only round trips: same symbol, direction and midnight entry.
+    // Only the second is annotated; the inputs are unchanged by the rebuild.
+    const matched = matchAnnotations(
+      [
+        old({ sourceKey: 'stmt:0' }),
+        old({ sourceKey: 'stmt:2', tags: ['revenge'], notes: 'second trade' }),
+      ],
+      [rebuilt({ sourceKey: 'stmt:0' }), rebuilt({ sourceKey: 'stmt:2' })],
+    )
+    expect([...matched.keys()]).toEqual([1])
+    expect(matched.get(1)?.notes).toBe('second trade')
+  })
+
+  test('keeps two annotations on their own identical same-day trades', () => {
+    const matched = matchAnnotations(
+      [
+        old({ sourceKey: 'stmt:0', notes: 'first' }),
+        old({ sourceKey: 'stmt:2', notes: 'second' }),
+      ],
+      [rebuilt({ sourceKey: 'stmt:2' }), rebuilt({ sourceKey: 'stmt:0' })],
+    )
+    expect(matched.get(0)?.notes).toBe('second')
+    expect(matched.get(1)?.notes).toBe('first')
+  })
+
+  test('without source identities, identical same-day trades are ambiguous and stay unmatched', () => {
+    // Trades written before sourceKey existed: the instant and the day both
+    // collide, so neither pass may guess.
+    const matched = matchAnnotations(
+      [old({}), old({ notes: 'which one?' })],
+      [rebuilt({ sourceKey: 'stmt:0' }), rebuilt({ sourceKey: 'stmt:2' })],
+    )
+    expect(matched.size).toBe(0)
+  })
+
+  test('judges uniqueness against unannotated trades too', () => {
+    // Two old trades shared a key; the rebuild produces one. The note may
+    // belong to the trade that no longer exists, so it is not moved.
+    const matched = matchAnnotations(
+      [old({}), old({ notes: 'maybe the vanished one' })],
+      [rebuilt({ sourceKey: 'stmt:9' })],
+    )
+    expect(matched.size).toBe(0)
+  })
+
+  test('matches an unchanged legacy trade on its entry instant', () => {
+    const matched = matchAnnotations([old({ notes: 'held too long' })], [rebuilt({})])
     expect(matched.get(0)?.notes).toBe('held too long')
   })
 
   test('carries annotations when a date-only entry becomes a timestamped TOS fill', () => {
     // Date-only 3/12 (UTC midnight) → TOS fill at 3/12 10:31 ET.
-    const matched = matchAnnotations([note({})], [
-      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
-    ])
+    const matched = matchAnnotations(
+      [old({ sourceKey: 'th:4', tags: ['breakout'], notes: 'held too long' })],
+      [rebuilt({ sourceKey: 'tos:17', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' })],
+    )
     expect(matched.get(0)).toMatchObject({ tags: ['breakout'], notes: 'held too long' })
   })
 
   test('reads an evening ET fill as that ET day, not the next UTC day', () => {
-    const matched = matchAnnotations([note({})], [
+    const matched = matchAnnotations(
+      [old({ notes: 'evening' })],
       // 3/13 01:30Z is 3/12 21:30 ET.
-      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-13T01:30:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
-    ])
+      [rebuilt({ sourceKey: 'tos:1', entryTime: new Date('2026-03-13T01:30:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' })],
+    )
     expect(matched.size).toBe(1)
   })
 
-  test('leaves ambiguous days unmatched instead of guessing', () => {
-    const twoNewTrades = matchAnnotations([note({})], [
-      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
-      { symbol: 'AAA', direction: 'LONG', entryTime: new Date('2026-03-12T18:02:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
-    ])
-    expect(twoNewTrades.size).toBe(0)
-
-    const otherSide = matchAnnotations([note({})], [
-      { symbol: 'AAA', direction: 'SHORT', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' },
-    ])
-    expect(otherSide.size).toBe(0)
+  test('does not carry an annotation to the opposite direction', () => {
+    const matched = matchAnnotations(
+      [old({ notes: 'long trade' })],
+      [rebuilt({ sourceKey: 'tos:1', direction: 'SHORT', entryTime: new Date('2026-03-12T14:31:00Z'), sourceFormat: 'TOS_ACCOUNT_STATEMENT' })],
+    )
+    expect(matched.size).toBe(0)
   })
 })
 
@@ -557,18 +608,19 @@ describe('rebuildLedgerTradesForAccount', () => {
         { id: 'exec_sell', execTime: utcDay('2026-01-16'), daySeq: 0, symbol: 'AAA', side: 'SELL', qty: decimal(100), price: decimal(52), commission: decimal(0.1) },
       ],
       annotated: [
-        { symbol: 'AAA', direction: 'LONG', entryTime: utcDay('2026-01-15'), tags: ['swing'], notes: null, notesUpdatedAt: null, brokerStatementImportId: null },
+        { sourceKey: 'exec:exec_buy', symbol: 'AAA', direction: 'LONG', entryTime: utcDay('2026-01-15'), tags: ['swing'], notes: null, notesUpdatedAt: null, brokerStatementImportId: null },
       ],
     })
 
     const result = await rebuildLedgerTradesForAccount(tx, 'acct_1')
 
     const [[{ data: trades }]] = calls.tradeCreateMany.mock.calls as [[{
-      data: Array<{ id: string; brokerStatementImportId: string | null; tags?: string[]; isOpen: boolean }>
+      data: Array<{ id: string; sourceKey: string | null; brokerStatementImportId: string | null; tags?: string[]; isOpen: boolean }>
     }]]
     expect(trades).toHaveLength(1)
     const [trade] = trades
-    expect(trade).toMatchObject({ brokerStatementImportId: null, tags: ['swing'], isOpen: false })
+    // The trade stores its identity: the legacy execution that opened it.
+    expect(trade).toMatchObject({ sourceKey: 'exec:exec_buy', brokerStatementImportId: null, tags: ['swing'], isOpen: false })
 
     const [[{ data: fills }]] = calls.fillCreateMany.mock.calls as [[{
       data: Array<{ tradeId: string; seq: number; kind: string; posEffect: string; side: string; qty: Prisma.Decimal; price: Prisma.Decimal | null; fees: Prisma.Decimal }>

@@ -327,6 +327,9 @@ model RoundTripTrade {
   entryTime       DateTime
   exitTime        DateTime?
   durationSeconds Int?
+  // Stable identity of the ledger input that opened this trade: "<statementId>:<rowIndex>"
+  // or "exec:<executionId>". Rebuilds use it to carry tags/notes to the same trade.
+  sourceKey       String?
   tags            String[]
   notes           String?   @db.Text
   notesUpdatedAt  DateTime?
