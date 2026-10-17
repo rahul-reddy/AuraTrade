@@ -36,10 +36,23 @@
   anchors, trade-view filter preservation, and document/main-content overflow.
 - **Documentation:** `docs/UI-DESIGN.md` records the design and journeys; `README.md`
   now documents actual local startup and checks instead of create-next-app instructions.
-- **Delivery / next action:** CI and independent review results belong to PR #20.
-  Complete the guarded merge after both gates approve. Production deployment remains
-  pending the owner's typed `DEPLOY <merged-sha7>` confirmation required by
-  `scripts/deploy.ps1` / `docs/DEPLOYMENT.md`. No production deployment is claimed here.
+- **CI / independent review:** CI on `42aece9fd574e94d06a44a7ffd18e2821ae6d264`
+  passed lint/types, harness checks, fresh migrations/drift, **267 unit tests**, build
+  and **14 browser tests** ([run](https://github.com/rahul-reddy/AuraTrade/actions/runs/39064575893)).
+  Claude Opus (medium, standard tier) approved that head with **0 blocking findings**
+  ([review](https://github.com/rahul-reddy/AuraTrade/pull/20#issuecomment-6240056409)).
+  Three advisory notes remain: empty-string greeting fallback, mobile rail overriding
+  the desktop collapse preference, and invalid status queries leaving no trade tab
+  selected. Gemini had zero quota; Claude's inherited API key had no credit; a retry
+  using its existing subscription login completed the review. No credential/settings
+  files were changed. The status-only follow-up must receive its own head-matched gate.
+- **Delivery / next action:** GitHub reports `rahul-reddy/AuraTrade` as **PUBLIC**, which
+  conflicts with AGENTS.md's instruction to keep it private. Visibility was not changed
+  in this task. An owner clarification is pending; resolve it before guarded merge.
+  Production deployment also remains pending the owner's typed `DEPLOY <merged-sha7>`
+  confirmation required by `scripts/deploy.ps1` / `docs/DEPLOYMENT.md`. No production
+  deployment is claimed here. Screenshots are saved locally under `.local/ui-preview/`
+  and in CI's verification artifact.
 
 ## Previous handoff (2026-10-17): hosted deployment
 
