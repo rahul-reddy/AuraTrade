@@ -42,6 +42,9 @@ export interface BrokerLedgerPosition {
   closingActions: string[]
   entryTime: Date
   exitTime: Date | null
+  /** Trading dates (yyyy-MM-dd) of the first open / last close, when the rows carry them. */
+  entryTradingDate: string | null
+  exitTradingDate: string | null
   closeKind: BrokerPositionCloseKind | null
   /** Opening then closing events, each in the order the ledger applied them. */
   fills: BrokerLedgerFill[]
@@ -235,9 +238,10 @@ function finalizePosition(pos: ActivePosition, isOpen: boolean): BrokerLedgerPos
 
   const netPnl = grossPnl == null ? null : grossPnl - pos.totalFees
   const entryTime = pos.openingEvents[0].row.date ?? new Date(0)
-  const exitTime = isOpen
-    ? null
-    : (pos.closingEvents[pos.closingEvents.length - 1]?.row.date ?? null)
+  const lastClose = pos.closingEvents[pos.closingEvents.length - 1]
+  const exitTime = isOpen ? null : (lastClose?.row.date ?? null)
+  const entryTradingDate = pos.openingEvents[0].row.tradingDate ?? null
+  const exitTradingDate = isOpen ? null : (lastClose?.row.tradingDate ?? null)
 
   return {
     instrumentKey: pos.instrumentKey,
@@ -261,6 +265,8 @@ function finalizePosition(pos: ActivePosition, isOpen: boolean): BrokerLedgerPos
     closingActions: pos.closingEvents.map((event) => event.row.action),
     entryTime,
     exitTime,
+    entryTradingDate,
+    exitTradingDate,
     closeKind,
     fills: [
       ...pos.openingEvents.map((event) => toLedgerFill(event, 'OPEN', pos.side)),

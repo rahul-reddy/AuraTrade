@@ -1,5 +1,9 @@
+import { tradingDayKey } from '@/lib/trades/trading-date'
+
 export interface MetricsTradeInput {
   exitTime: Date | string
+  /** Exchange trading date of the close; buckets the trade when present. */
+  exitTradingDate?: Date | string | null
   netPnl: number
   totalFees?: number
 }
@@ -56,11 +60,6 @@ function sum(values: number[]): number {
 function mean(values: number[]): number {
   if (values.length === 0) return 0
   return sum(values) / values.length
-}
-
-function dateKey(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value)
-  return date.toISOString().slice(0, 10)
 }
 
 export function calculateWinRate(wins: number, totalTrades: number): number {
@@ -149,7 +148,7 @@ export function buildDailyPerformanceSeries(
   const grouped = new Map<string, Omit<DailyPerformancePoint, 'date' | 'cumulativePnl'>>()
 
   for (const trade of trades) {
-    const key = dateKey(trade.exitTime)
+    const key = tradingDayKey(trade.exitTradingDate, trade.exitTime)
     const current = grouped.get(key) ?? {
       pnl: 0,
       tradeCount: 0,

@@ -46,6 +46,12 @@ export interface AnalyzedStatementRow {
   isImportTradeRow: boolean
   blocksCanonicalImport: boolean
   notes: string[]
+  /**
+   * Exchange trading date (yyyy-MM-dd) the row belongs to, set by the account
+   * ledger. `date` orders rows and may sit after the session (an expiration is
+   * placed at the end of its day), so analytics bucket by this instead.
+   */
+  tradingDate?: string
 }
 
 export interface StatementActionBreakdown {

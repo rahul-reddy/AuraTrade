@@ -190,7 +190,10 @@ export function selectAccountLedgerRows(
         continue
       }
       if (ownerOf(day, rowClass(row)) === statement.id) {
-        selected.push({ row: placeDateOnlyEvent(row, statement.sourceFormat, day), statementId: statement.id })
+        selected.push({
+          row: { ...placeDateOnlyEvent(row, statement.sourceFormat, day), tradingDate: day },
+          statementId: statement.id,
+        })
       } else {
         replacedRows += 1
       }

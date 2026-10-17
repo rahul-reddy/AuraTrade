@@ -1,7 +1,10 @@
 import { Prisma } from '@/generated/prisma'
+import { tradingDayKey } from '@/lib/trades/trading-date'
 
 export interface SnapshotTradeInput {
   exitTime: Date | string
+  /** Exchange trading date of the close; buckets the trade when present. */
+  exitTradingDate?: Date | string | null
   netPnl: Prisma.Decimal
   totalFees: Prisma.Decimal
 }
@@ -67,9 +70,9 @@ export function buildDailySnapshots(
   const grouped = new Map<string, DailyBucket>()
 
   for (const trade of trades) {
-    const key = dateKey(trade.exitTime)
+    const key = tradingDayKey(trade.exitTradingDate, trade.exitTime)
     const current = grouped.get(key) ?? {
-      date: toUtcDateOnly(trade.exitTime),
+      date: new Date(`${key}T00:00:00.000Z`),
       dailyPnl: ZERO,
       grossPnl: ZERO,
       totalFees: ZERO,
@@ -163,11 +166,20 @@ export async function rebuildDailySnapshotsForAccount(
     where: {
       accountId,
       isOpen: false,
-      exitTime: rebuildFromDate ? { gte: rebuildFromDate } : { not: null },
+      exitTime: { not: null },
+      ...(rebuildFromDate
+        ? {
+            OR: [
+              { exitTradingDate: { gte: rebuildFromDate } },
+              { exitTradingDate: null, exitTime: { gte: rebuildFromDate } },
+            ],
+          }
+        : {}),
       netPnl: { not: null },
     },
     select: {
       exitTime: true,
+      exitTradingDate: true,
       netPnl: true,
       totalFees: true,
     },
@@ -179,6 +191,7 @@ export async function rebuildDailySnapshotsForAccount(
       .filter((trade) => trade.exitTime !== null && trade.netPnl !== null)
       .map((trade) => ({
         exitTime: trade.exitTime as Date,
+        exitTradingDate: trade.exitTradingDate,
         netPnl: trade.netPnl!,
         totalFees: trade.totalFees,
       })),

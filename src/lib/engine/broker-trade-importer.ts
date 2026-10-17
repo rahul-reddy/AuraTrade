@@ -26,6 +26,11 @@ function parseOptionSymbol(symbol: string): ParsedOptionSymbol | null {
   }
 }
 
+/** "2026-03-20" → 2026-03-20T00:00:00Z, for @db.Date columns. */
+function toUtcDate(day: string | null): Date | null {
+  return day ? new Date(`${day}T00:00:00.000Z`) : null
+}
+
 function toDecimal(value: number | null): Prisma.Decimal | null {
   return value == null ? null : new Prisma.Decimal(value)
 }
@@ -98,6 +103,8 @@ export function mapBrokerPositionToTradeCreateInput(
     isOpen: position.isOpen,
     entryTime: position.entryTime,
     exitTime: position.exitTime,
+    entryTradingDate: toUtcDate(position.entryTradingDate),
+    exitTradingDate: toUtcDate(position.exitTradingDate),
     durationSeconds: durationSeconds(position.entryTime, position.exitTime),
   }
 }

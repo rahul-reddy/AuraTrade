@@ -327,6 +327,12 @@ model RoundTripTrade {
   entryTime       DateTime
   exitTime        DateTime?
   durationSeconds Int?
+  // Exchange trading dates of the first open / last close. entryTime/exitTime
+  // order events and may fall on another UTC date (an expiration is placed at
+  // the end of its day; a winter after-hours fill is past UTC midnight), so
+  // daily P&L, snapshots and day-of-week analytics bucket by these.
+  entryTradingDate DateTime? @db.Date
+  exitTradingDate  DateTime? @db.Date
   // Stable identity of the ledger input that opened this trade: "<statementId>:<rowIndex>"
   // or "exec:<executionId>". Rebuilds use it to carry tags/notes to the same trade.
   sourceKey       String?

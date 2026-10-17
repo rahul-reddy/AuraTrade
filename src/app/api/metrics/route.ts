@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { exitTradingDayRangeWhere } from '@/lib/trades/trading-date'
 import { prisma } from '@/lib/prisma'
 import { getRequiredSession } from '@/lib/session'
 import { calculatePerformanceMetrics } from '@/lib/engine/metrics'
@@ -14,13 +15,9 @@ function buildWhere(accountId: string, params: URLSearchParams): Prisma.RoundTri
   if (symbol) where.symbol = { contains: symbol, mode: 'insensitive' }
 
   // Realized-performance metrics are filtered by close date, not entry date.
-  const dateFrom = params.get('dateFrom')
-  const dateTo = params.get('dateTo')
-  if (dateFrom || dateTo) {
-    where.exitTime = {}
-    if (dateFrom) where.exitTime.gte = new Date(dateFrom + 'T00:00:00.000Z')
-    if (dateTo) where.exitTime.lte = new Date(dateTo + 'T23:59:59.999Z')
-  }
+  // Filter by the exit trading day, not the raw exit instant (see trading-date.ts).
+  const dayRange = exitTradingDayRangeWhere(params.get('dateFrom'), params.get('dateTo'))
+  if (dayRange) where.AND = [dayRange]
 
   return where
 }
@@ -57,6 +54,7 @@ export async function GET(req: NextRequest) {
       where,
       select: {
         exitTime: true,
+        exitTradingDate: true,
         netPnl: true,
         totalFees: true,
       },
@@ -68,6 +66,7 @@ export async function GET(req: NextRequest) {
         .filter((trade) => trade.exitTime !== null && trade.netPnl !== null)
         .map((trade) => ({
           exitTime: trade.exitTime as Date,
+          exitTradingDate: trade.exitTradingDate,
           netPnl: trade.netPnl!.toNumber(),
           totalFees: trade.totalFees.toNumber(),
         })),
