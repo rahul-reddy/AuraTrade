@@ -162,6 +162,27 @@ describe('analyzeTosAccountStatement', () => {
     expect(dryRun.rows[0]).toMatchObject({ actionCategory: 'EQUITY_TRADE', fees: 0 })
   })
 
+  test('blocks a fill whose cash row is truncated before the fee columns', () => {
+    const dryRun = analyzeTosAccountStatement(
+      makeStatement({
+        fills: [',1/15/26 09:30:00,STOCK,BUY,+5,TO OPEN,ABC,,,STOCK,10.00,10.00,MKT'],
+        // The row ends right after DESCRIPTION: the fee cells are absent, not blank.
+        cash: ['1/15/26,09:30:00,TRD,="1",BOT +5 ABC @10.00'],
+      }),
+    )
+    expect(dryRun.rows[0]).toMatchObject({ actionCategory: 'UNKNOWN', blocksCanonicalImport: true })
+    expect(evaluateStatementImportSupport(dryRun).supported).toBe(false)
+
+    // The same row at full width with blank fee cells is a genuine $0 fee.
+    const complete = analyzeTosAccountStatement(
+      makeStatement({
+        fills: [',1/15/26 09:30:00,STOCK,BUY,+5,TO OPEN,ABC,,,STOCK,10.00,10.00,MKT'],
+        cash: ['1/15/26,09:30:00,TRD,="1",BOT +5 ABC @10.00,,,-50.00,"1.00"'],
+      }),
+    )
+    expect(complete.rows[0]).toMatchObject({ actionCategory: 'EQUITY_TRADE', fees: 0 })
+  })
+
   test.each(['abc', '--', 'n/a'])('blocks a fill whose fee cell is malformed (%s)', (badFee) => {
     const dryRun = analyzeTosAccountStatement(
       makeStatement({

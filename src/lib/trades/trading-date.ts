@@ -32,16 +32,17 @@ export function tradingDayOfWeek(dayKey: string): number {
 }
 
 /**
- * Closed trades whose exit trading day falls in [dateFrom, dateTo] (inclusive
- * yyyy-MM-dd bounds). Returns null when neither bound is set.
+ * Trades whose entry or exit trading day falls in [dateFrom, dateTo]
+ * (inclusive yyyy-MM-dd bounds). Returns null when neither bound is set.
  */
-export function exitTradingDayRangeWhere(
+export function tradingDayRangeWhere(
+  side: 'entry' | 'exit',
   dateFrom: string | null,
   dateTo: string | null,
 ): Prisma.RoundTripTradeWhereInput | null {
   if (!dateFrom && !dateTo) return null
-  const day: Prisma.DateTimeNullableFilter = {}
-  const instant: Prisma.DateTimeNullableFilter = {}
+  const day: { gte?: Date; lte?: Date } = {}
+  const instant: { gte?: Date; lte?: Date } = {}
   if (dateFrom) {
     day.gte = new Date(`${dateFrom}T00:00:00.000Z`)
     instant.gte = new Date(`${dateFrom}T00:00:00.000Z`)
@@ -50,10 +51,15 @@ export function exitTradingDayRangeWhere(
     day.lte = new Date(`${dateTo}T00:00:00.000Z`)
     instant.lte = new Date(`${dateTo}T23:59:59.999Z`)
   }
-  return {
-    OR: [
-      { exitTradingDate: day },
-      { exitTradingDate: null, exitTime: instant },
-    ],
-  }
+  return side === 'entry'
+    ? { OR: [{ entryTradingDate: day }, { entryTradingDate: null, entryTime: instant }] }
+    : { OR: [{ exitTradingDate: day }, { exitTradingDate: null, exitTime: instant }] }
+}
+
+/** Closed trades whose exit trading day falls in [dateFrom, dateTo]. */
+export function exitTradingDayRangeWhere(
+  dateFrom: string | null,
+  dateTo: string | null,
+): Prisma.RoundTripTradeWhereInput | null {
+  return tradingDayRangeWhere('exit', dateFrom, dateTo)
 }

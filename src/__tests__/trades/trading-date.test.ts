@@ -7,6 +7,7 @@ import {
   exitTradingDayRangeWhere,
   tradingDayKey,
   tradingDayOfWeek,
+  tradingDayRangeWhere,
 } from '@/lib/trades/trading-date'
 import {
   selectAccountLedgerRows,
@@ -158,5 +159,65 @@ describe('exitTradingDayRangeWhere', () => {
       ],
     })
     expect(exitTradingDayRangeWhere(null, null)).toBeNull()
+  })
+})
+
+describe('tradingDayRangeWhere for trade entries', () => {
+  // Evaluates the { OR: [{ <day field>: range }, { <day field>: null, <instant>: range }] }
+  // shape produced by tradingDayRangeWhere against an in-memory trade.
+  type Range = { gte?: Date; lte?: Date }
+  const inRange = (value: Date | null | undefined, range: Range) =>
+    value != null &&
+    (range.gte == null || value >= range.gte) &&
+    (range.lte == null || value <= range.lte)
+  function matches(where: ReturnType<typeof tradingDayRangeWhere>, trade: Record<string, Date | null>) {
+    const clauses = (where?.OR ?? []) as Array<Record<string, Range | null>>
+    return clauses.some((clause) =>
+      Object.entries(clause).every(([field, condition]) =>
+        condition === null ? trade[field] == null : inRange(trade[field], condition),
+      ),
+    )
+  }
+
+  // A TOS buy at 1/14/26 19:30 EST is stored at 1/15 00:30Z with entry trading day 1/14.
+  const afterHoursEntry = {
+    entryTime: new Date('2026-01-15T00:30:00Z'),
+    entryTradingDate: new Date('2026-01-14T00:00:00Z'),
+  }
+
+  test('an after-hours entry is found under its ET trading day, not the next UTC day', () => {
+    expect(matches(tradingDayRangeWhere('entry', '2026-01-14', '2026-01-14'), afterHoursEntry)).toBe(true)
+    expect(matches(tradingDayRangeWhere('entry', '2026-01-15', '2026-01-15'), afterHoursEntry)).toBe(false)
+  })
+
+  test('trades without a stored trading date still filter by their UTC entry date', () => {
+    const legacy = { entryTime: new Date('2026-01-15T00:00:00Z'), entryTradingDate: null }
+    expect(matches(tradingDayRangeWhere('entry', '2026-01-15', '2026-01-15'), legacy)).toBe(true)
+    expect(matches(tradingDayRangeWhere('entry', '2026-01-14', '2026-01-14'), legacy)).toBe(false)
+  })
+
+  test('the ledger stores the ET trading day for that after-hours entry', () => {
+    const position = buildBrokerPositionLedger(
+      selectAccountLedgerRows([
+        {
+          id: 'tos',
+          sourceFormat: 'TOS_ACCOUNT_STATEMENT',
+          coverageFrom: new Date('2026-01-14T00:00:00Z'),
+          coverageTo: new Date('2026-01-14T00:00:00Z'),
+          createdAt: new Date('2026-01-16'),
+          rows: [
+            {
+              rowIndex: 0, raw: {}, date: afterHoursEntry.entryTime, action: 'Buy', symbol: 'ABC',
+              description: '', quantity: 10, price: 10, fees: 0, amount: null, instrumentType: 'EQUITY',
+              actionCategory: 'EQUITY_TRADE', optionContract: null, isImportTradeRow: true,
+              blocksCanonicalImport: false, notes: [],
+            },
+          ],
+        },
+      ]).rows,
+    ).positions[0]
+    const trade = mapBrokerPositionToTradeCreateInput('acct', 'tos', null, position)
+    expect(trade.entryTime).toEqual(afterHoursEntry.entryTime)
+    expect(trade.entryTradingDate).toEqual(afterHoursEntry.entryTradingDate)
   })
 })

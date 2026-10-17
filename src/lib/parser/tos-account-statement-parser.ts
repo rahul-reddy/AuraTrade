@@ -140,8 +140,18 @@ function extractSection(lines: string[], title: string): Section | null {
 }
 
 function column(section: Section, row: string[], name: string): string {
+  return presentCell(section, row, name) ?? ''
+}
+
+/**
+ * The trimmed cell, or null when the column is missing from the header or the
+ * row ends before it (a truncated row). Unlike column(), callers can tell an
+ * absent cell apart from one that is present but blank.
+ */
+function presentCell(section: Section, row: string[], name: string): string | null {
   const index = section.header.indexOf(name)
-  return index === -1 ? '' : (row[index] ?? '').trim()
+  if (index === -1 || index >= row.length) return null
+  return (row[index] ?? '').trim()
 }
 
 function parseNumber(raw: string): number | null {
@@ -208,11 +218,14 @@ function fillKey(args: {
 const FEE_COLUMNS = ['Misc Fees', 'Commissions & Fees'] as const
 
 /**
- * Reads one fee cell. A blank cell is a genuine $0 fee; anything else must
- * parse as a number. Returns null when the value is not usable evidence.
+ * Reads one fee cell. A present-but-blank cell is a genuine $0 fee; anything
+ * else must parse as a number. Returns null when the value is not usable
+ * evidence, including a cell the row never reached.
  */
-function parseFeeCell(raw: string): number | null {
-  if (raw.trim() === '') return 0
+function parseFeeCell(raw: string | null): number | null {
+  // An absent cell (truncated row) is not evidence of a $0 fee.
+  if (raw == null) return null
+  if (raw === '') return 0
   const value = parseNumber(raw)
   return value == null ? null : Math.abs(value)
 }
@@ -250,8 +263,8 @@ function indexCashTrades(section: Section | null): Map<string, CashTradeRow[]> {
       }),
       price,
     })
-    const misc = parseFeeCell(column(section, row, 'Misc Fees'))
-    const commission = parseFeeCell(column(section, row, 'Commissions & Fees'))
+    const misc = parseFeeCell(presentCell(section, row, 'Misc Fees'))
+    const commission = parseFeeCell(presentCell(section, row, 'Commissions & Fees'))
     // A malformed fee cell leaves this fill without a usable cash match, so it
     // blocks import instead of understating fees.
     if (misc == null || commission == null) continue
