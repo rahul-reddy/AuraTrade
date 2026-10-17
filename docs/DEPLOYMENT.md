@@ -207,12 +207,22 @@ and to read costs.
    Create inline policy → JSON → paste `infra/aws/tenfold-deny-auratrade.json`, name
    `deny-auratrade`. TenFold's inline policies then total about 1,400 of 2,048 bytes.
 
-Then check it live (`--profile auratrade`). Every probe changes nothing even if it were
-wrongly allowed: reads, temporary SSH details, and re-opening port 22, which is already
-open on both servers. Expected: `get-instance-access-details` and `open-instance-public-ports`
-(22/tcp) allowed on `auratrade-1` and `AccessDenied` on `tenfold-1`; `AccessDenied` on
-`get-bucket-access-keys`, `enable-add-on`, `tag-resource` and any `iam:` call on another
-user.
+Then check it live: `sh infra/aws/check-auratrade-access.sh` (AWS CLI profile
+`auratrade`). The IAM policy simulator is not available to these users, so the script
+probes live, with exact commands chosen so that none changes anything even if the policy
+were wrongly broader. It first confirms the no-op preconditions and aborts if any is
+missing: 22/tcp already open to `0.0.0.0/0` and automatic snapshots already on at 09:00
+on both servers, and `auratrade-1` already tagged `project=auratrade`. It then expects:
+
+| Probe | Expected |
+| --- | --- |
+| `get-instances` | allowed |
+| `get-instance-access-details` on `auratrade-1` / `tenfold-1` | allowed / denied |
+| `open-instance-public-ports` 22/tcp `0.0.0.0/0` on `auratrade-1` / `tenfold-1` | allowed / denied |
+| `enable-add-on` AutoSnapshot 09:00 on `auratrade-1` | denied |
+| `tag-resource` `project=auratrade` on `auratrade-1` (its current value) | denied |
+| `get-bucket-access-keys` on a bucket name that does not exist | denied |
+| `iam get-user` on `TenFold` / `AuraTrade` (read-only) | denied / allowed |
 
 ## Container image on GHCR
 
