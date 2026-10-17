@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "NeverTouchAuraTradeResources",
+      "Effect": "Deny",
+      "Action": "lightsail:*",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": { "aws:ResourceTag/project": "auratrade" }
+      }
+    }
+  ]
+}
