@@ -50,8 +50,12 @@
   stats and date filters. Trades now store `entryTradingDate`/`exitTradingDate` (migration
   `20261016230000_trade_trading_dates`) and all daily aggregates bucket through
   `src/lib/trades/trading-date.ts`. Real data: 4 trades had been bucketed on the wrong day.
+- **Cross-review rounds 7–8 (codex):** round 7's output was malformed (not recorded) but
+  its finding was fixed — TOS coverage fallback now uses ET trading days; round 8's 2
+  findings fixed — truncated cash rows no longer count as $0 fees, and the Trades page/API
+  (CSV export) filter by entry trading day. Dashboard best/worst-day labels pinned to UTC.
 - **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
-  `npm test` 245/245; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm test` 250/250; fresh-DB `prisma migrate deploy` + drift check: no difference;
   `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
   two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
   0 blocked, all option fills matched to their own contract's fee row.
