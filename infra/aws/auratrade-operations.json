@@ -33,8 +33,6 @@
       "Action": [
         "lightsail:AttachStaticIp",
         "lightsail:CloseInstancePublicPorts",
-        "lightsail:CreateInstanceSnapshot",
-        "lightsail:DeleteInstanceSnapshot",
         "lightsail:DetachStaticIp",
         "lightsail:GetInstanceAccessDetails",
         "lightsail:OpenInstancePublicPorts",

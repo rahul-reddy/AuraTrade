@@ -158,7 +158,7 @@ and to read costs.
 
 | User | Key lives in | Policy | Can do |
 | --- | --- | --- | --- |
-| `AuraTrade` | workstation AWS CLI profile `auratrade` (`~/.aws/credentials`), never a repository `.env` | `infra/aws/auratrade-operations.json` (inline `auratrade-operations`) | Read the Lightsail inventory. Operate only resources tagged `project=auratrade`: start/stop/reboot, firewall ports, manual snapshots, static IP attach/detach, browser SSH, tags. Read costs; view and edit only the `AuraTrade monthly` budget. Rotate its own keys. |
+| `AuraTrade` | workstation AWS CLI profile `auratrade` (`~/.aws/credentials`), never a repository `.env` | `infra/aws/auratrade-operations.json` (inline `auratrade-operations`) | Read the Lightsail inventory. Operate only resources tagged `project=auratrade`: start/stop/reboot, firewall ports, static IP attach/detach, browser SSH, tags. Read costs; view and edit only the `AuraTrade monthly` budget. Rotate its own keys. |
 
 - **Why a separate user:** AuraTrade was provisioned on 2026-10-17 with TenFold's
   `TenFold` user, whose `lightsail:*` covers every Lightsail resource in the account.
@@ -176,6 +176,12 @@ and to read costs.
   automatic snapshots. Lightsail only allows these account-wide (`Resource: "*"`, per
   the AWS Service Authorization Reference), so granting any of them would also reach
   TenFold's server.
+- **Manual snapshots are admin-only too.** A snapshot made from the CLI does not inherit
+  the instance's tags, so one made without `--tags` would sit outside both boundaries:
+  this user could not tag or delete it, and TenFold's deny would not cover it. Letting
+  this user tag new snapshots on creation would let it tag TenFold's snapshots as its
+  own. Daily automatic snapshots and the database dumps cover backups; an admin who
+  makes a manual snapshot passes `--tags key=project,value=auratrade`.
 - **The other direction:** `infra/aws/tenfold-deny-auratrade.json` is an inline policy
   for the `TenFold` user that denies every Lightsail action on `project=auratrade`
   resources. It cannot cover the account-wide actions above: with it, a TenFold key
