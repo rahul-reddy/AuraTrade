@@ -4,6 +4,8 @@ export interface DashboardTradePoint {
   id: string
   symbol: string
   exitTime: string
+  /** Exchange trading day (yyyy-MM-dd) of the close; daily buckets use this. */
+  exitDate: string
   netPnl: number
   totalQty: number
   entryPrice: number

@@ -79,11 +79,12 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
     );
   }
 
-  // ── Fetch trades with executions ──────────────────────────────────────────
+  // ── Fetch trades with their fills ─────────────────────────────────────────
 
   const rawTrades = await prisma.roundTripTrade.findMany({
     where: { accountId: account.id, symbol },
     include: {
+      fills: { orderBy: { seq: "asc" } },
       executions: { orderBy: [{ execTime: "asc" }, { daySeq: "asc" }] },
       classification: { select: { setup: true } },
     },
@@ -103,13 +104,27 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
     isOpen: trade.isOpen,
     durationSeconds: trade.durationSeconds,
     setup: trade.classification?.setup ?? null,
-    fills: trade.executions.map((ex) => ({
-      id: ex.id,
-      side: ex.side,
-      qty: ex.qty.toNumber(),
-      price: ex.price.toNumber(),
-      time: ex.execTime.toISOString(),
-    })),
+    // Ledger fills are canonical. Executions remain only as a fallback for
+    // trades written before fills existed (until the next reprocess).
+    fills:
+      trade.fills.length > 0
+        ? trade.fills
+            // Executions only: expirations/transfers have no market price.
+            .filter((fill) => (fill.kind === "OPEN" || fill.kind === "CLOSE") && fill.price != null)
+            .map((fill) => ({
+              id: fill.id,
+              side: fill.side,
+              qty: fill.qty.toNumber(),
+              price: fill.price?.toNumber() ?? 0,
+              time: fill.time.toISOString(),
+            }))
+        : trade.executions.map((ex) => ({
+            id: ex.id,
+            side: ex.side,
+            qty: ex.qty.toNumber(),
+            price: ex.price.toNumber(),
+            time: ex.execTime.toISOString(),
+          })),
   }));
 
   // ── Compute date range for initial market data ─────────────────────────────

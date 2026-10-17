@@ -55,6 +55,11 @@ export interface ParseResult {
   assumptions: string[]
 }
 
+/** Result for statement formats that never use the legacy Execution path. */
+export function emptyParseResult(): ParseResult {
+  return { executions: [], skippedRows: [], dateRange: null, symbols: [], assumptions: [] }
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────
 
 /**

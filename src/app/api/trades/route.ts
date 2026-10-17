@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { tradingDayRangeWhere } from '@/lib/trades/trading-date'
 import { getRequiredSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
@@ -51,11 +52,9 @@ function buildWhere(
 
   const dateFrom = params.get('dateFrom')
   const dateTo = params.get('dateTo')
-  if (dateFrom || dateTo) {
-    where.entryTime = {}
-    if (dateFrom) where.entryTime.gte = new Date(dateFrom + 'T00:00:00.000Z')
-    if (dateTo) where.entryTime.lte = new Date(dateTo + 'T23:59:59.999Z')
-  }
+  // Filter by the entry trading day, not the raw entry instant (see trading-date.ts).
+  const dayRange = tradingDayRangeWhere('entry', dateFrom ?? null, dateTo ?? null)
+  if (dayRange) where.AND = [dayRange]
 
   return where
 }

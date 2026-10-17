@@ -36,15 +36,17 @@ function mapRowCreateManyInput(
   return {
     statementImportId,
     rowIndex: row.rowIndex,
-    rawDate: row.raw.Date ?? null,
+    // Schwab Transaction History column names first, then thinkorswim
+    // Account Statement equivalents (Exec Time / Qty / Cash* from the TRD row).
+    rawDate: row.raw.Date ?? row.raw['Exec Time'] ?? null,
     parsedDate: row.date ?? null,
     action: row.action,
     symbol: row.symbol,
     description: row.description,
-    quantityRaw: row.raw.Quantity ?? null,
+    quantityRaw: row.raw.Quantity ?? row.raw.Qty ?? null,
     priceRaw: row.raw.Price ?? null,
-    feesRaw: row.raw['Fees & Comm'] ?? null,
-    amountRaw: row.raw.Amount ?? null,
+    feesRaw: row.raw['Fees & Comm'] ?? row.raw['Cash Fees'] ?? null,
+    amountRaw: row.raw.Amount ?? row.raw['Cash Amount'] ?? null,
     quantity: toDecimal(row.quantity),
     price: toDecimal(row.price),
     fees: toDecimal(row.fees),
@@ -136,8 +138,13 @@ export async function persistBrokerStatementImport(
       optionRows: args.dryRun.optionRows,
       skippedRows: args.dryRun.skippedRows,
       importSupported: args.dryRun.importSupported,
+      sourceFormat: args.dryRun.sourceFormat,
       dateFrom: args.dryRun.dateRange?.from ?? null,
       dateTo: args.dryRun.dateRange?.to ?? null,
+      coverageFrom: args.dryRun.coverage?.from ?? null,
+      coverageTo: args.dryRun.coverage?.to ?? null,
+      // confirmedAt is deliberately absent: re-previewing a confirmed file must
+      // not un-confirm it, and previews never confirm.
       warnings: args.dryRun.warnings,
       blockers: args.dryRun.blockers,
       assumptions: args.dryRun.assumptions,

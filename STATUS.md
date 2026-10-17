@@ -4,34 +4,74 @@
 
 ## Current handoff (2026-10-16)
 
-- **Branch / revision:** `feat/workflow-harness` (PR pending). Verified locally on this
-  worktree before pushing; CI results are recorded on the PR.
-- **What changed:** adopted the TenFold workflow — cross-model review harness
-  (`scripts/`), `AGENTS.md` contract, CI (`Verify AuraTrade` + Windows harness), container
-  delivery to GHCR, repository skill, PR template. To make `main` pass its own CI this PR
-  also fixes: lint (ESLint scanned generated Prisma code; 5 React purity errors),
-  `next build` (middleware pulled Prisma into the Edge runtime — split into
-  `src/lib/auth.config.ts`), a migration that failed on any fresh database, two
-  never-migrated foreign keys (schema drift), and the 4 failing Jest tests (same-timestamp
-  ledger ordering, store-test mock).
-- **Local results on this revision:** cross-review self-test passed; skill validation
-  passed; `npm run lint` 0 errors (2 warnings); `npm run typecheck` clean; `npm test`
-  165/165; fresh-DB `prisma migrate deploy` + drift check: no difference; `npm run build`
-  passed; Playwright 8/8 with no retries against `next start` (dashboard data-wait raised
-  to 15s; auth-nav waits for the page transition to leave one empty-state element);
-  `docker build` passed and the container served `/login`, redirected signed-out
-  `/dashboard`, and wrote a user through Prisma.
-- **Cross-review round 1 (codex, critical tier):** 2 blocking findings, both fixed: the
-  money-market sweep exclusion now has boundary tests (mixed-statement totals, unpaired
-  redemption, BOXX/FXAIX/ABCDXX still tracked), and the sidebar keeps an in-memory value
-  when localStorage writes throw (browser test with a throwing Storage).
-- **Remaining:** merge this PR through `scripts/merge-pr.ps1`; then rebase
-  `feat/tos-account-statement-import` (TOS importer + account-level ledger) onto main and
-  take it through the same gate. No hosting target exists yet — see `docs/DEPLOYMENT.md`.
-- **Next action:** owner confirms the critical-path list in AGENTS.md and chooses a host.
+- **Branch / revision:** `feat/tos-account-statement-import`, rebased onto `main` at
+  `83fd9eb` (workflow harness, PR #13). Verified locally at the rebased head before push;
+  CI results are recorded on the PR.
+- **What changed:** thinkorswim Account Statement importer (per-second fill times, fees
+  joined from Cash Balance rows); account-level statement ledger (carry-in positions pair
+  across files, overlapping statements never double-count, tags/notes survive rebuilds);
+  `BrokerStatementImport` gains `sourceFormat`, `coverageFrom/To`, `confirmedAt`; enrichment
+  survives a concurrent rebuild. On rebase, the feature migration dropped its two foreign
+  keys, which `main` now creates in the guarded `20261016190000` migration.
+- **Cross-review round 1 (codex, critical tier):** 5 blocking findings, all fixed:
+  (1) legacy Execution-path duplication — one canonical ledger import path; `confirmedAt`
+  backfilled only for statements that own ledger trades; statements overlapping legacy
+  fills are refused; (2) close-only statements were rejected — preview/confirm now use
+  account-level impact; (3) unmatched fee rows became $0 fees — now block import;
+  (4) option fee join ignored contract identity — key now includes expiry/strike/type;
+  (5) unsupported instrument types imported as equity — only STOCK/ETF allowed.
+- **Cross-review round 2 (codex):** 4 blocking findings, all fixed: (1) concurrent
+  same-account confirms could rebuild from stale snapshots — account-level Postgres advisory
+  lock in confirm and integrity reprocess (verified serializing on Postgres; concurrent
+  Playwright test); (2) expiration-/transfer-only follow-up statements were rejected —
+  shared `evaluateAccountImport` counts lifecycle rows; (3) date-only Expired rows sorted
+  before same-day TOS fills — placed at end of trading day (ET); (4) missing/malformed fee
+  columns became $0 — both fee headers required, malformed cells block.
+- **Cross-review round 3 (codex):** 3 blocking findings, all fixed: (1) legacy Execution
+  inventory could not be closed by new statements — legacy executions now enter the
+  account ledger as a synthetic oldest-precedence statement, the ledger owns every trade,
+  executions are re-linked to rebuilt trades, the Execution-only rebuild is removed;
+  (2) preview stamped the candidate "now" while the rebuild used its stored createdAt —
+  both now use the persisted value; (3) tags/notes were lost when a date-only trade became
+  a timestamped TOS trade — annotations fall back to (symbol, direction, trading day) when
+  unambiguous.
+- **Cross-review round 4 (codex):** 2 blocking findings, both fixed: (1) the synthetic
+  legacy input could outrank real statements when its coverage ended later — it now ranks
+  below every real statement and never owns lifecycle events; (2) statement-imported
+  trades had no per-trade fills, so charts lost fill markers and the classifier lost
+  scale-in/average-down signals — the ledger now writes `TradeFill` rows (migration
+  `20261016210000_trade_fills`) that both consumers read.
+- **Cross-review round 5 (codex):** 1 blocking finding, fixed: annotation carry-over keyed
+  on (symbol, direction, entry instant) was ambiguous for repeated same-day date-only round
+  trips. Trades now store `sourceKey` (migration `20261016220000_trade_source_key`) and
+  matching only pairs keys unique on both sides. Real data: 1196/1196 unique identities.
+- **Cross-review round 6 (codex):** 1 blocking finding, fixed: expirations ordered at ET
+  end-of-day landed on the next UTC date in daily snapshots, the daily series, day-of-week
+  stats and date filters. Trades now store `entryTradingDate`/`exitTradingDate` (migration
+  `20261016230000_trade_trading_dates`) and all daily aggregates bucket through
+  `src/lib/trades/trading-date.ts`. Real data: 4 trades had been bucketed on the wrong day.
+- **Cross-review rounds 7–8 (codex):** round 7's output was malformed (not recorded) but
+  its finding was fixed — TOS coverage fallback now uses ET trading days; round 8's 2
+  findings fixed — truncated cash rows no longer count as $0 fees, and the Trades page/API
+  (CSV export) filter by entry trading day. Dashboard best/worst-day labels pinned to UTC.
+  Round 9: invalid dates (e.g. 2/30) now block the statement instead of silently dropping a
+  fill; TOS dates are validated without calendar rollover.
+- **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
+  `npm test` 252/252; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
+  two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
+  0 blocked, all option fills matched to their own contract's fee row.
+- **Local data:** the owner's database is migrated (checksum of the rebased feature
+  migration realigned; the guarded FK migration applied as a no-op; 16 test-account
+  statements un-confirmed per the narrowed backfill, owner statements unchanged). After merge, run
+  Settings → Data Integrity → Reprocess trades to rebuild trades account-wide.
+- **Delivery:** `ghcr.io/rahul-reddy/auratrade-web:83fd9eb35692c0450ccc90b1465c1db0dfc0c592`
+  published by the first main run. No hosting target exists yet (`docs/DEPLOYMENT.md`).
+- **Next action:** merge this PR through `scripts/merge-pr.ps1`; owner confirms the
+  critical-path list in AGENTS.md and chooses a host.
 
 ## Current Phase
-**Post-phase follow-up: Phase 2–4 trade-import redesign / dry-run hardening**
+**Post-phase follow-up: timestamped thinkorswim Account Statement import** (branch `feat/tos-account-statement-import`)
 
 ## Phase Checklist
 
@@ -133,6 +173,18 @@
 | 2026-03-20 | Open-quantity model fix: added `remainingQty` to both `BrokerStatementPosition` and `RoundTripTrade` (migration `20260320203759_add_remaining_qty_to_statement_positions_and_trades`). `totalQty` now stays peak position size for analytics, while `/trades` and CSV export can show the true remaining size for open positions such as AMD `242` instead of peak `350`. |
 | 2026-03-20 | Live backfill for the current imported statement: recomputed `remainingQty` directly from persisted broker row indices and synced it into canonical trades. Verified current AMD open trade now stores `totalQty=350`, `closedQty=300`, `remainingQty=242`. |
 | 2026-03-20 | Verification after the remaining-quantity fix: `npx tsc --noEmit` clean and `npx jest --runInBand` now 157/157 passing. |
+| 2026-10-16 | Product review + competitor research (Tradezella/TraderSync via REA + help docs). Key finding: Schwab Transaction History is date-only, so 450/921 imported trades had 0s duration, the classifier labeled only 19 trades (all SCALP), and no trade had tags/notes. Competitors import full history from the thinkorswim **Account Statement → Account Trade History** export (per-second Exec Time) and use Schwab's OAuth Trader API only for incremental sync (60-day history window, 7-day refresh token → weekly re-auth). |
+| 2026-10-16 | Added `src/lib/parser/tos-account-statement-parser.ts` + `analyze-broker-statement.ts` format dispatcher. Reads Account Trade History fills (per-second Exec Time, explicit TO OPEN/TO CLOSE) and joins fees/amounts from Cash Balance TRD rows (1:1 per fill; ±2s tolerance because Schwab can book the cash row 1s after the fill). Fee = \|Misc Fees\| + \|Commissions & Fees\|; on this export **buys can carry fees** (option commissions, some misc fees), so fees are read on both sides. Exec Time assumed America/New_York (overridable); the "CST" on BAL rows is boilerplate — verified by the 09:30 fill burst. FUND rows (SNSXX sweeps) are cash, not trades. TOS statements always import through the broker-ledger path (`importSupported=false` gates only the legacy Execution path). |
+| 2026-10-16 | Real-file validation (3/13–10/16/26 statement, 703 fills): 702 trade fills + 1 sweep, 0 blockers, 0 unmatched fees, 105 closed round trips + 29 open. Ledger open positions + pre-3/13 DB open positions reproduce the statement's ending Equities section exactly (AMD 242+3=245, EOSE 350+100, FRMI 60+340, NBIS 20+80, NVDA 100+100, NLR, RXRX). Symbols opened/closed inside the window match TOS P/L to within fees (TOS P/L excludes fees). TOS "P/L YTD" is mark-to-market (includes open positions, prior-year carries from 12/31 mark) so it is not a realized-P&L reconciliation target. |
+| 2026-10-16 | Known gaps (next): (1) **cross-statement dedup** — ledger-path confirm only replaces trades from the same file hash, so overlapping statements double-count; (2) **carry-in inventory** — positions opened in an earlier statement surface as orphan closes (MRNA/APPS/ORCL calls on the real file); seed the ledger from prior open positions. Pre-existing on main since `8e7247e`: 2 ledger tests asserting same-day opens-before-closes for date-only files fail after that heuristic was removed; `broker-statement-store` tests fixed here (mock lacked `$transaction`). |
+| 2026-10-16 | Verification: `npx tsc --noEmit` clean; `npx jest --runInBand` 171/173 (only the 2 pre-existing ledger failures); new `src/__tests__/parser/tos-account-statement-parser.test.ts` 15/15; Playwright `upload-tos-account-statement.spec.ts` + `upload-import.spec.ts` pass (legacy spec needs a warm dev server). |
+| 2026-10-16 | **Account-level statement ledger** (`src/lib/engine/account-ledger-rebuild.ts`): confirm and integrity-reprocess now rebuild ALL statement-derived trades for the account from every confirmed `BrokerStatementImport` through one ledger, fixing (1) carry-in — positions opened in an earlier statement pair with closes in a later one (MRNA, APPS, ORCL calls now realize) — and (2) overlap double-counting. Overlap rule: each trading date is owned by one statement per row class; FILL rows prefer TOS (timestamped) > Transaction History, then latest coverage end, then newest upload; EVENT rows (expirations/journals/mergers) always come from Transaction History because TOS Trade History lists fills only. Tags/notes are carried across rebuilds by (symbol, direction, entryTime). |
+| 2026-10-16 | Schema: `BrokerStatementImport.sourceFormat`, `coverageFrom/coverageTo` (@db.Date; TOS from the "since … through …" header), `confirmedAt` (previews persist rows but never feed the ledger). Migration `20261016200000_account_level_statement_ledger` also adds the two `RoundTripTrade` → statement FKs that `8e7247e` declared in schema.prisma but never migrated. Backfill marks statements with trades / completed uploads as confirmed. |
+| 2026-10-16 | Migration repair: `20260320203759_add_remaining_qty…` used `FROM LATERAL` referencing the UPDATE target (invalid in Postgres), so the chain failed on any fresh DB / shadow DB; rewritten as equivalent correlated subqueries and verified on a scratch DB. That file had also been edited after being applied, so the local `_prisma_migrations` checksum was realigned (otherwise `migrate dev` demands a reset). Local DB backed up before migrating. |
+| 2026-10-16 | Ledger same-timestamp ordering: replaced the removed "opens before closes" heuristic with **inventory-aware deferral** — within a group of rows sharing an identical timestamp, a close is deferred after the group's matching opens only when current inventory cannot cover it. Fixes the phantom IOT/IONQ/BILI/TQQQ/TNA positions on date-only files without inverting "close carried position, reopen later". Distinct timestamps are never reordered. Money-market sweep funds (`^[A-Z]{3}XX$`, e.g. SNSXX) are ignored by the ledger (cash, not trades). The 2 previously failing ledger tests now pass. |
+| 2026-10-16 | Real-data dry run (rolled back): rebuilt account ends with exactly the broker's 30 equity positions + 1 ORCL call. Net closed P&L moves −$6,139.80 across 8 symbols — mostly removing a phantom **+$7,853.95 RKLB "profit"** in the stored data (pre-`8e7247e` code booked a $0-basis merger-in position's sale as profit) and realizing carry-ins (APPS +$2,180.80, ORCL calls). Known gap: name-change mergers should carry cost basis through (RKLB 5/30/25 true P&L ≈ +$1.2k is currently unrealized/excluded). |
+| 2026-10-16 | Enrichment robustness: a trade deleted by a concurrent rebuild used to throw into the job's outer catch and abort enrichment for every remaining trade. Now the vanished trade (P2003/P2025) is skipped and exactly one follow-up run picks up replacement IDs (a vanish-triggered rerun never re-triggers). |
+| 2026-10-16 | Verification: `npx tsc --noEmit` clean; `npx jest --runInBand` **187/187** (first fully green run since `8e7247e`); Playwright upload-import, upload-tos-account-statement, settings-integrity, upload-dry-run-blockers pass. |
 
 ## Pending User Actions
 - [ ] Set a real `NEXTAUTH_SECRET` in `.env.local` (`openssl rand -base64 32`)

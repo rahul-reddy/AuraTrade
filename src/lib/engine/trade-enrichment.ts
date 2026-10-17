@@ -16,7 +16,7 @@
 import YahooFinance from 'yahoo-finance2'
 import { SMA, EMA, ATR, RSI, ADX, BollingerBands } from 'technicalindicators'
 import { prisma as defaultPrisma } from '@/lib/prisma'
-import type { Prisma, PrismaClient } from '@/generated/prisma'
+import { Prisma, type PrismaClient } from '@/generated/prisma'
 import {
   classifyTrade,
   type ClassifierContext,
@@ -63,6 +63,10 @@ export interface EnrichmentProgress {
   startedAt: Date
   finishedAt?: Date
   rerunRequested?: boolean
+  /** Trades deleted by a concurrent rebuild while this job ran (skipped). */
+  vanishedTrades?: number
+  /** This job is the single follow-up run triggered by vanished trades. */
+  isVanishRerun?: boolean
 }
 
 export interface EnrichmentDataSource {
@@ -327,6 +331,10 @@ async function runEnrichmentJob(
         durationSeconds: true,
         isOpen: true,
         initialRisk: true,
+        fills: {
+          select: { kind: true, time: true, posEffect: true, side: true, price: true, qty: true, seq: true },
+          orderBy: { seq: 'asc' },
+        },
         executions: {
           select: {
             execTime: true,
@@ -418,118 +426,122 @@ async function runEnrichmentJob(
       for (const trade of symbolTrades) {
         const indicators = computeIndicators(candles, trade.entryTime)
         if (indicators == null) continue
+        try {
 
-        const regime = classifyMarketRegime(spyCandles, trade.entryTime)
-        const earnings = resolveNearestEarnings(earningsDates, trade.entryTime)
+          const regime = classifyMarketRegime(spyCandles, trade.entryTime)
+          const earnings = resolveNearestEarnings(earningsDates, trade.entryTime)
 
-        await db.tradeContext.upsert({
-          where: { tradeId: trade.id },
-          update: {
-            sma20: indicators.sma20,
-            sma50: indicators.sma50,
-            sma200: indicators.sma200,
-            ema20: indicators.ema20,
-            atr14: indicators.atr14,
-            rsi14: indicators.rsi14,
-            adx14: indicators.adx14,
-            bbUpper: indicators.bbUpper,
-            bbLower: indicators.bbLower,
-            highN52w: indicators.highN52w,
-            lowN52w: indicators.lowN52w,
-            prevClose: indicators.prevClose,
-            gapPercent: indicators.gapPercent,
-            nearestEarningsDate: earnings.nearestEarningsDate ?? undefined,
-            daysToEarnings: earnings.daysToEarnings ?? undefined,
-            marketRegime: regime,
-            enrichedAt: new Date(),
-          },
-          create: {
-            tradeId: trade.id,
-            sma20: indicators.sma20,
-            sma50: indicators.sma50,
-            sma200: indicators.sma200,
-            ema20: indicators.ema20,
-            atr14: indicators.atr14,
-            rsi14: indicators.rsi14,
-            adx14: indicators.adx14,
-            bbUpper: indicators.bbUpper,
-            bbLower: indicators.bbLower,
-            highN52w: indicators.highN52w,
-            lowN52w: indicators.lowN52w,
-            prevClose: indicators.prevClose,
-            gapPercent: indicators.gapPercent,
-            nearestEarningsDate: earnings.nearestEarningsDate ?? undefined,
-            daysToEarnings: earnings.daysToEarnings ?? undefined,
-            marketRegime: regime,
-          },
-        })
-
-        const classificationTrade: ClassifierTrade = {
-          id: trade.id,
-          symbol: trade.symbol,
-          direction: trade.direction,
-          entryPrice: trade.entryPrice.toNumber(),
-          totalQty: trade.totalQty.toNumber(),
-          durationSeconds: trade.durationSeconds,
-          isOpen: trade.isOpen,
-        }
-        const classificationContext: ClassifierContext = {
-          sma20: indicators.sma20,
-          sma50: indicators.sma50,
-          sma200: indicators.sma200,
-          ema20: indicators.ema20,
-          atr14: indicators.atr14,
-          rsi14: indicators.rsi14,
-          adx14: indicators.adx14,
-          bbUpper: indicators.bbUpper,
-          bbLower: indicators.bbLower,
-          highN52w: indicators.highN52w,
-          lowN52w: indicators.lowN52w,
-          gapPercent: indicators.gapPercent,
-          daysToEarnings: earnings.daysToEarnings,
-          marketRegime: regime,
-        }
-        const classificationExecutions: ClassifierExecution[] = trade.executions.map((execution) => ({
-          execTime: execution.execTime,
-          posEffect: execution.posEffect,
-          side: execution.side,
-          price: execution.price.toNumber(),
-          qty: execution.qty.toNumber(),
-          daySeq: execution.daySeq,
-        }))
-        const classification = classifyTrade(
-          classificationTrade,
-          classificationContext,
-          classificationExecutions,
-        )
-
-        await db.tradeClassification.upsert({
-          where: { tradeId: trade.id },
-          update: {
-            setup: classification.setup,
-            confidence: classification.confidence,
-            secondarySetup: classification.secondarySetup ?? null,
-            scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
-            classifiedAt: new Date(),
-          },
-          create: {
-            tradeId: trade.id,
-            setup: classification.setup,
-            confidence: classification.confidence,
-            secondarySetup: classification.secondarySetup ?? null,
-            scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
-          },
-        })
-
-        // Set initialRisk = 1.5 × ATR14 if not already user-defined
-        if (trade.initialRisk == null) {
-          await db.roundTripTrade.update({
-            where: { id: trade.id },
-            data: { initialRisk: indicators.atr14 * 1.5, riskSource: 'ATR' },
+          await db.tradeContext.upsert({
+            where: { tradeId: trade.id },
+            update: {
+              sma20: indicators.sma20,
+              sma50: indicators.sma50,
+              sma200: indicators.sma200,
+              ema20: indicators.ema20,
+              atr14: indicators.atr14,
+              rsi14: indicators.rsi14,
+              adx14: indicators.adx14,
+              bbUpper: indicators.bbUpper,
+              bbLower: indicators.bbLower,
+              highN52w: indicators.highN52w,
+              lowN52w: indicators.lowN52w,
+              prevClose: indicators.prevClose,
+              gapPercent: indicators.gapPercent,
+              nearestEarningsDate: earnings.nearestEarningsDate ?? undefined,
+              daysToEarnings: earnings.daysToEarnings ?? undefined,
+              marketRegime: regime,
+              enrichedAt: new Date(),
+            },
+            create: {
+              tradeId: trade.id,
+              sma20: indicators.sma20,
+              sma50: indicators.sma50,
+              sma200: indicators.sma200,
+              ema20: indicators.ema20,
+              atr14: indicators.atr14,
+              rsi14: indicators.rsi14,
+              adx14: indicators.adx14,
+              bbUpper: indicators.bbUpper,
+              bbLower: indicators.bbLower,
+              highN52w: indicators.highN52w,
+              lowN52w: indicators.lowN52w,
+              prevClose: indicators.prevClose,
+              gapPercent: indicators.gapPercent,
+              nearestEarningsDate: earnings.nearestEarningsDate ?? undefined,
+              daysToEarnings: earnings.daysToEarnings ?? undefined,
+              marketRegime: regime,
+            },
           })
-        }
 
-        progress.tradesEnriched++
+          const classificationTrade: ClassifierTrade = {
+            id: trade.id,
+            symbol: trade.symbol,
+            direction: trade.direction,
+            entryPrice: trade.entryPrice.toNumber(),
+            totalQty: trade.totalQty.toNumber(),
+            durationSeconds: trade.durationSeconds,
+            isOpen: trade.isOpen,
+          }
+          const classificationContext: ClassifierContext = {
+            sma20: indicators.sma20,
+            sma50: indicators.sma50,
+            sma200: indicators.sma200,
+            ema20: indicators.ema20,
+            atr14: indicators.atr14,
+            rsi14: indicators.rsi14,
+            adx14: indicators.adx14,
+            bbUpper: indicators.bbUpper,
+            bbLower: indicators.bbLower,
+            highN52w: indicators.highN52w,
+            lowN52w: indicators.lowN52w,
+            gapPercent: indicators.gapPercent,
+            daysToEarnings: earnings.daysToEarnings,
+            marketRegime: regime,
+          }
+          const classificationExecutions = toClassifierExecutions(trade)
+          const classification = classifyTrade(
+            classificationTrade,
+            classificationContext,
+            classificationExecutions,
+          )
+
+          await db.tradeClassification.upsert({
+            where: { tradeId: trade.id },
+            update: {
+              setup: classification.setup,
+              confidence: classification.confidence,
+              secondarySetup: classification.secondarySetup ?? null,
+              scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
+              classifiedAt: new Date(),
+            },
+            create: {
+              tradeId: trade.id,
+              setup: classification.setup,
+              confidence: classification.confidence,
+              secondarySetup: classification.secondarySetup ?? null,
+              scoreBreakdown: classification.scoreBreakdown as unknown as Prisma.InputJsonValue,
+            },
+          })
+
+          // Set initialRisk = 1.5 × ATR14 if not already user-defined
+          if (trade.initialRisk == null) {
+            await db.roundTripTrade.update({
+              where: { id: trade.id },
+              data: { initialRisk: indicators.atr14 * 1.5, riskSource: 'ATR' },
+            })
+          }
+
+          progress.tradesEnriched++
+        } catch (err) {
+          // A trade rebuild (upload confirm / integrity reprocess) can delete and
+          // recreate trades while this job is mid-flight. Skip the vanished trade
+          // and rerun once at the end so the replacement trade IDs get enriched.
+          if (isVanishedTradeError(err)) {
+            progress.vanishedTrades = (progress.vanishedTrades ?? 0) + 1
+            continue
+          }
+          throw err
+        }
       }
 
       progress.enriched++
@@ -540,11 +552,69 @@ async function runEnrichmentJob(
   } finally {
     progress.done = true
     progress.finishedAt = new Date()
-    if (progress.rerunRequested) {
+    // One follow-up run picks up replacement trade IDs after a rebuild. A
+    // vanish-triggered rerun never triggers another, so it cannot loop.
+    const rerunForVanished = (progress.vanishedTrades ?? 0) > 0 && !progress.isVanishRerun
+    if (progress.rerunRequested || rerunForVanished) {
+      const isVanishRerun = !progress.rerunRequested
       progress.rerunRequested = false
-      startEnrichment(accountId, db, dataSource)
+      startEnrichment(accountId, db, dataSource, { isVanishRerun })
     }
   }
+}
+
+/**
+ * Fills the classifier sees for a trade. Ledger fills are canonical (priced
+ * events only: expirations and transfers are not executions); executions are
+ * a fallback for trades written before fills existed.
+ */
+export function toClassifierExecutions(trade: {
+  fills: Array<{
+    kind: string
+    time: Date
+    posEffect: ClassifierExecution['posEffect']
+    side: ClassifierExecution['side']
+    price: { toNumber(): number } | null
+    qty: { toNumber(): number }
+    seq: number
+  }>
+  executions: Array<{
+    execTime: Date
+    posEffect: ClassifierExecution['posEffect']
+    side: ClassifierExecution['side']
+    price: { toNumber(): number }
+    qty: { toNumber(): number }
+    daySeq: number
+  }>
+}): ClassifierExecution[] {
+  if (trade.fills.length > 0) {
+    return trade.fills
+      .filter((fill) => (fill.kind === 'OPEN' || fill.kind === 'CLOSE') && fill.price != null)
+      .map((fill) => ({
+        execTime: fill.time,
+        posEffect: fill.posEffect,
+        side: fill.side,
+        price: fill.price?.toNumber() ?? 0,
+        qty: fill.qty.toNumber(),
+        daySeq: fill.seq,
+      }))
+  }
+  return trade.executions.map((execution) => ({
+    execTime: execution.execTime,
+    posEffect: execution.posEffect,
+    side: execution.side,
+    price: execution.price.toNumber(),
+    qty: execution.qty.toNumber(),
+    daySeq: execution.daySeq,
+  }))
+}
+
+/** FK violation (P2003) or missing record (P2025): the trade was deleted mid-job. */
+function isVanishedTradeError(err: unknown): boolean {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    (err.code === 'P2003' || err.code === 'P2025')
+  )
 }
 
 // ─── public API ───────────────────────────────────────────────────────
@@ -559,6 +629,7 @@ export function startEnrichment(
   accountId: string,
   db: PrismaClient = defaultPrisma,
   dataSource: EnrichmentDataSource = defaultDataSource,
+  options: { isVanishRerun?: boolean } = {},
 ): void {
   const existing = activeJobs.get(accountId)
   if (existing && !existing.done) {
@@ -575,6 +646,7 @@ export function startEnrichment(
     errorCount: 0,
     startedAt: new Date(),
     rerunRequested: false,
+    isVanishRerun: options.isVanishRerun ?? false,
   }
   activeJobs.set(accountId, progress)
 

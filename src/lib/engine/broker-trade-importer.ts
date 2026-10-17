@@ -26,6 +26,11 @@ function parseOptionSymbol(symbol: string): ParsedOptionSymbol | null {
   }
 }
 
+/** "2026-03-20" → 2026-03-20T00:00:00Z, for @db.Date columns. */
+function toUtcDate(day: string | null): Date | null {
+  return day ? new Date(`${day}T00:00:00.000Z`) : null
+}
+
 function toDecimal(value: number | null): Prisma.Decimal | null {
   return value == null ? null : new Prisma.Decimal(value)
 }
@@ -46,6 +51,15 @@ export function shouldLinkTradeToChart(position: BrokerLedgerPosition): boolean 
   return position.instrumentType === 'EQUITY' && position.closeKind !== 'TRANSFER'
 }
 
+/** Row categories that change positions in the account ledger. */
+const LEDGER_CATEGORIES = new Set<StatementDryRun['rows'][number]['actionCategory']>([
+  'EQUITY_TRADE',
+  'OPTION_TRADE',
+  'OPTION_LIFECYCLE',
+  'POSITION_TRANSFER',
+  'CORPORATE_ACTION',
+])
+
 export function evaluateStatementImportSupport(
   dryRun: StatementDryRun,
 ): { supported: boolean; reasons: string[] } {
@@ -54,6 +68,11 @@ export function evaluateStatementImportSupport(
   for (const row of dryRun.rows) {
     if (row.actionCategory === 'UNKNOWN') {
       reasons.add('Unsupported broker action category: UNKNOWN')
+    }
+    // A position-affecting row the ledger cannot place in time would be
+    // dropped silently (e.g. a close lost, leaving its position open).
+    if (row.date == null && LEDGER_CATEGORIES.has(row.actionCategory)) {
+      reasons.add('A trade or position event has an unreadable date; fix or re-export the statement before importing.')
     }
   }
 
@@ -65,8 +84,8 @@ export function evaluateStatementImportSupport(
 
 export function mapBrokerPositionToTradeCreateInput(
   accountId: string,
-  brokerStatementImportId: string,
-  brokerStatementPositionId: string,
+  brokerStatementImportId: string | null,
+  brokerStatementPositionId: string | null,
   position: BrokerLedgerPosition,
 ): Prisma.RoundTripTradeUncheckedCreateInput {
   const optionSymbol = position.instrumentType === 'OPTION'
@@ -98,6 +117,8 @@ export function mapBrokerPositionToTradeCreateInput(
     isOpen: position.isOpen,
     entryTime: position.entryTime,
     exitTime: position.exitTime,
+    entryTradingDate: toUtcDate(position.entryTradingDate),
+    exitTradingDate: toUtcDate(position.exitTradingDate),
     durationSeconds: durationSeconds(position.entryTime, position.exitTime),
   }
 }

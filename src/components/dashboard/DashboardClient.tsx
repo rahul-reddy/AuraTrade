@@ -24,7 +24,7 @@ import {
   YAxis,
 } from 'recharts'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton'
-import { formatCurrency, formatDate, formatDuration } from '@/lib/format'
+import { formatCurrency, formatDuration, formatTradingDay } from '@/lib/format'
 import type { DashboardPayload, HeatmapMonth } from '@/lib/dashboard/types'
 
 interface DashboardClientProps {
@@ -458,14 +458,14 @@ export default function DashboardClient({
                 href={insights.bestDay ? buildTradesHref(accountId, { status: 'closed', dateFrom: insights.bestDay.date, dateTo: insights.bestDay.date }) : baseTradesHref}
                 label="Best Day"
                 value={insights.bestDay ? formatCurrency(insights.bestDay.pnl) : '—'}
-                sub={insights.bestDay ? formatDate(new Date(insights.bestDay.date + 'T00:00:00.000Z')) : 'No day data'}
+                sub={insights.bestDay ? formatTradingDay(insights.bestDay.date) : 'No day data'}
                 tone="profit"
               />
               <SummaryCard
                 href={insights.worstDay ? buildTradesHref(accountId, { status: 'closed', dateFrom: insights.worstDay.date, dateTo: insights.worstDay.date }) : baseTradesHref}
                 label="Worst Day"
                 value={insights.worstDay ? formatCurrency(insights.worstDay.pnl) : '—'}
-                sub={insights.worstDay ? formatDate(new Date(insights.worstDay.date + 'T00:00:00.000Z')) : 'No day data'}
+                sub={insights.worstDay ? formatTradingDay(insights.worstDay.date) : 'No day data'}
                 tone="loss"
               />
               <SummaryCard
