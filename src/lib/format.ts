@@ -39,6 +39,16 @@ export function formatDuration(seconds: number | null | undefined): string {
 }
 
 /** Format a Date to "Mar 13, 2026" style. */
+/** A yyyy-MM-dd trading day, shown as that calendar day in every time zone. */
+export function formatTradingDay(dayKey: string): string {
+  return new Date(`${dayKey}T00:00:00.000Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
 export function formatDate(date: Date | null | undefined): string {
   if (!date) return '—'
   return date.toLocaleDateString('en-US', {

@@ -46,6 +46,12 @@ export interface AnalyzedStatementRow {
   isImportTradeRow: boolean
   blocksCanonicalImport: boolean
   notes: string[]
+  /**
+   * Exchange trading date (yyyy-MM-dd) the row belongs to, set by the account
+   * ledger. `date` orders rows and may sit after the session (an expiration is
+   * placed at the end of its day), so analytics bucket by this instead.
+   */
+  tradingDate?: string
 }
 
 export interface StatementActionBreakdown {
@@ -57,7 +63,12 @@ export interface StatementActionBreakdown {
   instrumentTypes: StatementInstrumentType[]
 }
 
+export type StatementSourceFormat =
+  | 'SCHWAB_TRANSACTION_HISTORY'
+  | 'TOS_ACCOUNT_STATEMENT'
+
 export interface StatementDryRun {
+  sourceFormat: StatementSourceFormat
   totalRows: number
   importableTradeRows: number
   blockedTradeRows: number
@@ -67,6 +78,11 @@ export interface StatementDryRun {
   skippedRows: number
   symbols: string[]
   dateRange: { from: Date; to: Date } | null
+  /**
+   * Trading dates the statement claims to cover, as UTC-midnight dates. Wider
+   * than dateRange when the export period includes days without activity.
+   */
+  coverage: { from: Date; to: Date } | null
   warnings: string[]
   blockers: string[]
   assumptions: string[]
@@ -420,6 +436,22 @@ export function analyzeSchwabStatement(rawContent: string): StatementDryRun {
     })
   }
 
+  return buildStatementDryRun(rows, assumptions)
+}
+
+/**
+ * Aggregates analyzed rows into the dry-run summary. Shared by every statement
+ * format parser so blockers, action breakdowns, and counts stay consistent.
+ */
+export function buildStatementDryRun(
+  rows: AnalyzedStatementRow[],
+  assumptions: string[],
+  options: {
+    sourceFormat?: StatementSourceFormat
+    coverage?: { from: Date; to: Date } | null
+  } = {},
+): StatementDryRun {
+  const sourceFormat = options.sourceFormat ?? 'SCHWAB_TRANSACTION_HISTORY'
   const actionMap = new Map<string, StatementActionBreakdown>()
   const blockers = new Set<string>()
   const warnings = new Set<string>()
@@ -507,12 +539,20 @@ export function analyzeSchwabStatement(rawContent: string): StatementDryRun {
     skippedRows,
     symbols: [...symbols].sort(),
     dateRange,
+    // Transaction History rows are already UTC-midnight dates, so the row span
+    // is the best available coverage when the file states none.
+    coverage: options.coverage ?? dateRange,
     warnings: [...warnings],
     blockers: [...blockers],
     assumptions,
     actions,
     rows,
+    sourceFormat,
+    // importSupported gates the legacy equity-only Execution path, which can
+    // only read Schwab Transaction History. Other formats always go through
+    // the broker ledger import path.
     importSupported:
+      sourceFormat === 'SCHWAB_TRANSACTION_HISTORY' &&
       blockedTradeRows === 0 &&
       positionAffectingNonTradeRows === 0 &&
       importableTradeRows > 0,

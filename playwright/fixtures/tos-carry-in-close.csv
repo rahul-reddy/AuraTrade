@@ -1,0 +1,13 @@
+Account Statement for 00000000SCHW (Individual) since 1/22/26 through 1/23/26
+
+Cash Balance
+DATE,TIME,TYPE,REF #,DESCRIPTION,Misc Fees,Commissions & Fees,AMOUNT,BALANCE
+1/22/26,01:00:00,BAL,,Cash balance at the start of business day 22.01 CST,,,,"9,500.00"
+1/22/26,11:00:00,TRD,="2002",SOLD -10 TOSC @55.00,-0.05,,549.95,"10,049.95"
+
+Account Trade History
+,Exec Time,Spread,Side,Qty,Pos Effect,Symbol,Exp,Strike,Type,Price,Net Price,Order Type
+,1/22/26 11:00:00,STOCK,SELL,-10,TO CLOSE,TOSC,,,STOCK,55.00,55.00,MKT
+
+Equities
+Symbol,Description,Qty,Trade Price

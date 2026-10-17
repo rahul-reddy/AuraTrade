@@ -1,4 +1,5 @@
 import type { DailyPerformancePoint, PerformanceMetrics } from '@/lib/engine/metrics'
+import { tradingDayOfWeek } from '@/lib/trades/trading-date'
 import type {
   DashboardInsights,
   DashboardTradePoint,
@@ -93,7 +94,7 @@ function buildRollingWinRate(sortedTrades: DashboardTradePoint[]): RollingWinRat
     const wins = window.filter((entry) => entry.netPnl > 0).length
     return {
       tradeNumber: index + 1,
-      exitDate: trade.exitTime.slice(0, 10),
+      exitDate: trade.exitDate,
       windowSize: window.length,
       winRate: window.length > 0 ? (wins / window.length) * 100 : 0,
     }
@@ -145,7 +146,7 @@ function buildDayOfWeek(sortedTrades: DashboardTradePoint[]): DayOfWeekPoint[] {
   const grouped = new Map<number, { pnl: number; tradeCount: number; winCount: number }>()
 
   for (const trade of sortedTrades) {
-    const dayIndex = new Date(trade.exitTime).getUTCDay()
+    const dayIndex = tradingDayOfWeek(trade.exitDate)
     const current = grouped.get(dayIndex) ?? { pnl: 0, tradeCount: 0, winCount: 0 }
     current.pnl += trade.netPnl
     current.tradeCount += 1
@@ -212,7 +213,7 @@ function buildScatterPoints(
     return {
       tradeId: trade.id,
       symbol: trade.symbol,
-      exitDate: trade.exitTime.slice(0, 10),
+      exitDate: trade.exitDate,
       pnl: trade.netPnl,
       x,
       xLabel: type === 'duration' ? 'Duration' : startingBalance > 0 ? 'Size %' : 'Notional',

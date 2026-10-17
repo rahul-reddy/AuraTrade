@@ -6,10 +6,14 @@ import {
   resolveNearestEarnings,
   runEnrichment,
   startEnrichment,
+  toClassifierExecutions,
   type DailyCandle,
   type EnrichmentDataSource,
 } from '@/lib/engine/trade-enrichment'
-import type { PrismaClient } from '@/generated/prisma'
+import { Prisma, type PrismaClient } from '@/generated/prisma'
+import { calculateSetupScores } from '@/lib/engine/classifier'
+import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
+import { analyzeSchwabStatement } from '@/lib/parser/schwab-statement-analyzer'
 
 // ─── helpers ──────────────────────────────────────────────────────────
 
@@ -280,6 +284,7 @@ describe('runEnrichment', () => {
             durationSeconds: 0,
             isOpen: false,
             initialRisk: null,
+            fills: [],
             executions: [{ execTime: new Date('2023-03-10T00:00:00.000Z'), posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 100 }, qty: { toNumber: () => 100 }, daySeq: 0 }],
           },
           {
@@ -292,6 +297,7 @@ describe('runEnrichment', () => {
             durationSeconds: 2 * 24 * 60 * 60,
             isOpen: false,
             initialRisk: 2.5,
+            fills: [],
             executions: [{ execTime: new Date('2023-09-01T00:00:00.000Z'), posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 120 }, qty: { toNumber: () => 50 }, daySeq: 0 }],
           },
         ]),
@@ -341,6 +347,72 @@ describe('runEnrichment', () => {
     })
   })
 
+  it('skips a trade deleted mid-job by a rebuild, keeps enriching the rest, and reruns once', async () => {
+    const candles = makeCandles(320, {
+      startDate: new Date('2023-01-01T00:00:00.000Z'),
+      basePrice: 100,
+      trend: 0.5,
+    })
+    const trade = (id: string, entry: string) => ({
+      id,
+      symbol: 'AAPL',
+      direction: 'LONG',
+      entryPrice: { toNumber: () => 100 },
+      totalQty: { toNumber: () => 10 },
+      entryTime: new Date(entry),
+      durationSeconds: 0,
+      isOpen: false,
+      initialRisk: 1,
+      fills: [],
+      executions: [],
+    })
+    const findMany = jest.fn().mockResolvedValue([
+      trade('vanished', '2023-06-01T00:00:00.000Z'),
+      trade('survivor', '2023-07-03T00:00:00.000Z'),
+    ])
+    const tradeContextUpsert = jest
+      .fn<Promise<unknown>, [{ where: { tradeId: string } }]>()
+      .mockImplementation(async (args) => {
+        if (args.where.tradeId === 'vanished') {
+          throw new Prisma.PrismaClientKnownRequestError('Foreign key constraint violated', {
+            code: 'P2003',
+            clientVersion: 'test',
+          })
+        }
+        return undefined
+      })
+
+    const db = {
+      roundTripTrade: { findMany, update: jest.fn().mockResolvedValue(undefined) },
+      tradeContext: { upsert: tradeContextUpsert },
+      tradeClassification: { upsert: jest.fn().mockResolvedValue(undefined) },
+    } as unknown as PrismaClient
+    const dataSource: EnrichmentDataSource = {
+      fetchDailyHistory: async () => candles,
+      fetchEarningsDates: async () => [],
+    }
+
+    const progress = await runEnrichment('acct-vanish', db, dataSource)
+
+    expect(progress.errorCount).toBe(0)
+    expect(progress.tradesEnriched).toBe(1)
+    expect(tradeContextUpsert.mock.calls.map(([args]) => args.where.tradeId)).toEqual([
+      'vanished',
+      'survivor',
+    ])
+    // The finished job started one follow-up run. Here the mock keeps failing
+    // the same trade, so that follow-up must NOT start a third run.
+    const followUp = getEnrichmentProgress('acct-vanish')
+    expect(followUp).not.toBe(progress)
+    expect(followUp?.isVanishRerun).toBe(true)
+    for (let i = 0; i < 100 && !getEnrichmentProgress('acct-vanish')?.done; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    expect(getEnrichmentProgress('acct-vanish')).toBe(followUp)
+    expect(followUp?.done).toBe(true)
+    expect(findMany).toHaveBeenCalledTimes(2)
+  })
+
   it('fetches candle history across the full symbol trade span instead of only the latest trade window', async () => {
     const symbolCandles = makeCandles(1200, {
       startDate: new Date('2020-01-01T00:00:00.000Z'),
@@ -375,6 +447,7 @@ describe('runEnrichment', () => {
             durationSeconds: 0,
             isOpen: false,
             initialRisk: null,
+            fills: [],
             executions: [{ execTime: new Date('2020-10-23T00:00:00.000Z'), posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 100 }, qty: { toNumber: () => 100 }, daySeq: 0 }],
           },
           {
@@ -387,6 +460,7 @@ describe('runEnrichment', () => {
             durationSeconds: 0,
             isOpen: false,
             initialRisk: null,
+            fills: [],
             executions: [{ execTime: new Date('2022-09-01T00:00:00.000Z'), posEffect: 'OPEN', side: 'BUY', price: { toNumber: () => 130 }, qty: { toNumber: () => 100 }, daySeq: 0 }],
           },
         ]),
@@ -457,5 +531,76 @@ describe('runEnrichment', () => {
 
     expect(findMany).toHaveBeenCalledTimes(2)
     expect(getEnrichmentProgress('acct-rerun')?.done).toBe(true)
+  })
+})
+
+describe('toClassifierExecutions', () => {
+  const decimal = (value: number) => new Prisma.Decimal(value)
+
+  test('feeds ledger fills to the classifier so average-down is detected on statement trades', () => {
+    // Ledger output for a scale-in: buy 100 @ 100, add 50 @ 98, add 50 @ 95, sell 200.
+    const dryRun = analyzeSchwabStatement(
+      [
+        'Date,Action,Symbol,Description,Quantity,Price,Fees & Comm,Amount',
+        '1/04/2023,Sell,AAPL,APPLE INC,200,"$101.00 ","$0.10 ","$20,199.90 "',
+        '1/03/2023,Buy,AAPL,APPLE INC,50,"$95.00 ",,"($4,750.00)"',
+        '1/02/2023,Buy,AAPL,APPLE INC,50,"$98.00 ",,"($4,900.00)"',
+        '1/01/2023,Buy,AAPL,APPLE INC,100,"$100.00 ",,"($10,000.00)"',
+      ].join('\n'),
+    )
+    const [position] = buildBrokerPositionLedger(dryRun.rows).positions
+    const stored = position.fills.map((fill, seq) => ({
+      kind: fill.kind,
+      time: fill.time,
+      posEffect: fill.posEffect,
+      side: fill.side,
+      price: fill.price == null ? null : decimal(fill.price),
+      qty: decimal(fill.qty),
+      seq,
+    }))
+
+    const executions = toClassifierExecutions({ fills: stored, executions: [] })
+    expect(executions.map((execution) => [execution.posEffect, execution.price, execution.qty])).toEqual([
+      ['OPEN', 100, 100],
+      ['OPEN', 98, 50],
+      ['OPEN', 95, 50],
+      ['CLOSE', 101, 200],
+    ])
+
+    const scores = calculateSetupScores(
+      { id: 't', symbol: 'AAPL', direction: 'LONG', entryPrice: 98.25, totalQty: 200, durationSeconds: 3 * 86_400, isOpen: false },
+      {
+        sma20: 98, sma50: 95, sma200: 90, ema20: 99, atr14: 2, rsi14: 62, adx14: 18,
+        bbUpper: 104, bbLower: 94, highN52w: 101, lowN52w: 70, gapPercent: 0.005,
+        daysToEarnings: 10, marketRegime: 'TRENDING_UP',
+      },
+      executions,
+    )
+    expect(scores.derivedSignals.worseningOpenAdds).toBe(2)
+    expect(scores.scores.AVERAGE_DOWN.score).toBeGreaterThanOrEqual(85)
+  })
+
+  test('drops expiration/transfer events, which are not executions', () => {
+    const executions = toClassifierExecutions({
+      fills: [
+        { kind: 'OPEN', time: new Date('2026-01-02'), posEffect: 'OPEN', side: 'BUY', price: decimal(1), qty: decimal(2), seq: 0 },
+        { kind: 'EXPIRATION', time: new Date('2026-01-20'), posEffect: 'CLOSE', side: 'SELL', price: decimal(0), qty: decimal(2), seq: 1 },
+        { kind: 'TRANSFER_OUT', time: new Date('2026-01-21'), posEffect: 'CLOSE', side: 'SELL', price: null, qty: decimal(2), seq: 2 },
+      ],
+      executions: [],
+    })
+    expect(executions).toHaveLength(1)
+  })
+
+  test('falls back to legacy executions for trades written before fills existed', () => {
+    const executions = toClassifierExecutions({
+      fills: [],
+      executions: [
+        { execTime: new Date('2026-01-02'), posEffect: 'OPEN', side: 'BUY', price: decimal(10), qty: decimal(5), daySeq: 0 },
+      ],
+    })
+    expect(executions).toEqual([
+      { execTime: new Date('2026-01-02'), posEffect: 'OPEN', side: 'BUY', price: 10, qty: 5, daySeq: 0 },
+    ])
   })
 })

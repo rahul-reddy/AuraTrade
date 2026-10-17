@@ -3,6 +3,23 @@ import type { AnalyzedStatementRow } from '@/lib/parser/schwab-statement-analyze
 export type BrokerPositionSide = 'LONG' | 'SHORT'
 export type BrokerPositionCloseKind = 'TRADE' | 'EXPIRATION' | 'TRANSFER' | 'MIXED'
 
+/**
+ * One fill (or lifecycle event) as the ledger applied it to a position. Unlike
+ * the source row, qty and fees are the portion attributed to THIS position
+ * (a reversal row is split between the closed and the newly opened side; an
+ * oversized close is capped at the inventory it consumed).
+ */
+export interface BrokerLedgerFill {
+  rowIndex: number
+  kind: 'OPEN' | 'CLOSE' | 'EXPIRATION' | 'TRANSFER_IN' | 'TRANSFER_OUT'
+  posEffect: 'OPEN' | 'CLOSE'
+  side: 'BUY' | 'SELL' | 'SELL_SHORT' | 'BUY_TO_COVER'
+  time: Date
+  qty: number
+  price: number | null
+  fees: number
+}
+
 export interface BrokerLedgerPosition {
   instrumentKey: string
   instrumentType: 'EQUITY' | 'OPTION'
@@ -25,7 +42,12 @@ export interface BrokerLedgerPosition {
   closingActions: string[]
   entryTime: Date
   exitTime: Date | null
+  /** Trading dates (yyyy-MM-dd) of the first open / last close, when the rows carry them. */
+  entryTradingDate: string | null
+  exitTradingDate: string | null
   closeKind: BrokerPositionCloseKind | null
+  /** Opening then closing events, each in the order the ledger applied them. */
+  fills: BrokerLedgerFill[]
 }
 
 export interface BrokerLedgerWarning {
@@ -216,9 +238,10 @@ function finalizePosition(pos: ActivePosition, isOpen: boolean): BrokerLedgerPos
 
   const netPnl = grossPnl == null ? null : grossPnl - pos.totalFees
   const entryTime = pos.openingEvents[0].row.date ?? new Date(0)
-  const exitTime = isOpen
-    ? null
-    : (pos.closingEvents[pos.closingEvents.length - 1]?.row.date ?? null)
+  const lastClose = pos.closingEvents[pos.closingEvents.length - 1]
+  const exitTime = isOpen ? null : (lastClose?.row.date ?? null)
+  const entryTradingDate = pos.openingEvents[0].row.tradingDate ?? null
+  const exitTradingDate = isOpen ? null : (lastClose?.row.tradingDate ?? null)
 
   return {
     instrumentKey: pos.instrumentKey,
@@ -242,7 +265,34 @@ function finalizePosition(pos: ActivePosition, isOpen: boolean): BrokerLedgerPos
     closingActions: pos.closingEvents.map((event) => event.row.action),
     entryTime,
     exitTime,
+    entryTradingDate,
+    exitTradingDate,
     closeKind,
+    fills: [
+      ...pos.openingEvents.map((event) => toLedgerFill(event, 'OPEN', pos.side)),
+      ...pos.closingEvents.map((event) => toLedgerFill(event, 'CLOSE', pos.side)),
+    ],
+  }
+}
+
+function toLedgerFill(
+  event: NormalizedLedgerEvent,
+  posEffect: 'OPEN' | 'CLOSE',
+  side: BrokerPositionSide,
+): BrokerLedgerFill {
+  return {
+    rowIndex: event.row.rowIndex,
+    kind: event.kind,
+    posEffect,
+    side:
+      side === 'LONG'
+        ? posEffect === 'OPEN' ? 'BUY' : 'SELL'
+        : posEffect === 'OPEN' ? 'SELL_SHORT' : 'BUY_TO_COVER',
+    // Undated rows never reach a position (the ledger skips them).
+    time: event.row.date ?? new Date(0),
+    qty: event.qty,
+    price: event.price,
+    fees: event.fees,
   }
 }
 

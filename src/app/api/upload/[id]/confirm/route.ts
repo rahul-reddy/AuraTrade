@@ -2,56 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { getRequiredSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
-import { parseSchwabCSV, type ParsedExecution } from '@/lib/parser/tos-csv-parser'
-import { analyzeSchwabStatement } from '@/lib/parser/schwab-statement-analyzer'
+import { analyzeBrokerStatement } from '@/lib/parser/analyze-broker-statement'
 import { persistBrokerStatementImport } from '@/lib/parser/broker-statement-store'
-import { rebuildTradesForAccount } from '@/lib/engine/account-rebuild'
 import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
 import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
+import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
 import {
-  evaluateStatementImportSupport,
-  mapBrokerPositionToTradeCreateInput,
-} from '@/lib/engine/broker-trade-importer'
-
-/** Map ParsedExecution side/posEffect/direction → Prisma Side enum string. */
-function toPrismaside(
-  side: string,
-  direction: string,
-): 'BUY' | 'SELL' | 'SELL_SHORT' | 'BUY_TO_COVER' {
-  if (side === 'BUY' && direction === 'LONG') return 'BUY'
-  if (side === 'SELL' && direction === 'LONG') return 'SELL'
-  if (side === 'SELL' && direction === 'SHORT') return 'SELL_SHORT'
-  return 'BUY_TO_COVER'
-}
+  evaluateAccountImport,
+  lockAccountLedger,
+  previewStatementImport,
+  rebuildLedgerTradesForAccount,
+} from '@/lib/engine/account-ledger-rebuild'
 
 /**
- * Assign a content-based daySeq to each incoming execution.
+ * Confirms a previewed upload. Every statement format imports the same way:
+ * the statement is marked confirmed and all statement-derived trades for the
+ * account are rebuilt through the account-level ledger (carry-in positions
+ * pair across files; overlapping statements never double-count).
  *
- * daySeq = 0-based occurrence index within (execTime, symbol, side, qty, price) on a given day.
- * Two files covering the same date range will assign the same daySeq to the same execution,
- * so the DB unique constraint (accountId, execTime, symbol, side, qty, price, daySeq) correctly
- * deduplicates overlapping uploads without double-counting genuinely repeated same-day fills.
+ * The legacy Execution import path no longer accepts new files. Executions it
+ * created earlier enter the same ledger (see mapLegacyExecutionsToStatement),
+ * so they pair with new statements and overlapping days are owned once.
  */
-function assignDaySeqs(
-  executions: ParsedExecution[],
-): Array<ParsedExecution & { daySeq: number; execTime: Date }> {
-  const seqMap = new Map<string, number>()
-  return executions.map((ex) => {
-    const prismaside = toPrismaside(ex.side, ex.direction)
-    // Key must match the DB unique constraint fields (excluding daySeq itself)
-    const key = `${ex.date.toISOString()}|${ex.symbol}|${prismaside}|${ex.qty}|${ex.price}`
-    const seq = seqMap.get(key) ?? 0
-    seqMap.set(key, seq + 1)
-    return {
-      ...ex,
-      daySeq: seq,
-      execTime: ex.date, // pure midnight — no rowIndex offset encoding
-    }
-  })
-}
-
-// ─── route handler ────────────────────────────────────────────────────
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -99,190 +71,91 @@ export async function POST(
       return NextResponse.json({ error: 'account_not_found' }, { status: 404 })
     }
 
-    // Parse the file
-    const dryRun = analyzeSchwabStatement(content)
-    const brokerLedger = buildBrokerPositionLedger(dryRun.rows)
+    // Re-analyze and re-persist so confirm never imports a stale preview.
+    const dryRun = analyzeBrokerStatement(content)
     const importSupport = evaluateStatementImportSupport(dryRun)
-    const parseResult = parseSchwabCSV(content)
-
-    await persistBrokerStatementImport(prisma, {
+    const { statementImportId } = await persistBrokerStatementImport(prisma, {
       userId,
       accountId,
       fileHash,
       fileName: file.name,
       dryRun,
-      ledger: brokerLedger,
+      ledger: buildBrokerPositionLedger(dryRun.rows),
     })
 
-    const statementImport = await prisma.brokerStatementImport.findUnique({
-      where: {
-        accountId_fileHash: {
-          accountId,
-          fileHash,
-        },
-      },
-      include: {
-        positions: true,
-        ledgerWarnings: {
-          orderBy: [{ rowIndex: 'asc' }, { createdAt: 'asc' }],
-          select: { message: true },
-        },
-      },
+    // Same decision as the preview (see evaluateAccountImport), using the
+    // persisted createdAt that the rebuild will also use for day ownership.
+    const { createdAt } = await prisma.brokerStatementImport.findUniqueOrThrow({
+      where: { id: statementImportId },
+      select: { createdAt: true },
     })
-
-    const useMixedLedgerImport =
-      !dryRun.importSupported &&
-      importSupport.supported &&
-      statementImport != null &&
-      statementImport.positions.length > 0
-
-    // Assign content-based daySeq — enables cross-file dedup for overlapping date ranges
-    const withSeqs = assignDaySeqs(parseResult.executions)
-
-    const execData = withSeqs.map((ex) => ({
-      accountId,
-      uploadId,
-      execTime: ex.execTime,
-      daySeq: ex.daySeq,
-      symbol: ex.symbol,
-      side: toPrismaside(ex.side, ex.direction),
-      qty: ex.qty,
-      price: ex.price,
-      netPrice: ex.price, // no separate NetPrice in Schwab format — commission is explicit
-      commission: ex.commission,
-      posEffect: ex.posEffect as 'OPEN' | 'CLOSE',
-      assetType: 'STOCK',
-    }))
+    const decision = evaluateAccountImport({
+      dryRun,
+      impact: await previewStatementImport(prisma, accountId, {
+        id: statementImportId,
+        createdAt,
+        sourceFormat: dryRun.sourceFormat,
+        coverageFrom: dryRun.coverage?.from ?? null,
+        coverageTo: dryRun.coverage?.to ?? null,
+        rows: dryRun.rows,
+      }),
+      supportReasons: importSupport.reasons,
+    })
+    if (!decision.canImport) {
+      return NextResponse.json(
+        {
+          error: 'not_importable',
+          message: 'This statement has nothing to import into the account or contains rows that block import.',
+          blockers: decision.blockers,
+        },
+        { status: 422 },
+      )
+    }
 
     const result = await prisma.$transaction(
       async (tx) => {
-        if (useMixedLedgerImport && statementImport) {
-          // Atomically claim the upload so concurrent confirms cannot both run
-          // the deleteMany/create sequence and produce duplicate trades.
-          const claimed = await tx.upload.updateMany({
-            where: { id: uploadId, status: { not: 'COMPLETE' } },
-            data: { status: 'COMPLETE', completedAt: new Date() },
-          })
-          if (claimed.count === 0) {
-            // Another request already completed this upload.
-            return null
-          }
-
-          await tx.roundTripTrade.deleteMany({
-            where: { brokerStatementImportId: statementImport.id },
-          })
-
-          for (const position of statementImport.positions) {
-            await tx.roundTripTrade.create({
-              data: mapBrokerPositionToTradeCreateInput(
-                accountId,
-                statementImport.id,
-                position.id,
-                {
-                  instrumentKey: position.instrumentKey,
-                  instrumentType: position.instrumentType as 'EQUITY' | 'OPTION',
-                  symbol: position.symbol,
-                  side: position.side as 'LONG' | 'SHORT',
-                  totalQty: position.totalQty.toNumber(),
-                  closedQty: position.closedQty.toNumber(),
-                  remainingQty: position.remainingQty.toNumber(),
-                  multiplier: position.multiplier,
-                  underlyingEquivalentQty: position.underlyingEquivalentQty.toNumber(),
-                  entryPrice: position.entryPrice.toNumber(),
-                  exitPrice: position.exitPrice?.toNumber() ?? null,
-                  grossPnl: position.grossPnl?.toNumber() ?? null,
-                  totalFees: position.totalFees.toNumber(),
-                  netPnl: position.netPnl?.toNumber() ?? null,
-                  isOpen: position.isOpen,
-                  openRows: position.openRows,
-                  closeRows: position.closeRows,
-                  openingActions: position.openingActions,
-                  closingActions: position.closingActions,
-                  entryTime: position.entryTime,
-                  exitTime: position.exitTime,
-                  closeKind: position.closeKind as
-                    | 'TRADE'
-                    | 'EXPIRATION'
-                    | 'TRANSFER'
-                    | 'MIXED'
-                    | null,
-                },
-              ),
-            })
-          }
-
-          const snapshotResult = await rebuildDailySnapshotsForAccount(
-            tx,
-            accountId,
-            account.startingBalance.toNumber(),
-          )
-
-          const importedTrades = await tx.roundTripTrade.findMany({
-            where: { brokerStatementImportId: statementImport.id },
-            select: { isOpen: true, netPnl: true },
-          })
-
-          const estimatedPnl = importedTrades.reduce(
-            (sum, trade) => sum + (trade.netPnl?.toNumber() ?? 0),
-            0,
-          )
-          const openPositions = importedTrades.filter((trade) => trade.isOpen).length
-
-          return {
-            newExecCount: 0,
-            skippedExecCount: 0,
-            totalTrades: importedTrades.length - openPositions,
-            openPositions,
-            estimatedPnl: Math.round(estimatedPnl * 100) / 100,
-            warnings: statementImport.ledgerWarnings.map((warning) => warning.message),
-            snapshotsRebuilt: snapshotResult.snapshotsWritten,
-          }
-        }
-
-        // ── 1. Upsert new executions (skipDuplicates deduplicates overlapping uploads) ──
-        const beforeCount = await tx.execution.count({ where: { accountId } })
-        await tx.execution.createMany({ data: execData, skipDuplicates: true })
-        const afterCount = await tx.execution.count({ where: { accountId } })
-        const newExecCount = afterCount - beforeCount
-        const skippedExecCount = execData.length - newExecCount
-
-        // ── 2. Rebuild round trips from all executions ──
-        const rebuildResult = await rebuildTradesForAccount(tx, accountId)
-
-        // ── 3. Rebuild snapshots from the earliest date in this upload when new data landed ──
-        const snapshotResult =
-          newExecCount > 0 && parseResult.dateRange?.from
-            ? await rebuildDailySnapshotsForAccount(
-                tx,
-                accountId,
-                account.startingBalance.toNumber(),
-                { fromDate: parseResult.dateRange.from },
-              )
-            : null
-
-        // ── 4. Mark upload complete ──
-        await tx.upload.update({
-          where: { id: uploadId },
+        // Serialize with every other ledger writer for this account before
+        // reading anything, then atomically claim the upload so a repeated
+        // confirm of the same upload is a no-op.
+        await lockAccountLedger(tx, accountId)
+        const claimed = await tx.upload.updateMany({
+          where: { id: uploadId, status: { not: 'COMPLETE' } },
           data: { status: 'COMPLETE', completedAt: new Date() },
         })
+        if (claimed.count === 0) {
+          return null
+        }
 
-        const closedTrades = await tx.roundTripTrade.findMany({
-          where: { accountId, isOpen: false, netPnl: { not: null } },
-          select: { netPnl: true },
+        await tx.brokerStatementImport.update({
+          where: { id: statementImportId },
+          data: { confirmedAt: new Date() },
         })
-        const estimatedPnl = closedTrades.reduce((sum, trade) => sum + (trade.netPnl?.toNumber() ?? 0), 0)
+        const ledgerRebuild = await rebuildLedgerTradesForAccount(tx, accountId, {
+          impactFor: statementImportId,
+        })
 
+        const snapshotResult = await rebuildDailySnapshotsForAccount(
+          tx,
+          accountId,
+          account.startingBalance.toNumber(),
+        )
+
+        const impact = ledgerRebuild.impact
         return {
-          newExecCount,
-          skippedExecCount,
-          totalTrades: rebuildResult.closedTrades,
-          openPositions: rebuildResult.openPositions,
-          estimatedPnl: Math.round(estimatedPnl * 100) / 100,
-          warnings: rebuildResult.warnings,
-          snapshotsRebuilt: snapshotResult?.snapshotsWritten ?? 0,
+          newExecCount: 0,
+          skippedExecCount: 0,
+          // Trades this statement opened or closed, including closes of
+          // positions opened in an earlier statement.
+          totalTrades: impact?.closedTradeLikePositions ?? 0,
+          openPositions: impact?.openPositions ?? 0,
+          estimatedPnl: Math.round((impact?.estimatedPnl ?? 0) * 100) / 100,
+          // Account-level warnings: carry-in closes that pair with an earlier
+          // statement no longer appear here.
+          warnings: ledgerRebuild.warnings,
+          snapshotsRebuilt: snapshotResult.snapshotsWritten,
         }
       },
-      { timeout: 30000 },
+      { timeout: 60_000 },
     )
 
     if (result === null) {
