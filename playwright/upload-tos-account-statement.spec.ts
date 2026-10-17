@@ -56,7 +56,9 @@ test('thinkorswim Account Statement imports timestamped trades via the broker le
   // The chart draws every ledger fill of the imported trade: TOSA was bought
   // in two fills (60 + 40) and sold in one, so it has three markers.
   await page.goto('/chart/TOSA')
-  await expect(page.getByTestId('chart-workspace')).toHaveAttribute('data-fill-count', '3', {
-    timeout: 20_000,
-  })
+  // AnimatePresence briefly keeps the previous page mounted during the route
+  // transition; wait for a single workspace before reading it.
+  const workspace = page.getByTestId('chart-workspace')
+  await expect(workspace).toHaveCount(1, { timeout: 20_000 })
+  await expect(workspace).toHaveAttribute('data-fill-count', '3')
 })
