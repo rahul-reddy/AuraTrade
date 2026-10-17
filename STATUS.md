@@ -45,8 +45,13 @@
   on (symbol, direction, entry instant) was ambiguous for repeated same-day date-only round
   trips. Trades now store `sourceKey` (migration `20261016220000_trade_source_key`) and
   matching only pairs keys unique on both sides. Real data: 1196/1196 unique identities.
+- **Cross-review round 6 (codex):** 1 blocking finding, fixed: expirations ordered at ET
+  end-of-day landed on the next UTC date in daily snapshots, the daily series, day-of-week
+  stats and date filters. Trades now store `entryTradingDate`/`exitTradingDate` (migration
+  `20261016230000_trade_trading_dates`) and all daily aggregates bucket through
+  `src/lib/trades/trading-date.ts`. Real data: 4 trades had been bucketed on the wrong day.
 - **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
-  `npm test` 236/236; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm test` 245/245; fresh-DB `prisma migrate deploy` + drift check: no difference;
   `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
   two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
   0 blocked, all option fills matched to their own contract's fee row.
