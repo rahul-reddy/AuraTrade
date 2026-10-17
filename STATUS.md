@@ -41,8 +41,12 @@
   trades had no per-trade fills, so charts lost fill markers and the classifier lost
   scale-in/average-down signals — the ledger now writes `TradeFill` rows (migration
   `20261016210000_trade_fills`) that both consumers read.
+- **Cross-review round 5 (codex):** 1 blocking finding, fixed: annotation carry-over keyed
+  on (symbol, direction, entry instant) was ambiguous for repeated same-day date-only round
+  trips. Trades now store `sourceKey` (migration `20261016220000_trade_source_key`) and
+  matching only pairs keys unique on both sides. Real data: 1196/1196 unique identities.
 - **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
-  `npm test` 232/232; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm test` 236/236; fresh-DB `prisma migrate deploy` + drift check: no difference;
   `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
   two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
   0 blocked, all option fills matched to their own contract's fee row.
