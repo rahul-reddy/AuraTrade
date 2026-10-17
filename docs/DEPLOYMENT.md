@@ -37,9 +37,10 @@ together are about $26–28 a month, so that alert will fire until the owner rai
 - **Failed sign-ins**: five wrong passwords for one email within 15 minutes lock that
   email for 15 minutes, during which even the right password is refused with the same
   "Invalid email or password." message (`src/lib/login-throttle.ts`). The lock is in
-  memory and clears on a restart. It tracks up to 10,000 addresses and never evicts an
-  active lock; if all 10,000 are locked at once (a spray), every untracked address is
-  refused too until locks expire. Someone who knows the owner's email, or sprays, can
+  memory and clears on a restart. It tracks up to 10,000 addresses and never evicts a
+  live record (an active lock, or failures still inside their 15-minute window); while
+  all 10,000 slots are live (a spray), every untracked address is refused too until
+  records expire. Someone who knows the owner's email, or sprays, can
   keep the owner locked out; if that happens, restart the web container
   (`~/auratrade/bin/dc restart web`).
 
@@ -141,9 +142,11 @@ data into fixtures or logs, and do not open more ports.
 3. **`.env`:** written on the server as above.
 4. **DNS (owner, Namecheap → Advanced DNS):** delete the parking records; add
    `A @ 18.226.191.214` and `CNAME www auratrades.quest.`.
-5. **First deploy** with `scripts/deploy.ps1`; Caddy fetches the certificate once DNS
-   resolves.
-6. **Daily dump:** `crontab -e` on the server: `30 8 * * * $HOME/auratrade/bin/backup.sh daily`.
+5. **First deploy** with `scripts/deploy.ps1` (`d5b9043`, 2026-10-17). Caddy fetches the
+   certificate once DNS resolves; it retries on its own, and `~/auratrade/bin/dc restart
+   caddy` retries at once.
+6. **Daily dump** (installed 2026-10-17): the server's crontab runs
+   `30 8 * * * $HOME/auratrade/bin/backup.sh daily >> $HOME/auratrade/backups/cron.log 2>&1`.
 7. **Owner account** with `set-user.mjs`, or the workstation database restored with
    `pg_restore` (stop `web` first).
 

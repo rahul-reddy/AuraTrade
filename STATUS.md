@@ -8,28 +8,27 @@
   domain `auratrades.quest` (Namecheap).
 - **Provisioned (live AWS, `us-east-2`):** `auratrade-1` (`small_3_0`, $12/month), static IP
   `auratrade-ip` = `18.226.191.214`, ports 22/80/443 only, daily auto-snapshots 09:00 UTC,
-  key `~/.ssh/auratrade-lightsail`. Docker, swap and unattended-upgrades installed.
-- **Branch `feat/lightsail-deployment`:** `deploy/` stack (Postgres 16, web, migrate,
-  Caddy), Dockerfile `migrate` stage, `scripts/deploy.ps1` (clean worktree, sha on
-  origin/main, green `Verify AuraTrade`, typed `DEPLOY <sha7>`, `git archive` over SSH so
-  the server holds no GitHub credential), backup before every migrate plus daily dumps,
-  `deploy/set-user.mjs` (owner account, password on stdin). Sign-up switch
-  `AURATRADE_REGISTRATION` (pinned `closed` on the server; unknown values close it).
-  Failed sign-in lockout (5 per email per 15 min). Runbook rewritten: `docs/DEPLOYMENT.md`.
-- **Local results on this revision:** lint 0 errors; typecheck clean; `npm test` 261/261
-  (adds login-throttle and registration tests); fresh-DB migrate + `npm run build` +
-  Playwright 12/12 against `next start` (adds `login-lockout.spec.ts`). The deploy stack
-  itself ran locally in Docker with `localhost`: both images build, 12 migrations apply,
-  `set-user.mjs` creates an account and refuses a short password, `/login` 200, signed-out
-  `/dashboard` 307 → `/login`, register POST 403, `/register` shows "Sign-up is closed",
-  no sign-up link on `/login`, HTTP → HTTPS, HSTS/frame headers; a browser signed in, and
-  after five wrong passwords the right one was refused.
-- **Pending owner actions:** Namecheap DNS `A @ 18.226.191.214` and `CNAME www
-  auratrades.quest.`; raise the account-wide $20 "My Monthly Cost Budget" (two servers
-  ≈ $26–28/month; the TenFold IAM user cannot edit it); choose whether to copy the
-  workstation database to the server or start empty with `set-user.mjs`.
-- **Next action:** merge through `scripts/merge-pr.ps1`, then first deploy with
-  `scripts/deploy.ps1` once DNS resolves.
+  key `~/.ssh/auratrade-lightsail`. Docker, swap and unattended-upgrades installed. Server
+  `.env` secrets were generated on the server and never left it.
+- **Merged PR #15 (`d5b9043`):** `deploy/` stack (Postgres 16, web, migrate, Caddy),
+  `scripts/deploy.ps1` (clean worktree, sha on origin/main, green CI, typed `DEPLOY <sha7>`,
+  `git archive` over SSH, so the server has no GitHub credential), backups before every
+  migration plus daily dumps, `deploy/set-user.mjs`, sign-up switch pinned `closed` on the
+  server, failed sign-in lockout. Codex cross-review: four rounds of blocking findings (a
+  lockout race, a deploy redirect check that threw, and two address-spraying lock
+  bypasses), all fixed with regression tests, then APPROVE. CI green at every head (267 unit,
+  12 Playwright).
+- **Deployed `d5b9043`:** 12 migrations applied to an empty database; db, web and Caddy
+  healthy; web answers 200; Caddy redirects HTTP to HTTPS; pre-deploy dump written; daily
+  dump cron installed. The public smoke check failed only because DNS still points at
+  Namecheap parking, so no certificate has been issued yet.
+- **Pending owner actions:** (1) Namecheap Advanced DNS: delete parking records, add
+  `A @ 18.226.191.214` and `CNAME www auratrades.quest.`; (2) choose: copy the workstation
+  database to the server (keeps current account and trades) or create a fresh owner account
+  with `set-user.mjs`; (3) raise the account-wide $20 "My Monthly Cost Budget" (two servers
+  ≈ $26–28/month).
+- **Next action:** after DNS resolves, `~/auratrade/bin/dc restart caddy`, then re-run the
+  smoke check (`scripts/deploy.ps1 -Confirm "DEPLOY <sha7>"` is safe to repeat).
 
 ## Previous handoff (2026-10-16)
 
