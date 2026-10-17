@@ -18,17 +18,30 @@
   lockout race, a deploy redirect check that threw, and two address-spraying lock
   bypasses), all fixed with regression tests, then APPROVE. CI green at every head (267 unit,
   12 Playwright).
-- **Deployed `d5b9043`:** 12 migrations applied to an empty database; db, web and Caddy
-  healthy; web answers 200; Caddy redirects HTTP to HTTPS; pre-deploy dump written; daily
-  dump cron installed. The public smoke check failed only because DNS still points at
-  Namecheap parking, so no certificate has been issued yet.
-- **Pending owner actions:** (1) Namecheap Advanced DNS: delete parking records, add
-  `A @ 18.226.191.214` and `CNAME www auratrades.quest.`; (2) choose: copy the workstation
-  database to the server (keeps current account and trades) or create a fresh owner account
-  with `set-user.mjs`; (3) raise the account-wide $20 "My Monthly Cost Budget" (two servers
-  ≈ $26–28/month).
-- **Next action:** after DNS resolves, `~/auratrade/bin/dc restart caddy`, then re-run the
-  smoke check (`scripts/deploy.ps1 -Confirm "DEPLOY <sha7>"` is safe to repeat).
+- **Deployed `d5b9043`:** 12 migrations applied; db, web and Caddy healthy; daily dump cron
+  installed. DNS now resolves to `18.226.191.214`; Let's Encrypt certificates issued for
+  `auratrades.quest` and `www`. Live checks: `/login` 200 with a valid certificate,
+  signed-out `/dashboard` 307 → `/login`, register POST 403, `www` 301 → bare domain.
+- **Workstation data copied (owner request):** the local `auratrade` database was cloned to a
+  scratch database, the 191 Playwright `@example.com` users (shared published test
+  password) were deleted there, and only that copy was restored on the server (after a
+  `pre-restore` dump). Owner data identical on both sides: 1 user, 1,196 trades, net P&L
+  −24,367.018, 4,415 statement rows, 4,111 fills, 12 migrations; `migrate status` up to
+  date. A live sign-in with the owner's existing credentials reached the dashboard and
+  `/api/dashboard` returned data. The local database was not changed.
+- **AWS access (in progress):** provisioning used the `TenFold` IAM user. The owner wants a
+  separate user: `infra/aws/auratrade-operations.json` (tag-scoped to
+  `project=auratrade`, reads listed one by one) and `infra/aws/tenfold-deny-auratrade.json`
+  are written and checked against the AWS service reference (the policy simulator is not
+  available to the `TenFold` user). `auratrade-ip` and the `auratrade` key pair are now
+  tagged. The workstation's default AWS CLI profile is `focus-halo-deploy` (admin); it was
+  not used.
+- **Pending owner actions:** create the `AuraTrade` IAM user, key and `AuraTrade monthly`
+  budget (`docs/DEPLOYMENT.md` → AWS access); optionally attach the TenFold deny policy;
+  raise the account-wide $20 "My Monthly Cost Budget" (two servers ≈ $26–28/month);
+  change the app password when convenient (`deploy/set-user.mjs`).
+- **Next action:** after the user exists, run the live probes in `docs/DEPLOYMENT.md` with
+  `--profile auratrade` and record the results.
 
 ## Previous handoff (2026-10-16)
 

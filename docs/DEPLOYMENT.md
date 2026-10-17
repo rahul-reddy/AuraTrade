@@ -150,6 +150,80 @@ data into fixtures or logs, and do not open more ports.
 7. **Owner account** with `set-user.mjs`, or the workstation database restored with
    `pg_restore` (stop `web` first).
 
+## AWS access
+
+Deploys never use AWS: `scripts/deploy.ps1` works over SSH only. An AWS key is needed
+only to run the server itself (stop/start, firewall ports, snapshots, the static IP)
+and to read costs.
+
+| User | Key lives in | Policy | Can do |
+| --- | --- | --- | --- |
+| `AuraTrade` | workstation AWS CLI profile `auratrade` (`~/.aws/credentials`), never a repository `.env` | `infra/aws/auratrade-operations.json` (inline `auratrade-operations`) | Read the Lightsail inventory. Operate only resources tagged `project=auratrade`: start/stop/reboot, firewall ports, static IP attach/detach, browser SSH. Read costs; view and edit only the `AuraTrade monthly` budget. Rotate its own keys. |
+
+- **Why a separate user:** AuraTrade was provisioned on 2026-10-17 with TenFold's
+  `TenFold` user, whose `lightsail:*` covers every Lightsail resource in the account.
+  A separate user limits what a leaked key can reach, puts AuraTrade's actions under its
+  own name in CloudTrail, and gives it its own budget.
+- **Tags are the boundary, and only an admin changes them.** `auratrade-1`,
+  `auratrade-ip` and the `auratrade` key pair carry `project=auratrade`. Neither user may
+  tag or untag: removing or overwriting `project` would move a resource out of this
+  user's reach and out of TenFold's deny, back under TenFold's `lightsail:*`.
+- **Reads are listed one by one, never `lightsail:Get*`.** That wildcard includes
+  `GetBucketAccessKeys` (bucket secrets, account-wide only) and
+  `GetInstanceAccessDetails` (temporary SSH access to any instance). The latter is
+  granted only on tagged instances.
+- **Admin-only (console):** creating or deleting the server, the static IP or key pairs,
+  restoring from a snapshot, enabling or disabling automatic snapshots, deleting
+  automatic snapshots. Lightsail only allows these account-wide (`Resource: "*"`, per
+  the AWS Service Authorization Reference), so granting any of them would also reach
+  TenFold's server.
+- **Manual snapshots are admin-only too.** A snapshot made from the CLI does not inherit
+  the instance's tags, so one made without `--tags` would sit outside both boundaries:
+  this user could not tag or delete it, and TenFold's deny would not cover it. Letting
+  this user tag new snapshots on creation would let it tag TenFold's snapshots as its
+  own. Daily automatic snapshots and the database dumps cover backups; an admin who
+  makes a manual snapshot passes `--tags key=project,value=auratrade`.
+- **The other direction:** `infra/aws/tenfold-deny-auratrade.json` is an inline policy
+  for the `TenFold` user that denies every Lightsail action on `project=auratrade`
+  resources. It cannot cover the account-wide actions above: with it, a TenFold key
+  could still turn off or delete AuraTrade's automatic snapshots. Denying those would
+  block TenFold's own.
+
+### Creating the user (owner, AWS console, signed in as an admin)
+
+1. **IAM → Users → Create user.** Name `AuraTrade`. Leave console access off. On
+   "Set permissions", choose nothing and create the user.
+2. **The user → Permissions → Add permissions → Create inline policy → JSON.** Paste
+   `infra/aws/auratrade-operations.json` whole. Name it `auratrade-operations`.
+3. **The user → Security credentials → Create access key → Command Line Interface.**
+   On the workstation, run `aws configure --profile auratrade` and paste the key there,
+   region `us-east-2`. Never put it in a chat, a commit or this repository's `.env`
+   (Next.js and Prisma load that file).
+4. **Billing → Budgets → Create budget → Cost budget, monthly.** Name it exactly
+   `AuraTrade monthly` (the policy names it). Optionally activate the `project` tag
+   under Billing → Cost allocation tags first (it takes up to 24 hours), then filter
+   the budget to `project=auratrade`.
+5. **Optional, the other direction:** IAM → Users → `TenFold` → Add permissions →
+   Create inline policy → JSON → paste `infra/aws/tenfold-deny-auratrade.json`, name
+   `deny-auratrade`. TenFold's inline policies then total about 1,400 of 2,048 bytes.
+
+Then check it live: `sh infra/aws/check-auratrade-access.sh` (AWS CLI profile
+`auratrade`). The IAM policy simulator is not available to these users, so the script
+probes live, with exact commands chosen so that none changes anything even if the policy
+were wrongly broader. It first confirms the no-op preconditions and aborts if any is
+missing: 22/tcp already open to `0.0.0.0/0` and automatic snapshots already on at 09:00
+on both servers, and `auratrade-1` already tagged `project=auratrade`. It then expects:
+
+| Probe | Expected |
+| --- | --- |
+| `get-instances` | allowed |
+| `get-instance-access-details` on `auratrade-1` / `tenfold-1` | allowed / denied |
+| `open-instance-public-ports` 22/tcp `0.0.0.0/0` on `auratrade-1` / `tenfold-1` | allowed / denied |
+| `enable-add-on` AutoSnapshot 09:00 on `auratrade-1` | denied |
+| `tag-resource` `project=auratrade` on `auratrade-1` (its current value) | denied |
+| `get-bucket-access-keys` on a bucket name that does not exist | denied |
+| `iam get-user` on `TenFold` / `AuraTrade` (read-only) | denied / allowed |
+
 ## Container image on GHCR
 
 Separately, every push to `main` that passes CI publishes
