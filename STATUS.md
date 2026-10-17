@@ -54,8 +54,10 @@
   its finding was fixed — TOS coverage fallback now uses ET trading days; round 8's 2
   findings fixed — truncated cash rows no longer count as $0 fees, and the Trades page/API
   (CSV export) filter by entry trading day. Dashboard best/worst-day labels pinned to UTC.
+  Round 9: invalid dates (e.g. 2/30) now block the statement instead of silently dropping a
+  fill; TOS dates are validated without calendar rollover.
 - **Local results on this revision:** `npm run lint` 0 errors; `npm run typecheck` clean;
-  `npm test` 250/250; fresh-DB `prisma migrate deploy` + drift check: no difference;
+  `npm test` 252/252; fresh-DB `prisma migrate deploy` + drift check: no difference;
   `npm run build` passed; Playwright 11/11 with no retries against `next start` (adds a
   two-statement carry-in import and a concurrent two-confirm import). Real 703-fill statement unchanged: 702 importable,
   0 blocked, all option fills matched to their own contract's fee row.
