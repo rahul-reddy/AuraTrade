@@ -227,6 +227,13 @@ on both servers, and `auratrade-1` already tagged `project=auratrade`. It then e
 | `get-bucket-access-keys` on a bucket name that does not exist | denied |
 | `iam get-user` on `TenFold` / `AuraTrade` (read-only) | denied / allowed |
 
+**Verified live 2026-10-17:** the owner created `AuraTrade` (inline `auratrade-operations`),
+profile `auratrade`, and the `AuraTrade monthly` budget ($20, monthly). The script ran as
+`arn:aws:iam::<account-id>:user/AuraTrade`: all 10 probes matched, and afterwards both
+servers' ports and automatic snapshots were unchanged. The budget has no cost filter yet,
+so it tracks the whole account (both servers, ≈ $26–28) until it is filtered to
+`project=auratrade`. The optional TenFold deny (`deny-auratrade`) is not attached.
+
 ## Container image on GHCR
 
 Separately, every push to `main` that passes CI publishes

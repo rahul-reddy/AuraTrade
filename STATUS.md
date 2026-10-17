@@ -29,19 +29,21 @@
   −24,367.018, 4,415 statement rows, 4,111 fills, 12 migrations; `migrate status` up to
   date. A live sign-in with the owner's existing credentials reached the dashboard and
   `/api/dashboard` returned data. The local database was not changed.
-- **AWS access (in progress):** provisioning used the `TenFold` IAM user. The owner wants a
-  separate user: `infra/aws/auratrade-operations.json` (tag-scoped to
-  `project=auratrade`, reads listed one by one) and `infra/aws/tenfold-deny-auratrade.json`
-  are written and checked against the AWS service reference (the policy simulator is not
-  available to the `TenFold` user). `auratrade-ip` and the `auratrade` key pair are now
-  tagged. The workstation's default AWS CLI profile is `focus-halo-deploy` (admin); it was
-  not used.
-- **Pending owner actions:** create the `AuraTrade` IAM user, key and `AuraTrade monthly`
-  budget (`docs/DEPLOYMENT.md` → AWS access); optionally attach the TenFold deny policy;
-  raise the account-wide $20 "My Monthly Cost Budget" (two servers ≈ $26–28/month);
-  change the app password when convenient (`deploy/set-user.mjs`).
-- **Next action:** after the user exists, run the live probes in `docs/DEPLOYMENT.md` with
-  `--profile auratrade` and record the results.
+- **AWS access (done):** separate `AuraTrade` IAM user created by the owner with
+  `infra/aws/auratrade-operations.json` (tag boundary `project=auratrade`; no tagging,
+  manual-snapshot or add-on rights), CLI profile `auratrade`, budget `AuraTrade monthly`
+  ($20, unfiltered). `infra/aws/check-auratrade-access.sh`: 10/10 probes matched as the
+  `AuraTrade` user, servers unchanged afterwards. The workstation's default profile is
+  `focus-halo-deploy` (admin), not used.
+- **Pending owner actions:**
+  - Remove the AuraTrade AWS key from this repository's `.env` (it is also in the
+    `auratrade` profile, which is where it belongs).
+  - Optionally filter `AuraTrade monthly` to `project=auratrade` (activate the cost
+    allocation tag first) and raise the account-wide $20 budget.
+  - Optionally attach `infra/aws/tenfold-deny-auratrade.json` to `TenFold`.
+  - Consider deactivating the `focus-halo-deploy` access key.
+  - Change the app password when convenient (`deploy/set-user.mjs`).
+- **Next action:** none blocking. Future deploys: `scripts/deploy.ps1`.
 
 ## Previous handoff (2026-10-16)
 
