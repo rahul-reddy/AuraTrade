@@ -32,8 +32,16 @@ export class LoginThrottle {
   recordFailure(email: string, now: number = Date.now()): void {
     const key = this.key(email);
     const existing = this.entries.get(key);
+    // Sign-in checks run concurrently, so a failure can land after another
+    // request has already set the lock; it must never replace an active lock.
+    if (existing && existing.lockedUntil > now) {
+      existing.failures += 1;
+      return;
+    }
+    // Continue an unlocked count inside the window; an expired lock or an old
+    // count starts afresh.
     const entry: Entry =
-      existing && now - existing.firstFailureAt < WINDOW_MS && existing.lockedUntil <= now
+      existing && existing.lockedUntil === 0 && now - existing.firstFailureAt < WINDOW_MS
         ? existing
         : { failures: 0, firstFailureAt: now, lockedUntil: 0 };
     entry.failures += 1;

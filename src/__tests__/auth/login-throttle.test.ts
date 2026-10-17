@@ -47,6 +47,17 @@ describe("LoginThrottle", () => {
     expect(throttle.isLocked(email, 2)).toBe(false);
   });
 
+  it("keeps an active lock when in-flight failures land after it was set", () => {
+    const throttle = new LoginThrottle();
+    // Six concurrent wrong guesses: all passed isLocked() before any finished.
+    for (let i = 0; i < MAX_FAILURES + 1; i++) throttle.recordFailure(email, 100);
+    expect(throttle.isLocked(email, 101)).toBe(true);
+    // A later straggler, still inside the lock, neither resets nor extends it.
+    throttle.recordFailure(email, 200);
+    expect(throttle.isLocked(email, 100 + LOCK_MS - 1)).toBe(true);
+    expect(throttle.isLocked(email, 100 + LOCK_MS)).toBe(false);
+  });
+
   it("does not lock other addresses", () => {
     const throttle = new LoginThrottle();
     for (let i = 0; i < MAX_FAILURES; i++) throttle.recordFailure(email, 0);

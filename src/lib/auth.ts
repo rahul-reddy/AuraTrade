@@ -50,6 +50,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           loginThrottle.recordFailure(email);
           return null;
         }
+        // A check that began before concurrent failures set the lock is
+        // refused too; success never clears an active lock.
+        if (loginThrottle.isLocked(email)) return null;
         loginThrottle.recordSuccess(email);
 
         return {
