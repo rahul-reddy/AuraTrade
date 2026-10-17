@@ -78,10 +78,24 @@ export function tosTradingDate(
   return formatInTimeZone(instant, timeZone, 'yyyy-MM-dd')
 }
 
+/**
+ * Strict calendar check: Date.UTC silently rolls invalid dates over (2/30 →
+ * 3/2), which would let a malformed fill match a real day's cash row.
+ */
+function isRealDateTime(
+  year: number, month: number, day: number,
+  hour = 0, minute = 0, second = 0,
+): boolean {
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return false
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
+
 function parseShortDate(raw: string): Date | null {
   const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
   if (!match) return null
   const [, month, day, year] = match.map(Number)
+  if (!isRealDateTime(2000 + year, month, day)) return null
   return new Date(Date.UTC(2000 + year, month - 1, day))
 }
 
@@ -175,6 +189,7 @@ function wallClockSeconds(execTime: string): number | null {
   const match = execTime.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})$/)
   if (!match) return null
   const [, month, day, year, hour, minute, second] = match.map(Number)
+  if (!isRealDateTime(2000 + year, month, day, hour, minute, second)) return null
   return Date.UTC(2000 + year, month - 1, day, hour, minute, second) / 1000
 }
 
@@ -314,6 +329,9 @@ function parseExecTime(raw: string, timeZone: string): Date | null {
   const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})$/)
   if (!match) return null
   const [, month, day, year, hour, minute, second] = match
+  if (!isRealDateTime(2000 + Number(year), Number(month), Number(day), Number(hour), Number(minute), Number(second))) {
+    return null
+  }
   const local = `20${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour}:${minute}:${second}`
   const parsed = fromZonedTime(local, timeZone)
   return Number.isNaN(parsed.getTime()) ? null : parsed
@@ -473,6 +491,21 @@ export function analyzeTosAccountStatement(
         isImportTradeRow: false,
         blocksCanonicalImport: true,
         notes: [`Unrecognized TOS fill: Spread=${spread} Side=${side} Pos Effect=${posEffect} Type=${type}.`],
+      })
+      continue
+    }
+
+    // A fill the ledger cannot place in time must block, never be dropped.
+    if (base.date == null) {
+      rows.push({
+        ...base,
+        action,
+        fees: 0,
+        instrumentType: isOption ? 'OPTION' : 'EQUITY',
+        actionCategory: 'UNKNOWN',
+        isImportTradeRow: false,
+        blocksCanonicalImport: true,
+        notes: [...notes, `Exec Time "${execTimeRaw}" is not a valid date.`],
       })
       continue
     }

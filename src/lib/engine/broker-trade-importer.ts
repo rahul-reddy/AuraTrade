@@ -51,6 +51,15 @@ export function shouldLinkTradeToChart(position: BrokerLedgerPosition): boolean 
   return position.instrumentType === 'EQUITY' && position.closeKind !== 'TRANSFER'
 }
 
+/** Row categories that change positions in the account ledger. */
+const LEDGER_CATEGORIES = new Set<StatementDryRun['rows'][number]['actionCategory']>([
+  'EQUITY_TRADE',
+  'OPTION_TRADE',
+  'OPTION_LIFECYCLE',
+  'POSITION_TRANSFER',
+  'CORPORATE_ACTION',
+])
+
 export function evaluateStatementImportSupport(
   dryRun: StatementDryRun,
 ): { supported: boolean; reasons: string[] } {
@@ -59,6 +68,11 @@ export function evaluateStatementImportSupport(
   for (const row of dryRun.rows) {
     if (row.actionCategory === 'UNKNOWN') {
       reasons.add('Unsupported broker action category: UNKNOWN')
+    }
+    // A position-affecting row the ledger cannot place in time would be
+    // dropped silently (e.g. a close lost, leaving its position open).
+    if (row.date == null && LEDGER_CATEGORIES.has(row.actionCategory)) {
+      reasons.add('A trade or position event has an unreadable date; fix or re-export the statement before importing.')
     }
   }
 

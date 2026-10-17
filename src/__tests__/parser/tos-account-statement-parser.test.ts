@@ -162,6 +162,39 @@ describe('analyzeTosAccountStatement', () => {
     expect(dryRun.rows[0]).toMatchObject({ actionCategory: 'EQUITY_TRADE', fees: 0 })
   })
 
+  test('a fill with an impossible date (2/30) blocks the whole statement instead of being dropped', () => {
+    const dryRun = analyzeTosAccountStatement(
+      makeStatement({
+        fills: [
+          ',2/30/26 10:00:00,STOCK,SELL,-5,TO CLOSE,ABC,,,STOCK,11.00,11.00,MKT',
+          ',2/27/26 09:30:00,STOCK,BUY,+5,TO OPEN,ABC,,,STOCK,10.00,10.00,MKT',
+        ],
+        cash: [
+          '2/27/26,09:30:00,TRD,="1",BOT +5 ABC @10.00,,,-50.00,"1.00"',
+          // Date.UTC would roll 2/30 into 3/2; the cash row must not match.
+          '2/30/26,10:00:00,TRD,="2",SOLD -5 ABC @11.00,-0.01,,54.99,"1.00"',
+        ],
+      }),
+    )
+    const close = dryRun.rows.find((row) => row.quantity === -5)
+    expect(close).toMatchObject({ date: null, actionCategory: 'UNKNOWN', blocksCanonicalImport: true })
+    expect(close?.notes.join(' ')).toContain('Exec Time "2/30/26 10:00:00" is not a valid date')
+    expect(close?.raw['Ref #']).toBeUndefined()
+    expect(evaluateStatementImportSupport(dryRun).supported).toBe(false)
+    expect(dryRun.blockers).toHaveLength(1)
+  })
+
+  test('an undated Transaction History trade row blocks the statement too', () => {
+    const dryRun = analyzeBrokerStatement(
+      [
+        'Date,Action,Symbol,Description,Quantity,Price,Fees & Comm,Amount',
+        '2/30/2026,Sell,ABC,ABC INC,5,"$11.00 ","$0.01 ","$54.99 "',
+        '2/27/2026,Buy,ABC,ABC INC,5,"$10.00 ",,"($50.00)"',
+      ].join('\n'),
+    )
+    expect(evaluateStatementImportSupport(dryRun).supported).toBe(false)
+  })
+
   test('blocks a fill whose cash row is truncated before the fee columns', () => {
     const dryRun = analyzeTosAccountStatement(
       makeStatement({
