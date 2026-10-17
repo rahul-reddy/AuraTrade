@@ -37,8 +37,11 @@ together are about $26–28 a month, so that alert will fire until the owner rai
 - **Failed sign-ins**: five wrong passwords for one email within 15 minutes lock that
   email for 15 minutes, during which even the right password is refused with the same
   "Invalid email or password." message (`src/lib/login-throttle.ts`). The lock is in
-  memory and clears on a restart. Someone who knows the owner's email can keep the
-  owner locked out by guessing; if that happens, restart the web container.
+  memory and clears on a restart. It tracks up to 10,000 addresses and never evicts an
+  active lock; if all 10,000 are locked at once (a spray), every untracked address is
+  refused too until locks expire. Someone who knows the owner's email, or sprays, can
+  keep the owner locked out; if that happens, restart the web container
+  (`~/auratrade/bin/dc restart web`).
 
 ## The server's `.env`
 

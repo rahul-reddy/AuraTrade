@@ -75,6 +75,17 @@ describe("LoginThrottle", () => {
     expect(throttle.isLocked(`locked-${MAX_TRACKED - 1}@example.com`, 2)).toBe(true);
   });
 
+  it("refuses an untracked address while every slot is locked, then frees it", () => {
+    const throttle = new LoginThrottle();
+    for (let i = 0; i < MAX_TRACKED; i++) {
+      for (let j = 0; j < MAX_FAILURES; j++) throttle.recordFailure(`locked-${i}@example.com`, 0);
+    }
+    // The victim never failed, so it has no slot; it must not get free guesses.
+    expect(throttle.isLocked(email, 1)).toBe(true);
+    // Once the spray's locks expire, the victim is no longer refused.
+    expect(throttle.isLocked(email, LOCK_MS + WINDOW_MS)).toBe(false);
+  });
+
   it("does not lock other addresses", () => {
     const throttle = new LoginThrottle();
     for (let i = 0; i < MAX_FAILURES; i++) throttle.recordFailure(email, 0);

@@ -25,8 +25,18 @@ export class LoginThrottle {
   }
 
   isLocked(email: string, now: number = Date.now()): boolean {
-    const entry = this.entries.get(this.key(email));
-    return entry !== undefined && entry.lockedUntil > now;
+    const key = this.key(email);
+    const entry = this.entries.get(key);
+    if (entry !== undefined) return entry.lockedUntil > now;
+    // Fail closed: when every slot holds an active lock (someone sprayed
+    // failures across MAX_TRACKED addresses), an address with no slot cannot
+    // be counted, so it is treated as locked until slots free up. Otherwise
+    // the spray would grant unlimited guesses at any untracked address.
+    if (this.entries.size >= MAX_TRACKED) {
+      this.prune(now);
+      return this.entries.size >= MAX_TRACKED;
+    }
+    return false;
   }
 
   recordFailure(email: string, now: number = Date.now()): void {
@@ -50,8 +60,8 @@ export class LoginThrottle {
     }
     if (!this.entries.has(key) && this.entries.size >= MAX_TRACKED) {
       this.prune(now);
-      // Every slot holds an active lock: leave them all in place and stop
-      // counting new addresses until locks expire, rather than evict one.
+      // Every slot holds an active lock: leave them all in place rather than
+      // evict one. isLocked() refuses untracked addresses meanwhile.
       if (this.entries.size >= MAX_TRACKED) return;
     }
     this.entries.set(key, entry);
