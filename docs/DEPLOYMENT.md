@@ -158,15 +158,16 @@ and to read costs.
 
 | User | Key lives in | Policy | Can do |
 | --- | --- | --- | --- |
-| `AuraTrade` | workstation AWS CLI profile `auratrade` (`~/.aws/credentials`), never a repository `.env` | `infra/aws/auratrade-operations.json` (inline `auratrade-operations`) | Read the Lightsail inventory. Operate only resources tagged `project=auratrade`: start/stop/reboot, firewall ports, static IP attach/detach, browser SSH, tags. Read costs; view and edit only the `AuraTrade monthly` budget. Rotate its own keys. |
+| `AuraTrade` | workstation AWS CLI profile `auratrade` (`~/.aws/credentials`), never a repository `.env` | `infra/aws/auratrade-operations.json` (inline `auratrade-operations`) | Read the Lightsail inventory. Operate only resources tagged `project=auratrade`: start/stop/reboot, firewall ports, static IP attach/detach, browser SSH. Read costs; view and edit only the `AuraTrade monthly` budget. Rotate its own keys. |
 
 - **Why a separate user:** AuraTrade was provisioned on 2026-10-17 with TenFold's
   `TenFold` user, whose `lightsail:*` covers every Lightsail resource in the account.
   A separate user limits what a leaked key can reach, puts AuraTrade's actions under its
   own name in CloudTrail, and gives it its own budget.
-- **Tags are the boundary.** `auratrade-1`, `auratrade-ip` and the `auratrade` key pair
-  carry `project=auratrade`. The user can tag only resources that already carry that
-  tag, so it cannot claim TenFold's.
+- **Tags are the boundary, and only an admin changes them.** `auratrade-1`,
+  `auratrade-ip` and the `auratrade` key pair carry `project=auratrade`. Neither user may
+  tag or untag: removing or overwriting `project` would move a resource out of this
+  user's reach and out of TenFold's deny, back under TenFold's `lightsail:*`.
 - **Reads are listed one by one, never `lightsail:Get*`.** That wildcard includes
   `GetBucketAccessKeys` (bucket secrets, account-wide only) and
   `GetInstanceAccessDetails` (temporary SSH access to any instance). The latter is
@@ -206,11 +207,12 @@ and to read costs.
    Create inline policy → JSON → paste `infra/aws/tenfold-deny-auratrade.json`, name
    `deny-auratrade`. TenFold's inline policies then total about 1,400 of 2,048 bytes.
 
-Then check it live (`--profile auratrade`). Every probe is harmless: reads, temporary
-SSH details, and adding and removing a throwaway tag. Expected: allowed on
-`auratrade-1`, `auratrade-ip` and the `auratrade` key pair; `AccessDenied` on
-`tenfold-1`, `tenfold-ip`, `get-bucket-access-keys`, `enable-add-on` and any
-`iam:` call on another user.
+Then check it live (`--profile auratrade`). Every probe changes nothing even if it were
+wrongly allowed: reads, temporary SSH details, and re-opening port 22, which is already
+open on both servers. Expected: `get-instance-access-details` and `open-instance-public-ports`
+(22/tcp) allowed on `auratrade-1` and `AccessDenied` on `tenfold-1`; `AccessDenied` on
+`get-bucket-access-keys`, `enable-add-on`, `tag-resource` and any `iam:` call on another
+user.
 
 ## Container image on GHCR
 

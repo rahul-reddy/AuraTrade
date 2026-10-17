@@ -39,9 +39,7 @@
         "lightsail:PutInstancePublicPorts",
         "lightsail:RebootInstance",
         "lightsail:StartInstance",
-        "lightsail:StopInstance",
-        "lightsail:TagResource",
-        "lightsail:UntagResource"
+        "lightsail:StopInstance"
       ],
       "Resource": "*",
       "Condition": {
