@@ -1,4 +1,4 @@
-import { LOCK_MS, LoginThrottle, MAX_FAILURES, WINDOW_MS } from "@/lib/login-throttle";
+import { LOCK_MS, LoginThrottle, MAX_FAILURES, MAX_TRACKED, WINDOW_MS } from "@/lib/login-throttle";
 import { isRegistrationOpen } from "@/lib/registration";
 
 describe("LoginThrottle", () => {
@@ -56,6 +56,23 @@ describe("LoginThrottle", () => {
     throttle.recordFailure(email, 200);
     expect(throttle.isLocked(email, 100 + LOCK_MS - 1)).toBe(true);
     expect(throttle.isLocked(email, 100 + LOCK_MS)).toBe(false);
+  });
+
+  it("keeps an active lock when other addresses fill the tracker", () => {
+    const throttle = new LoginThrottle();
+    for (let i = 0; i < MAX_FAILURES; i++) throttle.recordFailure(email, 0);
+    for (let i = 0; i < MAX_TRACKED + 10; i++) throttle.recordFailure(`spray-${i}@example.com`, 0);
+    expect(throttle.isLocked(email, 1)).toBe(true);
+  });
+
+  it("keeps every lock when the tracker is full of locks", () => {
+    const throttle = new LoginThrottle();
+    for (let i = 0; i < MAX_TRACKED; i++) {
+      for (let j = 0; j < MAX_FAILURES; j++) throttle.recordFailure(`locked-${i}@example.com`, 0);
+    }
+    throttle.recordFailure("newcomer@example.com", 1);
+    expect(throttle.isLocked("locked-0@example.com", 2)).toBe(true);
+    expect(throttle.isLocked(`locked-${MAX_TRACKED - 1}@example.com`, 2)).toBe(true);
   });
 
   it("does not lock other addresses", () => {

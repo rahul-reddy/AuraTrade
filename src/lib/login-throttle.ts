@@ -13,7 +13,7 @@ export const MAX_FAILURES = 5;
 export const WINDOW_MS = 15 * 60 * 1000;
 export const LOCK_MS = 15 * 60 * 1000;
 // Bounds memory if someone sprays many distinct addresses.
-const MAX_TRACKED = 10_000;
+export const MAX_TRACKED = 10_000;
 
 type Entry = { failures: number; firstFailureAt: number; lockedUntil: number };
 
@@ -50,6 +50,9 @@ export class LoginThrottle {
     }
     if (!this.entries.has(key) && this.entries.size >= MAX_TRACKED) {
       this.prune(now);
+      // Every slot holds an active lock: leave them all in place and stop
+      // counting new addresses until locks expire, rather than evict one.
+      if (this.entries.size >= MAX_TRACKED) return;
     }
     this.entries.set(key, entry);
   }
@@ -64,10 +67,12 @@ export class LoginThrottle {
         this.entries.delete(key);
       }
     }
-    // Still full: drop the oldest records (Map keeps insertion order).
-    for (const key of this.entries.keys()) {
+    // Still full: drop the oldest unlocked counts (Map keeps insertion order).
+    // Active locks are never evicted, so a flood of other addresses cannot
+    // unlock one.
+    for (const [key, entry] of this.entries) {
       if (this.entries.size < MAX_TRACKED) break;
-      this.entries.delete(key);
+      if (entry.lockedUntil <= now) this.entries.delete(key);
     }
   }
 }

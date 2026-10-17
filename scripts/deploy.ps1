@@ -92,16 +92,33 @@ Invoke-Native "server deploy" { ssh @ssh $target $remote }
 
 Write-Host "== Smoke check https://$SiteHost"
 $base = "https://$SiteHost"
-$login = Invoke-WebRequest -Uri "$base/login" -MaximumRetryCount 6 -RetryIntervalSec 5
-if ($login.StatusCode -ne 200) { throw "/login returned $($login.StatusCode)." }
-$dashboard = Invoke-WebRequest -Uri "$base/dashboard" -MaximumRedirection 0 -SkipHttpErrorCheck
-$location = [string]($dashboard.Headers["Location"] | Select-Object -First 1)
-if ($dashboard.StatusCode -notin 302, 303, 307 -or $location -notmatch '/login') {
-    throw "Signed-out /dashboard did not redirect to /login ($($dashboard.StatusCode) $location)."
-}
-$register = Invoke-WebRequest -Uri "$base/api/auth/register" -Method Post -ContentType "application/json" `
-    -Body '{}' -SkipHttpErrorCheck
-if ($register.StatusCode -ne 403) {
-    throw "Sign-up is not closed: POST /api/auth/register returned $($register.StatusCode)."
+# HttpClient with redirects off: the signed-out redirect is an expected answer
+# to inspect, which Invoke-WebRequest -MaximumRedirection 0 throws on instead.
+$handler = [System.Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [System.Net.Http.HttpClient]::new($handler)
+$client.Timeout = [TimeSpan]::FromSeconds(20)
+try {
+    $status = 0
+    foreach ($attempt in 1..6) {
+        try { $status = [int]$client.GetAsync("$base/login").GetAwaiter().GetResult().StatusCode } catch { $status = 0 }
+        if ($status -eq 200) { break }
+        Start-Sleep -Seconds 5
+    }
+    if ($status -ne 200) { throw "/login returned $status." }
+
+    $dashboard = $client.GetAsync("$base/dashboard").GetAwaiter().GetResult()
+    $location = [string]$dashboard.Headers.Location
+    if ([int]$dashboard.StatusCode -notin 302, 303, 307 -or $location -notmatch '/login') {
+        throw "Signed-out /dashboard did not redirect to /login ($([int]$dashboard.StatusCode) $location)."
+    }
+
+    $body = [System.Net.Http.StringContent]::new('{}', [System.Text.Encoding]::UTF8, "application/json")
+    $register = $client.PostAsync("$base/api/auth/register", $body).GetAwaiter().GetResult()
+    if ([int]$register.StatusCode -ne 403) {
+        throw "Sign-up is not closed: POST /api/auth/register returned $([int]$register.StatusCode)."
+    }
+} finally {
+    $client.Dispose()
 }
 Write-Host "Deployed $short to $base. /login 200, /dashboard redirects, sign-up closed."
