@@ -80,6 +80,10 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 | `src/components/charts/CandlestickChart.tsx` | LWC v5 chart component (ssr:false) |
 | `src/components/charts/ChartWorkspace.tsx` | Chart page client wrapper (focusTradeId, sidebar) |
 | `src/lib/format.ts` | Shared display formatters — import from here, never duplicate locally |
+| `src/lib/registration.ts` | Public sign-up switch (`AURATRADE_REGISTRATION`; closed on the hosted server) |
+| `src/lib/login-throttle.ts` | Failed sign-in lockout (5 failures / 15 min per email) |
+| `deploy/` | Hosted stack: compose, Caddyfile, server deploy/backup scripts, `set-user.mjs` |
+| `scripts/deploy.ps1` | Workstation deploy: CI-green sha on main, typed confirmation (see `docs/DEPLOYMENT.md`) |
 
 ## Docker DB Command (run when Docker Desktop is open)
 ```bash
