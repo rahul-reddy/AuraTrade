@@ -2,7 +2,30 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-17): workspace redesign and home routing
+## Current handoff (2026-10-18): public repository decision; UI merged
+
+- **Owner decision:** keep `rahul-reddy/AuraTrade` public; its public visibility is
+  intentional. Updated AGENTS.md to reflect this instruction. Repository visibility
+  was not changed. This resolves the prior handoff's visibility question.
+- **UI delivered to main:** [PR #20](https://github.com/rahul-reddy/AuraTrade/pull/20)
+  squash-merged using `scripts/merge-pr.ps1` as
+  `2a0ef6ba97f60877c074fdcdbebd329b066a0eda`. Includes the root-to-dashboard fix
+  and the workspace redesign described below.
+- **Evidence on reviewed PR head `ec5272287dc058b1bcdc121ba9e530e617822420`:**
+  [CI](https://github.com/rahul-reddy/AuraTrade/actions/runs/39064900879) passed
+  lint, types, migration/harness checks, **267 unit tests**, build and **14 browser
+  tests**; [Claude Opus review](https://github.com/rahul-reddy/AuraTrade/pull/20#issuecomment-6240096254)
+  approved with **0 blocking findings**. No new application code or tests changed
+  in this documentation-only follow-up; it uses the docs-only CI path and requires
+  its own head-matched independent review before guarded merge.
+- **Production / next action:** production is unchanged. Merge this documentation
+  update once its gates pass, then obtain the owner's typed `DEPLOY <release-sha7>`
+  confirmation required by `scripts/deploy.ps1` before deploying the CI-green main
+  revision. The deploy script backs up the database and runs live smoke checks.
+  Screenshots remain under `.local/ui-preview/`; startup and hosting instructions
+  are in README.md and docs/DEPLOYMENT.md.
+
+## Previous handoff (2026-10-17): workspace redesign and home routing
 
 - **Implementation / PR:** `4d569a2e35cc35df377bc7ba54ac312f2df63a17` on
   `feat/workspace-redesign`; [PR #20](https://github.com/rahul-reddy/AuraTrade/pull/20).
