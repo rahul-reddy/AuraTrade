@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { useSyncExternalStore } from 'react'
 import Link from 'next/link'
+import ThemeToggle from '@/components/layout/ThemeToggle'
 
 // The platform never changes during a session, so there is nothing to subscribe to.
 const subscribeNever = () => () => {}
@@ -50,6 +51,7 @@ export default function TopBar({ onOpenPalette, accountName }: TopBarProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
+      <ThemeToggle />
       <button
         type="button"
         onClick={onOpenPalette}

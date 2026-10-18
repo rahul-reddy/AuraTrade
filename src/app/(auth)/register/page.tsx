@@ -15,13 +15,13 @@ export default async function RegisterPage() {
       <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
         <CardHeader className="space-y-1">
           <p className="eyebrow mb-3">Your trading workspace</p>
-          <CardTitle role="heading" aria-level={1} className="text-2xl text-white">Sign-up is closed</CardTitle>
+          <CardTitle role="heading" aria-level={1} className="text-2xl text-foreground">Sign-up is closed</CardTitle>
           <CardDescription className="text-zinc-400">
             This AuraTrade server is private. Accounts are created by its owner.
           </CardDescription>
         </CardHeader>
         <CardFooter>
-          <Link href="/login" className="text-sm text-blue-400 hover:text-blue-300">
+          <Link href="/login" className="text-sm text-primary hover:text-primary">
             Back to sign in
           </Link>
         </CardFooter>

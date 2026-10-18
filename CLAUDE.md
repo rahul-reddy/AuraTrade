@@ -45,8 +45,11 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 - Auth: NextAuth v5 beta with Credentials provider + bcrypt
 
 ## Design System
-- Dark-first: `zinc-900` / `zinc-800` backgrounds (not pure black)
-- Accent: `blue-500` interactive, `green-500` profit, `red-500` loss
+- Espresso & Acid with persistent light/dark mode (owner choice, 2026-10-18).
+- Dark: espresso surfaces, citron actions, glacier blue chart accents.
+- Light: parchment/cream surfaces, olive actions, mineral blue chart accents.
+- Use semantic primary/profit/loss/warning tokens; mode-specific values live in globals.css.
+- Existing zinc utilities alias the theme-aware neutral scale.
 - Fonts: Inter (UI text), JetBrains Mono (all numbers and data)
 
 ## Key File Locations

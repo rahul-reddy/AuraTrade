@@ -78,13 +78,13 @@ function SummaryCard({
 }) {
   const toneClass =
     tone === 'profit'
-      ? 'text-green-400'
+      ? 'text-profit'
       : tone === 'warning'
-        ? 'text-amber-300'
+        ? 'text-warning'
         : 'text-zinc-100'
 
   const content = (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 transition-all hover:border-blue-500/40 hover:bg-zinc-900">
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 transition-all hover:border-primary/40 hover:bg-zinc-900">
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</p>
       <p className={`mt-3 font-mono text-2xl font-semibold ${toneClass}`}>{value}</p>
     </div>
@@ -177,7 +177,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
 
   if (integrityQuery.isPending) {
     return (
-      <div className="mx-auto max-w-[1680px] px-8 py-6 text-white">
+      <div className="mx-auto max-w-[1680px] px-8 py-6 text-foreground">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
             <div
@@ -192,7 +192,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
 
   if (integrityQuery.isError || !integrityQuery.data) {
     return (
-      <div className="flex items-center justify-center p-8 py-24 text-white">
+      <div className="flex items-center justify-center p-8 py-24 text-foreground">
         <div className="max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6 text-center">
           <h1 className="text-xl font-semibold">Integrity page unavailable</h1>
           <p className="mt-2 text-sm text-zinc-400">
@@ -203,7 +203,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
           <button
             type="button"
             onClick={() => integrityQuery.refetch()}
-            className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             Retry
           </button>
@@ -219,7 +219,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
     data.counts.duplicateCandidates === 0
 
   return (
-    <div className="text-white">
+    <div className="text-foreground">
       <div className="workspace-page">
         <PageHeader eyebrow="Settings / Account health" title="Data Integrity" description={`${accountName} · Review your imported data and keep your trade history consistent.`}>
           <div className="flex flex-wrap gap-3">
@@ -227,7 +227,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
               type="button"
               onClick={() => requestAction('reprocess_trades')}
               disabled={actionMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCcw className="h-4 w-4" />
               Reprocess All Trades
@@ -236,7 +236,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
               type="button"
               onClick={() => requestAction('rebuild_snapshots')}
               disabled={actionMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
               <DatabaseBackup className="h-4 w-4" />
               Rebuild All Snapshots
@@ -246,11 +246,11 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
 
         <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
           <div className="flex items-start gap-4">
-            <div className={`rounded-2xl p-3 ${isHealthy ? 'bg-green-500/10' : 'bg-amber-500/10'}`}>
+            <div className={`rounded-2xl p-3 ${isHealthy ? 'bg-profit/10' : 'bg-warning/10'}`}>
               {isHealthy ? (
-                <ShieldCheck className="h-6 w-6 text-green-400" />
+                <ShieldCheck className="h-6 w-6 text-profit" />
               ) : (
-                <AlertTriangle className="h-6 w-6 text-amber-300" />
+                <AlertTriangle className="h-6 w-6 text-warning" />
               )}
             </div>
             <div>
@@ -383,7 +383,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
                           <td className="px-4 py-3">
                             <Link
                               href={`/chart/${trade.symbol}?accountId=${accountId}&tradeId=${trade.id}`}
-                              className="font-medium text-blue-400 transition hover:text-blue-300"
+                              className="font-medium text-primary transition hover:text-primary"
                             >
                               {trade.symbol}
                             </Link>
@@ -397,7 +397,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
                           <td className="px-4 py-3 text-right font-mono text-zinc-300">
                             {trade.totalQty.toLocaleString('en-US', { maximumFractionDigits: 4 })}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono text-amber-300">
+                          <td className="px-4 py-3 text-right font-mono text-warning">
                             {trade.closedQty.toLocaleString('en-US', { maximumFractionDigits: 4 })}
                           </td>
                         </tr>
@@ -437,11 +437,11 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
                             @ <span className="font-mono">${formatPrice(candidate.price)}</span>
                           </p>
                         </div>
-                        <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-right">
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-amber-300/80">
+                        <div className="rounded-xl bg-warning/10 px-3 py-2 text-right">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-warning/80">
                             Cluster size
                           </p>
-                          <p className="font-mono text-xl text-amber-300">{candidate.count}</p>
+                          <p className="font-mono text-xl text-warning">{candidate.count}</p>
                         </div>
                       </div>
                     </div>

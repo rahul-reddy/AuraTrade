@@ -6,8 +6,35 @@ next?
 
 ## Visual system
 
-- Charcoal surfaces with cool neutral borders and restrained depth. Blue identifies
-  actions and selection; green and red retain their financial meaning.
+- **Espresso & Acid** (owner choice, 2026-10-18): warm surfaces, citron branding,
+  olive/citron actions and mineral/glacier blue chart accents. Green/rose retain
+  their financial meaning in both modes.
+- A sun/moon control on the auth screen and workspace toolbar switches modes.
+  Dark is the default; the browser stores `auratrade-theme` locally and syncs tabs.
+  An inline head script applies the saved mode before hydration. Blocked storage
+  falls back to dark on reload; switching still works in the current document.
+- `src/app/globals.css` owns all role-based color values, including chart colors.
+  Existing zinc utilities alias a mode-aware warm neutral scale. Use semantic
+  `primary`, `primary-foreground`, `profit`, `loss`, `warning` and `chart-*` colors
+  for new work; never hardcode white text onto theme-dependent surfaces.
+
+| Role | Dark | Light |
+| --- | --- | --- |
+| Canvas | `#1B1713` | `#F6F2E9` |
+| Surface | `#2A231D` | `#FFFCF5` |
+| Text | `#F6F0E4` | `#30271C` |
+| Muted text | `#BFB09C` | `#726553` |
+| Action | `#D8EB7C` | `#586414` |
+| Action ink | `#1B1713` | `#FFFFFF` |
+| Blue chart accent | `#91C9F7` | `#28658D` |
+| Profit / up | `#57D9A3` | `#14734C` |
+| Loss / down | `#FF7D91` | `#B72E49` |
+
+Canvas charts resolve CSS tokens and update the mounted chart in place, retaining
+zoom, data, selected trades and display settings. SVG charts use CSS variables.
+Heatmap intensity uses restrained profit/loss tints, with exact amounts visible.
+Citron branding stays constant across modes; light-mode action text uses olive.
+
 - Inter for interface text; JetBrains Mono for money, quantities and dates.
 - Shared page headers establish context, title, description and a relevant next action.
 - Cards, controls and tables use consistent spacing, rounded corners and focus states.
@@ -52,6 +79,9 @@ scrollable tables; controls must remain usable without widening the document.
 protected deep links, password visibility, first-import onboarding, import progress,
 dashboard anchors, command navigation, trade views and small-screen layouts. It saves
 screenshots with synthetic test data under `test-results/` for visual inspection.
+`playwright/theme.spec.ts` covers persistence through sign-in, navigation, reloads
+and other tabs; pre-hydration appearance, blocked storage, themed canvas charts,
+command dialogs and mobile controls.
 The existing browser suite remains the regression check for uploads, chart behavior,
 account integrity, lockout and sidebar persistence.
 

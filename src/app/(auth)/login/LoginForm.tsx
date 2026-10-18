@@ -57,7 +57,7 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
     <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
       <CardHeader className="space-y-1">
         <p className="eyebrow mb-3">Welcome back</p>
-        <CardTitle role="heading" aria-level={1} className="text-3xl tracking-tight text-white">Sign in</CardTitle>
+        <CardTitle role="heading" aria-level={1} className="text-3xl tracking-tight text-foreground">Sign in</CardTitle>
         <CardDescription className="text-zinc-400">
           Pick up where your last session left off.
         </CardDescription>
@@ -65,9 +65,9 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
 
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-5">
-          {searchParams.get("registered") === "1" && <div role="status" className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm leading-6 text-blue-200">Your account is ready. Sign in to start exploring.</div>}
+          {searchParams.get("registered") === "1" && <div role="status" className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm leading-6 text-primary">Your account is ready. Sign in to start exploring.</div>}
           {error && (
-            <div role="alert" className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            <div role="alert" className="rounded-md bg-loss/10 border border-loss/20 px-4 py-3 text-sm text-loss">
               {error}
             </div>
           )}
@@ -84,7 +84,7 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-blue-500"
+              className="bg-zinc-800 border-zinc-700 text-foreground placeholder:text-zinc-500 focus:border-primary"
             />
           </div>
 
@@ -101,9 +101,9 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="bg-zinc-800 border-zinc-700 pr-12 text-white placeholder:text-zinc-500 focus:border-blue-500"
+              className="bg-zinc-800 border-zinc-700 pr-12 text-foreground placeholder:text-zinc-500 focus:border-primary"
             />
-            <button type="button" aria-label={showPassword ? "Hide characters" : "Show characters"} aria-controls="password" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-zinc-400 hover:text-white">
+            <button type="button" aria-label={showPassword ? "Hide characters" : "Show characters"} aria-controls="password" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-zinc-400 hover:text-foreground">
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
             </div>
@@ -114,7 +114,7 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
           >
             {isLoading ? "Signing in…" : "Sign in"}
           </Button>
@@ -122,7 +122,7 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
           {registrationOpen && (
             <p className="text-sm text-zinc-400 text-center">
               Don&apos;t have an account?{" "}
-              <Link href="/register" className="text-blue-400 hover:text-blue-300">
+              <Link href="/register" className="text-primary hover:text-primary">
                 Create one
               </Link>
             </p>

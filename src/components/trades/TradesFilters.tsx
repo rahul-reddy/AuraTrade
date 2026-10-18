@@ -81,7 +81,7 @@ export function TradesFilters({
         defaultValue={initialSymbol ?? ''}
         onChange={submitDebounced}
         placeholder="Symbol"
-        className="w-32 h-8 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-blue-500 text-sm font-mono uppercase"
+        className="w-32 h-8 bg-zinc-900 border-zinc-700 text-foreground placeholder:text-zinc-500 focus:border-primary text-sm font-mono uppercase"
         autoComplete="off"
       />
 
@@ -90,7 +90,7 @@ export function TradesFilters({
         name="direction"
         defaultValue={initialDirection ?? ''}
         onChange={submitImmediate}
-        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-blue-500"
+        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-primary"
       >
         <option value="">All Directions</option>
         <option value="LONG">Long</option>
@@ -102,7 +102,7 @@ export function TradesFilters({
         name="status"
         defaultValue={initialStatus ?? ''}
         onChange={submitImmediate}
-        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-blue-500"
+        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-primary"
       >
         <option value="">All Status</option>
         <option value="closed">Closed</option>
@@ -115,7 +115,7 @@ export function TradesFilters({
         defaultValue={initialSetup ?? ''}
         onChange={submitDebounced}
         placeholder="Setup"
-        className="w-32 h-8 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-blue-500 text-sm uppercase"
+        className="w-32 h-8 bg-zinc-900 border-zinc-700 text-foreground placeholder:text-zinc-500 focus:border-primary text-sm uppercase"
         autoComplete="off"
       />
 
@@ -125,7 +125,7 @@ export function TradesFilters({
         name="dateFrom"
         defaultValue={initialDateFrom ?? ''}
         onChange={submitImmediate}
-        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-primary"
       />
       <span className="text-zinc-600 text-sm">–</span>
       <input
@@ -134,7 +134,7 @@ export function TradesFilters({
         name="dateTo"
         defaultValue={initialDateTo ?? ''}
         onChange={submitImmediate}
-        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-primary"
       />
 
       {hasFilters && (
@@ -153,7 +153,7 @@ export function TradesFilters({
         name="pageSize"
         defaultValue={String(initialPageSize)}
         onChange={submitImmediate}
-        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-blue-500"
+        className="h-8 px-2 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 text-sm focus:outline-none focus:border-primary"
       >
         <option value="25">25 / page</option>
         <option value="50">50 / page</option>
@@ -164,7 +164,7 @@ export function TradesFilters({
       <button
         type="button"
         onClick={handleExport}
-        className="h-8 px-3 text-xs rounded-md border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+        className="h-8 px-3 text-xs rounded-md border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-foreground transition-colors"
       >
         Export CSV
       </button>

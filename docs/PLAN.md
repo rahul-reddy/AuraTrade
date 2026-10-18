@@ -38,8 +38,9 @@ NEXTAUTH_URL="http://localhost:3000"
 ```
 
 ### Design System
-- Dark-first: zinc-900 / zinc-800 backgrounds (not pure black)
-- Accent: blue-500 interactive, green-500 profit, red-500 loss
+- Espresso & Acid, with persistent light/dark mode (owner choice, 2026-10-18).
+- Dark: espresso/citron/glacier; light: parchment/olive/mineral blue.
+- Profit/loss use mode-specific green/rose tokens; see docs/UI-DESIGN.md.
 - Fonts: Inter (UI), JetBrains Mono (numbers/data)
 - Tailwind config: extend `fontFamily.mono` with JetBrains Mono
 

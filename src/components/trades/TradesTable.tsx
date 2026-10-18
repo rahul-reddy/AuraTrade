@@ -96,10 +96,10 @@ function SortableHeading({
   return (
     <Link
       href={buildTradesHref(query, { sortBy: field, sortDir: nextDir, page: 1 })}
-      className={`flex items-center gap-1 hover:text-zinc-200 transition-colors ${query.sortBy === field ? 'text-blue-400' : ''} ${className ?? ''}`}
+      className={`flex items-center gap-1 hover:text-zinc-200 transition-colors ${query.sortBy === field ? 'text-primary' : ''} ${className ?? ''}`}
     >
       <span>{label}</span>
-      <span className={`text-xs ${query.sortBy === field ? '' : 'text-zinc-700'}`}>{arrow}</span>
+      <span className={`text-xs ${query.sortBy === field ? '' : 'text-muted-foreground'}`}>{arrow}</span>
     </Link>
   )
 }
@@ -179,7 +179,7 @@ export function TradesTable({
                     {canLinkToChart(trade) ? (
                       <Link
                         href={buildChartHref(trade)}
-                        className="font-mono font-semibold text-sm text-zinc-100 hover:text-blue-400 transition-colors"
+                        className="font-mono font-semibold text-sm text-zinc-100 hover:text-primary transition-colors"
                       >
                         {trade.symbol}
                       </Link>
@@ -195,8 +195,8 @@ export function TradesTable({
                       variant="outline"
                       className={
                         trade.direction === 'LONG'
-                          ? 'border-blue-500/40 text-blue-400 bg-blue-500/10 hover:bg-blue-500/10 text-xs px-1.5 py-0'
-                          : 'border-amber-500/40 text-amber-400 bg-amber-500/10 hover:bg-amber-500/10 text-xs px-1.5 py-0'
+                          ? 'border-primary/40 text-primary bg-primary/10 hover:bg-primary/10 text-xs px-1.5 py-0'
+                          : 'border-warning/40 text-warning bg-warning/10 hover:bg-warning/10 text-xs px-1.5 py-0'
                       }
                     >
                       {trade.direction === 'LONG' ? 'L' : 'S'}
@@ -211,7 +211,7 @@ export function TradesTable({
                     {trade.isOpen ? (
                       <Badge
                         variant="outline"
-                        className="border-green-500/40 text-green-400 bg-green-500/10 hover:bg-green-500/10 text-xs px-1.5 py-0"
+                        className="border-profit/40 text-profit bg-profit/10 hover:bg-profit/10 text-xs px-1.5 py-0"
                       >
                         Open
                       </Badge>
@@ -240,9 +240,9 @@ export function TradesTable({
                     <span
                       className={
                         pnlPositive
-                          ? 'text-green-400'
+                          ? 'text-profit'
                           : pnlNegative
-                          ? 'text-red-400'
+                          ? 'text-loss'
                           : 'text-zinc-500'
                       }
                     >
@@ -259,7 +259,7 @@ export function TradesTable({
                         )}
                       </span>
                     ) : (
-                      <span className="text-zinc-700">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
 
@@ -276,7 +276,7 @@ export function TradesTable({
                         {trade.classification.setup}
                       </Badge>
                     ) : (
-                      <span className="text-zinc-700 text-xs">—</span>
+                      <span className="text-muted-foreground text-xs">—</span>
                     )}
                   </TableCell>
 
@@ -286,7 +286,7 @@ export function TradesTable({
                         asChild
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-zinc-300 hover:text-white hover:bg-zinc-800"
+                        className="h-7 px-2 text-zinc-300 hover:text-foreground hover:bg-zinc-800"
                       >
                         <Link href={buildChartHref(trade)}>View</Link>
                       </Button>
@@ -312,7 +312,7 @@ export function TradesTable({
             {query.page > 1 && (
               <Link
                 href={buildTradesHref(query, { page: query.page - 1 })}
-                className="h-8 px-3 flex items-center text-sm rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+                className="h-8 px-3 flex items-center text-sm rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-foreground transition-colors"
               >
                 ← Prev
               </Link>
@@ -323,7 +323,7 @@ export function TradesTable({
             {query.page < totalPages && (
               <Link
                 href={buildTradesHref(query, { page: query.page + 1 })}
-                className="h-8 px-3 flex items-center text-sm rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+                className="h-8 px-3 flex items-center text-sm rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-foreground transition-colors"
               >
                 Next →
               </Link>
