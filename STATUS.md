@@ -17,11 +17,21 @@
   Invalid exports fail closed; upstream errors cannot expose token-bearing URLs.
   No ledger, broker prices, fees, money calculations or database schema changed.
   Assumptions, indicator formulas and limitations: docs/CHARTS.md.
-- **Validation in progress:** new indicator/date/marker/provider/API/cache tests
-  and a substantive browser flow were added. Final build, regression checks,
-  CI and independent cross-model review must finish before merge/release.
-- **Next action:** record exact tested source revision/results, open the PR,
-  address blocking review findings and use the guarded merge workflow. Optional
+- **Verified source:** `07e9f97565c8e895b5d2d31cdcea7161ef41a59f` passed
+  `npm run lint` (0 errors, two existing warnings), `npm run typecheck`,
+  `npm test` (**297/297**, 24 suites) and `npm run build`. Subsequent commits
+  only adapt browser tests to collapsed statistics and wait for active streamed/
+  filtered route content; assertions were preserved. Full browser regression on
+  `c17ee91674a3f0598c8aa5c0a3f4220ab66ceea9` passed **15/15** against the production
+  build and isolated `auratrade_ui_test` database. Final lint also passed.
+- **Data/browser evidence:** authenticated API returned 250 MSFT daily candles
+  from Finviz over one year. An additional real-Finviz BROS render mapped both
+  synthetic broker fills; its 122 available candles reflect post-IPO history.
+  Desktop/mobile screenshots inspected under `.local/ui-preview/`; browser test
+  covers non-overlap, controls, retry, annotation selection and zoom stability.
+  All 46 browser build files scanned: 0 matches for the configured private token.
+- **Next action:** open the PR, finish CI and independent review, address any
+  blocking findings and use the guarded merge workflow. Optional
   runtime Finviz environment wiring is included; production token provisioning
   and deployment are not yet performed for this revision. Repository stays public.
 
