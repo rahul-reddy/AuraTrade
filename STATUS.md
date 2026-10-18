@@ -2,7 +2,46 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): functional trade-review chart revision
+## Current handoff (2026-10-18): annotated chart release deployed
+
+- **Live release:** `36be2af13e400d14aeaab590d52ff4a5331d5c06` at
+  https://auratrades.quest. PR #23 was squash-merged through `scripts/merge-pr.ps1`
+  after exact-head Claude Opus approval (0 blocking findings) and successful CI.
+  Deployed using `scripts/deploy.ps1 -Revision <full-sha> -Confirm "DEPLOY 36be2af"`
+  under the owner's existing deployment instruction.
+- **Delivered:** one-year daily trade-review charts, grouped candle-aligned entry/
+  exit markers, EMA 8/21, SMA 50, volume/SMA 50 and RSI 14/SMA 5 panes; explicit
+  intervals/ranges, stable zoom, focus/reset, fill inspector, symbol search,
+  indicator toggles, preserved views on errors and mobile stacking. Compact
+  navigation and expandable secondary dashboard statistics prioritize the chart.
+- **Validation:** final application source `c9e11b259f0397e717f9e60210eb25132aba1898`
+  passed local lint (two existing warnings), types, **298 unit tests**, production
+  build and **15 browser tests**. The tested PR head `920052f` adds only a status
+  update. Full CI also passed on the exact merged/deployed SHA:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39142057978
+  (harness, fresh migrations/drift, lint/types, coverage, build and browsers).
+- **Deployment evidence:** server build/types passed; backup
+  `auratrade-20261018T155454Z-pre-36be2af.dump` (916K) completed before the migration
+  check. All 12 migrations were already applied; no schema change was needed.
+  The running web image identifies the release above; web/database healthy and
+  Caddy running. Server Finviz token configured privately in mode-600 `.env`, with
+  existing environment keys preserved. All 46 client build files scanned: 0 token
+  matches; no credential value or real broker statement was committed/logged.
+- **Live checks:** `/login` 200; signed-out `/` and `/dashboard` redirect to login;
+  public registration remains closed. Desktop/mobile sign-in rendered with **0
+  page errors** and no mobile overflow. An ephemeral server-side synthetic session
+  confirmed authenticated `/` returns 307 to `/dashboard` and market-data API 200
+  with **250 Finviz MSFT daily candles** (2025-10-20 through 2026-10-16). No persistent
+  production test account was created and no owner account/password was used.
+- **Limits / next action:** daily quotes may be split-adjusted; exact broker fill
+  prices remain intact. Date-only fills annotate daily charts. Yahoo intraday
+  availability can fail inside the nominal retention window; errors preserve the
+  previous chart. Cache freshness reflects retrieval time, not a guaranteed live
+  feed. docs/CHARTS.md states these limits and formulas. Review/merge this docs-only
+  handoff through the normal gate; no application redeploy is needed. Repository
+  remains public as instructed. Startup: README.md; runbook: docs/DEPLOYMENT.md.
+
+## Previous handoff (2026-10-18): functional trade-review chart revision
 
 - **Scope:** owner requested a more useful UI and a proper one-year daily stock
   chart with their trades annotated, using the existing private Finviz token.
