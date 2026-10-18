@@ -66,6 +66,9 @@ test('root sign-in reaches the dashboard and the redesigned workspace supports r
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('trades-desktop.png') })
   await page.getByLabel('Search symbol', { exact: true }).fill('BROS')
   await expect(page).toHaveURL(/symbol=BROS/)
+  // GET form navigation updates the URL before the next document's links render.
+  // Wait for the filtered view's tab, rather than clicking the previous document.
+  await expect(page.getByRole('link', { name: 'Closed trades', exact: true })).toHaveAttribute('href', /symbol=BROS/)
   await page.getByRole('link', { name: 'Closed trades', exact: true }).click()
   await expect(page).toHaveURL(/status=closed/)
   expect(new URL(page.url()).searchParams.get('symbol')).toBe('BROS')
