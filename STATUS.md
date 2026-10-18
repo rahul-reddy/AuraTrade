@@ -21,6 +21,12 @@
   Open the PR, finish full browser regression/CI, obtain exact-head independent
   review, guarded-merge and deploy under the existing delivery instruction.
   The previous annotated-chart release remains live until that succeeds.
+- **Review/test follow-up:** PR #25 head `f29efdd` passed full CI and independent
+  Claude Opus review with 0 blocking findings. Local regression exposed transient
+  duplicate headings during Next.js streaming. Browser assertions now scope those
+  headings to the active main workspace and wait for exactly one, preserving the
+  visibility checks. All four affected calendar/navigation/workspace scenarios
+  passed together; full regression is rerunning. Application source is unchanged.
 
 ## Previous handoff (2026-10-18): annotated chart release deployed
 

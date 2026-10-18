@@ -2,6 +2,13 @@ import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import type { DashboardPayload } from '../src/lib/dashboard/types'
 
+async function expectActiveHeading(page: Page, name: string) {
+  // Next can briefly retain a streamed route copy outside the active workspace.
+  const heading = page.locator('#main-content').getByRole('heading', { name, exact: true })
+  await expect(heading).toHaveCount(1)
+  await expect(heading).toBeVisible()
+}
+
 async function signInAndImport(page: Page, fixture: string, tradeCount: number) {
   const email = `playwright-calendar-nav-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`
   await page.goto('/register')
@@ -73,20 +80,20 @@ test('chart symbol search works in place and returning to trades clears the char
   await signInAndImport(page, 'sample-tos-account-statement.csv', 2)
   await page.goto('/trades?symbol=TOSA')
   await page.getByRole('link', { name: 'TOSA', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'TOSA', exact: true })).toBeVisible()
+  await expectActiveHeading(page, 'TOSA')
   const accountId = new URL(await page.getByRole('link', { name: '← Trades', exact: true }).getAttribute('href') ?? '', page.url()).searchParams.get('accountId')
   await expect(page.getByRole('search', { name: 'Search chart symbols' })).toBeVisible()
   await expect(page.getByText('Symbol search', { exact: true })).toBeVisible()
   await page.getByRole('textbox', { name: 'Jump to symbol', exact: true }).fill('tosb')
   await page.getByRole('button', { name: 'Open symbol chart', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'TOSB', exact: true })).toBeVisible()
+  await expectActiveHeading(page, 'TOSB')
   expect(new URL(page.url()).searchParams.get('accountId')).toBe(accountId)
   await page.getByRole('textbox', { name: 'Jump to symbol', exact: true }).fill('AAPL')
   await page.getByRole('textbox', { name: 'Jump to symbol', exact: true }).press('Enter')
-  await expect(page.getByRole('heading', { name: 'AAPL', exact: true })).toBeVisible()
+  await expectActiveHeading(page, 'AAPL')
   await page.screenshot({ path: testInfo.outputPath('chart-symbol-search.png'), animations: 'disabled' })
   await page.getByRole('link', { name: '← Trades', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Trade History', exact: true })).toBeVisible()
+  await expectActiveHeading(page, 'Trade History')
   expect(new URL(page.url()).searchParams.has('symbol')).toBe(false)
   expect(new URL(page.url()).searchParams.get('accountId')).toBe(accountId)
   await expect(page.getByLabel('Search symbol', { exact: true })).toHaveValue('')
