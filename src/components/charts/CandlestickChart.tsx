@@ -288,22 +288,22 @@ export default function CandlestickChart({
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: "#09090b" },
-        textColor: "#a1a1aa",
+        background: { color: "#101217" },
+        textColor: "#a5adbd",
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: "#18181b" },
-        horzLines: { color: "#18181b" },
+        vertLines: { color: "#1b1f28" },
+        horzLines: { color: "#1b1f28" },
       },
       crosshair: { mode: 1 },
       rightPriceScale: {
-        borderColor: "#27272a",
-        textColor: "#a1a1aa",
+        borderColor: "#282d38",
+        textColor: "#a5adbd",
       },
       timeScale: {
-        borderColor: "#27272a",
+        borderColor: "#282d38",
         timeVisible: true,
         secondsVisible: false,
       },
@@ -497,7 +497,7 @@ export default function CandlestickChart({
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar: TF buttons + OHLCV panel + status */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800 bg-zinc-950 shrink-0">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-3 border-b border-zinc-800 bg-zinc-950 shrink-0">
         {/* Timeframe buttons */}
         <div className="flex items-center gap-0.5">
           {TIMEFRAME_OPTIONS.map((tf) => (
@@ -516,7 +516,7 @@ export default function CandlestickChart({
         </div>
 
         {/* OHLCV info (updates on crosshair move) */}
-        <div className="border-l border-zinc-800 pl-3 ml-1 flex items-center gap-2.5 text-xs font-mono min-w-0">
+        <div className="border-l border-zinc-800 pl-3 ml-1 flex flex-wrap items-center gap-2.5 text-xs font-mono min-w-0">
           {hoveredOhlcv ? (
             <>
               <span className="text-zinc-600">O</span>

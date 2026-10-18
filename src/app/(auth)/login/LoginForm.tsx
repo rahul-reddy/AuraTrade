@@ -1,5 +1,6 @@
 "use client";
 
+import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -24,6 +25,7 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,22 +56,18 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
   return (
     <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
       <CardHeader className="space-y-1">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-md bg-blue-500 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">A</span>
-          </div>
-          <span className="text-white font-semibold text-lg">AuraTrade</span>
-        </div>
-        <CardTitle className="text-2xl text-white">Sign in</CardTitle>
+        <p className="eyebrow mb-3">Welcome back</p>
+        <CardTitle role="heading" aria-level={1} className="text-3xl tracking-tight text-white">Sign in</CardTitle>
         <CardDescription className="text-zinc-400">
-          Enter your credentials to access your account
+          Pick up where your last session left off.
         </CardDescription>
       </CardHeader>
 
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
+          {searchParams.get("registered") === "1" && <div role="status" className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm leading-6 text-blue-200">Your account is ready. Sign in to start exploring.</div>}
           {error && (
-            <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            <div role="alert" className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
               {error}
             </div>
           )}
@@ -94,16 +92,21 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
             <Label htmlFor="password" className="text-zinc-300">
               Password
             </Label>
+            <div className="relative">
             <Input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-blue-500"
+              className="bg-zinc-800 border-zinc-700 pr-12 text-white placeholder:text-zinc-500 focus:border-blue-500"
             />
+            <button type="button" aria-label={showPassword ? "Hide characters" : "Show characters"} aria-controls="password" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-zinc-400 hover:text-white">
+              {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+            </div>
           </div>
         </CardContent>
 
@@ -111,7 +114,7 @@ export function LoginForm({ registrationOpen }: { registrationOpen: boolean }) {
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
           >
             {isLoading ? "Signing in…" : "Sign in"}
           </Button>

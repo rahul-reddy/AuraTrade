@@ -2,14 +2,14 @@
 
 /* shadcn/ui CSS variables — zinc base, dark-first */
 :root {
-  --background: 240 10% 3.9%;
+  --background: 228 15% 7%;
   --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
+  --card: 225 12% 10%;
   --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
+  --popover: 225 12% 11%;
   --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
   --secondary: 240 3.7% 15.9%;
   --secondary-foreground: 0 0% 98%;
   --muted: 240 3.7% 15.9%;
@@ -20,7 +20,7 @@
   --destructive-foreground: 0 0% 98%;
   --border: 240 3.7% 15.9%;
   --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+  --ring: 217 91% 60%;
   --radius: 0.5rem;
 
   /* AuraTrade semantic colors */
@@ -30,6 +30,16 @@
 }
 
 @theme inline {
+  --color-zinc-950: #101217;
+  --color-zinc-900: #171a21;
+  --color-zinc-800: #282d38;
+  --color-zinc-700: #3b4250;
+  --color-zinc-600: #7b8496;
+  --color-zinc-500: #939bad;
+  --color-zinc-400: #a5adbd;
+  --color-zinc-300: #c3cad6;
+  --color-zinc-200: #dce1ea;
+  --color-zinc-100: #f0f3f9;
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
@@ -69,4 +79,55 @@ body {
 .font-mono,
 [class*="tabular-nums"] {
   font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* Shared workspace rhythm and interaction language. */
+:root { color-scheme: dark; }
+::selection { background: #3b82f640; color: #fff; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), select { cursor: pointer; }
+:focus-visible { outline: 2px solid #60a5fa; outline-offset: 4px; }
+input, select, textarea { accent-color: #3b82f6; }
+input[type="date"] { min-width: 0; }
+.workspace-page { width: 100%; max-width: 1680px; margin-inline: auto; padding: 36px 36px 48px; }
+.eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase; color: #939bad; }
+.brand-mark { background: linear-gradient(145deg, #60a5fa, #2563eb); box-shadow: inset 0 1px 0 #ffffff35, 0 4px 12px #0003; }
+.surface { background: linear-gradient(140deg, #1a1e27, #171a21 65%); border: 1px solid #2a303c; border-radius: 14px; box-shadow: 0 2px 4px #0000000c; }
+.action-primary { min-height: 40px; border: 1px solid #6199f54d; border-radius: 8px; background: #2563eb; padding: 10px 16px; color: white; font-size: 13px; font-weight: 500; transition: background .15s; }
+.action-primary:hover { background: #326fe5; }
+.action-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; border: 1px solid #3b4250; border-radius: 8px; padding: 9px 14px; font-size: 12px; color: #c3cad6; background: #ffffff03; transition: background .15s, border-color .15s; }
+.action-secondary:hover { background: #ffffff08; border-color: #7b8496; }
+.metric-card { position: relative; overflow: hidden; }
+.metric-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 2px; background: #3b82f6; opacity: 0; transition: opacity .15s; }
+.metric-card:hover::before { opacity: 1; }
+.metric-primary { background: linear-gradient(130deg, #1e2c44, #171e2c 70%); border-color: #3d5e8a; }
+.auth-shell { background: #101217; }
+.auth-story { background: radial-gradient(ellipse at 10% 95%, #244d7e45, transparent 60%), #151922; }
+.auth-story::after { content: ''; position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(#ffffff03 1px, transparent 1px), linear-gradient(90deg, #ffffff03 1px, transparent 1px); background-size: 64px 64px; mask-image: linear-gradient(transparent, black); }
+.auth-form > div { background: transparent; border: 0; box-shadow: none; }
+.auth-form > div > div { padding-inline: 0; }
+.auth-form form > div { padding-inline: 0; }
+.auth-form input { height: 46px; border-radius: 8px; background: #171a21; }
+.auth-form button[type="submit"] { height: 46px; border-radius: 8px; }
+.skip-link { position: fixed; z-index: 100; top: 8px; left: 12px; transform: translateY(-160%); border-radius: 6px; background: #3478ed; padding: 10px 16px; color: #fff; }
+.skip-link:focus { transform: translateY(0); }
+.workspace-main { scrollbar-width: thin; scrollbar-color: #3b4250 transparent; }
+.trade-table tbody tr:nth-child(even) { background: #ffffff02; }
+.trade-table tbody tr:hover { background: #3b82f60a; }
+.trade-table th { height: 46px; background: #1b1f28; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.trade-table td { height: 56px; border-color: #282d38; }
+.filter-bar { padding: 14px; border: 1px solid #282d38; border-radius: 12px; background: #171a21; }
+.filter-bar input, .filter-bar select, .filter-bar button, .filter-bar a { min-height: 36px; }
+@media (max-width: 767px) {
+  .workspace-page { padding: 24px 16px 36px; }
+  .app-sidebar { width: 60px !important; }
+  .app-sidebar .sidebar-expanded, .app-sidebar .sidebar-toggle { display: none; }
+  .app-sidebar .sidebar-brand { justify-content: center; padding-inline: 0; }
+  .app-sidebar nav a { justify-content: center; padding-inline: 0; }
+  .app-sidebar .sidebar-footer { padding: 10px 4px; }
+  .app-sidebar .sidebar-signout { justify-content: center; padding-inline: 0; }
+  .page-header form { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import PageHeader from '@/components/layout/PageHeader'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, DatabaseBackup, RefreshCcw, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
@@ -51,7 +52,7 @@ function Panel({
   return (
     <section
       id={id}
-      className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]"
+      className="surface p-6"
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
@@ -202,7 +203,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
           <button
             type="button"
             onClick={() => integrityQuery.refetch()}
-            className="mt-4 rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400"
+            className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
           >
             Retry
           </button>
@@ -219,23 +220,14 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
 
   return (
     <div className="text-white">
-      <div className="mx-auto max-w-[1680px] px-8 py-6">
-        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Data Integrity</h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              {accountName}
-              {' · '}
-              Inspect execution/trade consistency and run repair jobs when the imported ledger drifts.
-            </p>
-          </div>
-
+      <div className="workspace-page">
+        <PageHeader eyebrow="Settings / Account health" title="Data Integrity" description={`${accountName} · Review your imported data and keep your trade history consistent.`}>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => requestAction('reprocess_trades')}
               disabled={actionMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCcw className="h-4 w-4" />
               Reprocess All Trades
@@ -250,7 +242,7 @@ export default function IntegrityClient({ accountId, accountName }: IntegrityCli
               Rebuild All Snapshots
             </button>
           </div>
-        </div>
+        </PageHeader>
 
         <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
           <div className="flex items-start gap-4">
