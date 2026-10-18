@@ -33,6 +33,11 @@ unavailable; intraday requests use Yahoo. Hosted deployment passes the key at ru
 through the server's `.env`, never a build argument or browser request. See
 [chart behavior and data assumptions](docs/CHARTS.md).
 
+The dashboard heatmap lists the newest month first. Its year and month selectors
+filter only the calendar within the dashboard's date range; Clear calendar filters
+restores all available months. Chart symbol search opens another ticker directly,
+and the Trades back link returns to all symbols in the current account.
+
 ## Verification
 
 ```sh
