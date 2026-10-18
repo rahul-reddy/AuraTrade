@@ -2,7 +2,43 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): Espresso & Acid light/dark themes
+## Current handoff (2026-10-18): Espresso & Acid deployed and verified live
+
+- **Live release:** `300cf90de329b4b748e52da24c925969c0995a66` at
+  https://auratrades.quest. PR #27 was squash-merged through the guarded merge
+  script after successful CI and exact-head Claude Opus approval (0 blocking;
+  4 advisory cleanup notes). The owner clarified that implementation includes
+  deployment. Deployed with `scripts/deploy.ps1 -Revision <full-sha> -Confirm
+  "DEPLOY 300cf90"`; the server's CURRENT marker matches this revision.
+- **Delivered:** Espresso & Acid throughout the application, with dark espresso/
+  citron and light parchment/cream/olive, mode-aware charts and financial colors,
+  and persistent sun/moon controls on auth and workspace screens. The selected mode
+  applies before hydration, syncs tabs, and retains chart data/selection/zoom.
+- **Validation:** application source `454eb43e53421be7befd5c8a6f7e5d81bb732f0d`
+  passed local lint (0 errors, two existing warnings), types, build, **298 unit
+  tests** and **19/19 browser tests** against the production build and isolated
+  test database. Full CI also passed on the exact merged/deployed revision:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39162848542
+  (harness, migrations/drift, lint/types, coverage, build and browsers).
+- **Deployment evidence:** server build/types passed. Backup
+  `auratrade-20261018T203137Z-pre-300cf90.dump` (1004K) completed before migration
+  checks. All 12 migrations were already applied; no schema changes were needed.
+  Web, database and Caddy were healthy after the release switch.
+- **Live checks:** login 200; signed-out root/dashboard redirect to login;
+  registration remains closed. Real Chromium checks exercised dark and light on
+  desktop/mobile, the visible mode control, correct background/native color scheme,
+  reload persistence and cross-tab synchronization, with **0 page errors** and no
+  document overflow. Four live screenshots are in ignored
+  `.local/ui-preview/espresso-acid/live/`. A 60-second server-side synthetic session
+  verified authenticated root 307 to dashboard and dashboard 200 with the theme
+  control rendered. No persistent production test account or owner password used.
+- **Scope / next action:** no financial calculation, parser, ledger, API/auth,
+  schema or dependency changes. Startup: README.md; appearance: docs/UI-DESIGN.md;
+  deployment: docs/DEPLOYMENT.md. Review/merge this documentation-only handoff
+  through the normal gate. The application is deployed; no redeploy is needed for
+  this status update. Repository visibility remains public.
+
+## Previous handoff (2026-10-18): Espresso & Acid light/dark themes
 
 - **Implemented:** the owner's chosen Espresso & Acid palette across auth, workspace,
   tables, import previews, integrity screens, error/loading states, dialogs, toasts,
