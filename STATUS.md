@@ -2,7 +2,41 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): public repository decision; UI merged
+## Current handoff (2026-10-18): UI release deployed and verified
+
+- **Live release:** `8a299fc561af20bee65a9c0793ff5c386dcfbc9e` is deployed at
+  https://auratrades.quest. The owner approved deploying the concrete release after
+  the prior handoff. Ran `scripts/deploy.ps1 -Revision <full-sha> -Confirm "DEPLOY 8a299fc"`;
+  the script verified a clean worktree, main ancestry and successful CI before upload.
+- **Server evidence:** production build/types passed; backup
+  `auratrade-20261018T143501Z-pre-8a299fc.dump` (852K) completed before migration checks.
+  All 12 existing migrations were already applied; no pending migrations. The script
+  switched web/Caddy successfully. Server `~/auratrade/CURRENT` and the running web
+  image both identify the full release SHA; web and database are healthy, Caddy running.
+- **Live checks:** HTTPS `/login` returned 200; signed-out `/` and `/dashboard` returned
+  307 to login; registration POST returned 403 and `/register` rendered "Sign-up is
+  closed". Playwright rendered the new login design at 1440px and 390px, with no
+  mobile document overflow and **0 page errors**. Inspected screenshots saved under
+  `.local/ui-preview/live-sign-in-desktop.png` and `live-sign-in-mobile.png`.
+- **Original regression verified live:** authenticated `/` returned **307 to
+  `/dashboard`**, whose HTML returned **200** and the redesigned empty-account state.
+  This read-only check used a 60-second synthetic session for a nonexistent user,
+  issued/kept in memory inside an ephemeral server-side tools container. No persistent
+  test account was created, no owner account was used, and no secrets/cookies were
+  printed or copied off the server. Real credential login is covered by the reviewed
+  pre-deploy browser suite rather than a live owner-password test.
+- **Prior validation:** the application source in this release passed **267 unit
+  tests and 14 browser tests**, lint, types, build, migrations/drift and harness checks
+  on [PR #20's final CI](https://github.com/rahul-reddy/AuraTrade/actions/runs/39064900879),
+  with independent Claude Opus approval and 0 blocking findings. [PR #21](https://github.com/rahul-reddy/AuraTrade/pull/21)
+  only updated AGENTS.md/STATUS.md; it also passed independent review and docs-only CI.
+  This post-deploy handoff changes documentation only and needs no application redeploy.
+- **Visibility / next action:** repository remains public as the owner instructed.
+  No deployment work remains. Review/merge this status-only handoff through the normal
+  gate; future releases use scripts/deploy.ps1. Startup/runbook: README.md and
+  docs/DEPLOYMENT.md.
+
+## Previous handoff (2026-10-18): public repository decision; UI merged
 
 - **Owner decision:** keep `rahul-reddy/AuraTrade` public; its public visibility is
   intentional. Updated AGENTS.md to reflect this instruction. Repository visibility
