@@ -1,7 +1,8 @@
 import { fetchFinvizDaily } from './finviz-client'
-import { fetchYahooMarketData, resolvePreferredMarketDataTimeframe, INTRADAY_FALLBACK_MESSAGE, type FetchYahooMarketDataOptions, type FetchYahooMarketDataResult } from './yahoo-client'
+import { fetchYahooMarketData, normalizeMarketDataSymbol, resolvePreferredMarketDataTimeframe, INTRADAY_FALLBACK_MESSAGE, type FetchYahooMarketDataOptions, type FetchYahooMarketDataResult } from './yahoo-client'
 
 export async function fetchChartMarketData(options: FetchYahooMarketDataOptions): Promise<FetchYahooMarketDataResult> {
+  options = { ...options, symbol: normalizeMarketDataSymbol(options.symbol) }
   const daily = resolvePreferredMarketDataTimeframe(options.timeframe, options.from, options.to, options.now) === '1d'
   if (daily && process.env.AURATRADE_FINVIZ_TOKEN) {
     try {

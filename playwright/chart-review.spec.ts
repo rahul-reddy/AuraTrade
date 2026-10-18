@@ -101,6 +101,10 @@ test('one-year trade review has real candle annotations, stable zoom, working co
   await page.getByRole('button',{name:'Retry',exact:true}).click()
   await expect(plot.getByRole('alert')).toHaveCount(0)
   await expect(page.getByRole('button',{name:'3M',exact:true})).toHaveAttribute('aria-pressed','true')
+  const threeMonthStart = await plot.getAttribute('data-range-from')
+  await page.getByRole('button',{name:'1D',exact:true}).click()
+  await expect(plot).toHaveAttribute('data-range-from',threeMonthStart!)
+  await expect(page.getByRole('button',{name:'3M',exact:true})).toHaveAttribute('aria-pressed','true')
 
   await page.getByRole('button',{name:'1H',exact:true}).click()
   await expect(page.getByRole('status')).toContainText('Showing daily')

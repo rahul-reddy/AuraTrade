@@ -172,7 +172,8 @@ export default function CandlestickChart(props: Props) {
     const oscillator = rsi(closes)
     lines.current.rsi?.setData(lineData(candles, oscillator))
     const signal = sma(oscillator.filter((value): value is number => value != null), 5)
-    lines.current.signal?.setData(lineData(candles, [...Array<number | null>(14).fill(null), ...signal]))
+    const rsiWarmup = Math.max(0, oscillator.findIndex(value => value != null))
+    lines.current.signal?.setData(lineData(candles, [...Array<number | null>(rsiWarmup).fill(null), ...signal]))
     chart.current.applyOptions({ timeScale: { timeVisible: data.timeframe !== '1d' } })
     if (candles.length) {
       const view = restoreView.current
@@ -195,6 +196,7 @@ export default function CandlestickChart(props: Props) {
   }, [selected, showLevels, data, showVolume, showRsi])
 
   function changeTimeframe(timeframe: MarketDataTimeframe) {
+    if (timeframe === data.timeframe) return
     if (timeframe === '1d') { void load(yearRange(data.range.to), '1d', '1Y'); return }
     const anchor = selected?.entryDay ?? (selected ? fillTradingDay(selected.entryTime) : data.range.to)
     const end = Math.min(Date.parse(anchor) + 2 * DAY_MS, Date.now())

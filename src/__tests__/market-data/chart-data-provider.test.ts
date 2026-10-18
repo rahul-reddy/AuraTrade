@@ -12,6 +12,12 @@ it('prefers configured Finviz for daily prices',async()=>{
   expect((await fetchChartMarketData(options)).provider).toBe('finviz')
   expect(fetchYahooMarketData).not.toHaveBeenCalled()
 })
+it('normalizes the Finviz symbol and returned cache key consistently with Yahoo',async()=>{
+  jest.mocked(fetchFinvizDaily).mockResolvedValue([])
+  const result=await fetchChartMarketData({...options,symbol:' aapl '})
+  expect(result.symbol).toBe('AAPL')
+  expect(fetchFinvizDaily).toHaveBeenCalledWith(expect.objectContaining({symbol:'AAPL'}))
+})
 it('falls back explicitly when Finviz fails without forwarding the exception',async()=>{
   jest.mocked(fetchFinvizDaily).mockRejectedValue(new Error('synthetic-private-token'))
   jest.mocked(fetchYahooMarketData).mockResolvedValue({symbol:'AAPL',requestedTimeframe:'1d',effectiveTimeframe:'1d',candles:[],fallbackMessage:null})

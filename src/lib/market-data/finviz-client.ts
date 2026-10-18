@@ -10,8 +10,9 @@ export function parseFinvizDailyCsv(csv: string): MarketDataCandle[] {
   if (parsed.errors.length || !required.every(key => parsed.meta.fields?.includes(key))) throw new Error('finviz_invalid_export')
   const byDay = new Map<string, MarketDataCandle>()
   for (const row of parsed.data) {
-    const date = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(row.Date.trim())
-    const day = date ? `${date[3]}-${date[1].padStart(2, '0')}-${date[2].padStart(2, '0')}` : row.Date.trim()
+    const rawDate = row.Date?.trim() ?? ''
+    const date = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(rawDate)
+    const day = date ? `${date[3]}-${date[1].padStart(2, '0')}-${date[2].padStart(2, '0')}` : rawDate
     const time = `${day}T00:00:00.000Z`
     const instant = new Date(time)
     const values = required.slice(1).map(key => row[key]?.trim() ? Number(row[key]) : NaN)

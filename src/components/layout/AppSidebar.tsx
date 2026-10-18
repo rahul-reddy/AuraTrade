@@ -142,7 +142,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
         collapsed ? 'w-16' : 'w-[232px]',
       )}
     >
-      <div className={cn('sidebar-brand flex h-[76px] shrink-0 items-center px-5', collapsed && 'justify-center px-0')}>
+      <div className={cn('sidebar-brand flex h-[56px] shrink-0 items-center px-5', collapsed && 'justify-center px-0')}>
         <Brand compact={collapsed} className={collapsed ? '' : '[&>span:last-child]:max-md:hidden'} />
       </div>
       {!collapsed && <p className="sidebar-expanded eyebrow px-6 pb-3 pt-6">Workspace</p>}
