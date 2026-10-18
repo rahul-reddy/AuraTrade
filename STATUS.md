@@ -34,6 +34,13 @@
   blocking findings and use the guarded merge workflow. Optional
   runtime Finviz environment wiring is included; production token provisioning
   and deployment are not yet performed for this revision. Repository stays public.
+- **Review follow-up:** PR #23's `39cf886` head passed full GitHub CI and independent
+  Claude Opus review with 0 blocking findings. `c9e11b2` addresses all five advisory
+  notes: preserve an active interval's range, normalize provider symbols, handle
+  missing export dates defensively, derive RSI signal warm-up from actual values
+  and align the sidebar brand height with the header. A browser assertion now
+  protects active-interval range preservation. Final checks and exact-head review
+  must run again on this follow-up before guarded merge/deployment.
 
 ## Previous handoff (2026-10-18): UI release deployed and verified
 
