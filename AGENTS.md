@@ -14,7 +14,7 @@ Trade analytics platform for a discretionary equity trader: imports Schwab/think
 ## Workflow
 - main is the integration branch. Use feat/<topic>, fix/<topic>, or docs/<topic> branches and focused commits.
 - Open a PR, run CI, review the diff, then squash merge. Never force-push main.
-- The current GitHub plan does not support branch protection on this private repository. Keep it private. After reviewing the diff, use scripts/merge-pr.ps1 to require successful CI and match the reviewed head SHA.
+- The repository is intentionally public (owner decision, 2026-10-18). Preserve public visibility. After reviewing the diff, use scripts/merge-pr.ps1 to require successful CI and match the reviewed head SHA.
 - Preserve unrelated changes. Coordinate file ownership before multiple agents edit the same files.
 - Update STATUS.md with evidence, remaining work and next action in every meaningful handoff.
 - Do not claim tests passed unless you ran them on the current revision.
