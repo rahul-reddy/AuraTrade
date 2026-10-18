@@ -69,10 +69,10 @@ export async function GET(req: NextRequest) {
       },
       candles: result.candles,
     });
-  } catch (error) {
-    console.error("[GET /api/market-data]", error);
+  } catch {
+    console.error("[GET /api/market-data] Upstream data request failed");
     return NextResponse.json(
-      { error: "market_data_fetch_failed", message: String(error) },
+      { error: "market_data_fetch_failed", message: "Market data is temporarily unavailable. Please retry." },
       { status: 500 },
     );
   }

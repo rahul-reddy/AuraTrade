@@ -2,7 +2,30 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): UI release deployed and verified
+## Current handoff (2026-10-18): functional trade-review chart revision
+
+- **Scope:** owner requested a more useful UI and a proper one-year daily stock
+  chart with their trades annotated, using the existing private Finviz token.
+  Work is on `feat/trade-review-charts`; the previous release remains live.
+- **Implemented:** explicit intervals/ranges, candle-aligned grouped entry/exit
+  markers, EMA 8/21 and SMA 50, separate volume/SMA 50 and Wilder RSI 14/SMA 5
+  panes, focus/reset controls, original-fill inspector, annotation selection,
+  symbol navigation, loading/retry and mobile stacking. Compact app chrome and
+  expandable secondary dashboard statistics prioritize review space.
+- **Data:** strict server-only Finviz daily CSV adapter; Yahoo intraday/fallback.
+  Daily cache keys normalize provider timestamps without deleting stored data.
+  Invalid exports fail closed; upstream errors cannot expose token-bearing URLs.
+  No ledger, broker prices, fees, money calculations or database schema changed.
+  Assumptions, indicator formulas and limitations: docs/CHARTS.md.
+- **Validation in progress:** new indicator/date/marker/provider/API/cache tests
+  and a substantive browser flow were added. Final build, regression checks,
+  CI and independent cross-model review must finish before merge/release.
+- **Next action:** record exact tested source revision/results, open the PR,
+  address blocking review findings and use the guarded merge workflow. Optional
+  runtime Finviz environment wiring is included; production token provisioning
+  and deployment are not yet performed for this revision. Repository stays public.
+
+## Previous handoff (2026-10-18): UI release deployed and verified
 
 - **Live release:** `8a299fc561af20bee65a9c0793ff5c386dcfbc9e` is deployed at
   https://auratrades.quest. The owner approved deploying the concrete release after

@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getRequiredSession } from "@/lib/session";
-import { getMarketData } from "@/lib/market-data/market-data-cache";
-import { getDefaultMarketDataRange } from "@/lib/market-data/yahoo-client";
+import { tradeYearRange, fillTradingDay } from "@/lib/charts/chart-model";
 import ChartWorkspace from "@/components/charts/ChartWorkspace";
 import type { ChartTrade } from "@/components/charts/CandlestickChart";
 
@@ -17,32 +16,6 @@ function getParam(
 ): string | undefined {
   const v = sp[key];
   return typeof v === "string" && v ? v : undefined;
-}
-
-/**
- * Market-data window around a symbol's trades: the trade span padded by 30%
- * (min 30 days) on each side, capped at tomorrow. Open trades extend to now.
- * Kept outside the component so render stays pure.
- */
-function getChartDateRange(
-  trades: Array<{ entryTime: Date; exitTime: Date | null }>,
-): { from: Date; to: Date } {
-  if (trades.length === 0) return getDefaultMarketDataRange("1d");
-  const now = Date.now();
-  const earliest = trades.reduce(
-    (min, t) => Math.min(min, t.entryTime.getTime()),
-    Infinity,
-  );
-  const latest = trades.reduce(
-    (max, t) => Math.max(max, t.exitTime?.getTime() ?? now),
-    -Infinity,
-  );
-  const spanMs = Math.max(latest - earliest, 30 * 86_400_000);
-  const padMs = Math.max(spanMs * 0.3, 30 * 86_400_000);
-  return {
-    from: new Date(earliest - padMs),
-    to: new Date(Math.min(latest + padMs, now + 86_400_000)),
-  };
 }
 
 export default async function SymbolChartPage({ params, searchParams }: ChartPageProps) {
@@ -96,7 +69,9 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
     id: trade.id,
     direction: trade.direction,
     entryTime: trade.entryTime.toISOString(),
+    entryDay: fillTradingDay(trade.entryTime.toISOString(), trade.entryTradingDate?.toISOString()),
     exitTime: trade.exitTime?.toISOString() ?? null,
+    exitDay: trade.exitTime ? fillTradingDay(trade.exitTime.toISOString(), trade.exitTradingDate?.toISOString()) : null,
     entryPrice: trade.entryPrice.toNumber(),
     exitPrice: trade.exitPrice?.toNumber() ?? null,
     totalQty: trade.totalQty.toNumber(),
@@ -114,6 +89,8 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
             .map((fill) => ({
               id: fill.id,
               side: fill.side,
+              kind: fill.kind === "OPEN" ? "OPEN" as const : "CLOSE" as const,
+              day: fillTradingDay(fill.time.toISOString(), fill.time.getTime() === trade.entryTime.getTime() ? trade.entryTradingDate?.toISOString() : fill.time.getTime() === trade.exitTime?.getTime() ? trade.exitTradingDate?.toISOString() : null),
               qty: fill.qty.toNumber(),
               price: fill.price?.toNumber() ?? 0,
               time: fill.time.toISOString(),
@@ -121,6 +98,8 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
         : trade.executions.map((ex) => ({
             id: ex.id,
             side: ex.side,
+            kind: ex.posEffect === "OPEN" ? "OPEN" as const : ex.posEffect === "CLOSE" ? "CLOSE" as const : undefined,
+            day: fillTradingDay(ex.execTime.toISOString()),
             qty: ex.qty.toNumber(),
             price: ex.price.toNumber(),
             time: ex.execTime.toISOString(),
@@ -129,26 +108,9 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
 
   // ── Compute date range for initial market data ─────────────────────────────
 
-  const { from, to } = getChartDateRange(rawTrades);
-
-  // ── Fetch initial daily candles ───────────────────────────────────────────
-
-  let initialCandles: Awaited<ReturnType<typeof getMarketData>>["candles"] = [];
-  let initialFallbackMessage: string | null = null;
-  // #8 fix: use the server's effectiveTimeframe (may differ from "1d" due to fallback logic)
-  let initialEffectiveTimeframe: import("@/lib/market-data/yahoo-client").MarketDataTimeframe = "1d";
-
-  try {
-    const md = await getMarketData({ symbol, timeframe: "1d", from, to });
-    initialCandles = md.candles;
-    initialFallbackMessage = md.fallbackMessage;
-    initialEffectiveTimeframe = md.effectiveTimeframe;
-  } catch (err) {
-    // No market data available: chart renders empty, client can retry via TF buttons
-    if (process.env.NODE_ENV === "development") {
-      console.warn(`[SymbolChartPage] Failed to fetch initial candles for ${symbol}:`, err);
-    }
-  }
+  const initialRange = tradeYearRange(trades.find(t => t.id === tradeId));
+  // Load prices through the authenticated client API. A slow quote provider must
+  // not delay the trade inspector or navigation; the chart owns loading/retry.
 
   // ── Header stats ──────────────────────────────────────────────────────────
 
@@ -164,12 +126,15 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
 
   return (
     <ChartWorkspace
+      key={`${symbol}:${account.id}:${focusTradeId ?? "overview"}`}
       symbol={symbol}
       accountId={account.id}
       trades={trades}
-      initialCandles={initialCandles}
-      initialTimeframe={initialEffectiveTimeframe}
-      initialFallbackMessage={initialFallbackMessage}
+      initialCandles={[]}
+      initialTimeframe="1d"
+      initialFallbackMessage={null}
+      initialSource="unavailable"
+      initialRange={initialRange}
       initialFocusTradeId={focusTradeId}
       totalNetPnl={totalNetPnl}
       winRate={winRate}

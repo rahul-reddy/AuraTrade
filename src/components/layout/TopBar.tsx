@@ -41,7 +41,7 @@ export default function TopBar({ onOpenPalette, accountName }: TopBarProps) {
   const modKey = useSyncExternalStore(subscribeNever, getClientModKey, () => '⌘K')
 
   return (
-    <header className="flex h-[76px] shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/90 px-4 sm:px-9">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/90 px-4 sm:px-9">
       <div className="flex min-w-0 items-center gap-3 text-xs text-zinc-400">
         <Layers className="h-3.5 w-3.5 shrink-0" />
         <span className="max-w-48 truncate font-medium text-zinc-300">{contextLabel}</span>

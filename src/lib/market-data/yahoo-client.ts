@@ -25,6 +25,7 @@ export interface FetchYahooMarketDataOptions {
 }
 
 export interface FetchYahooMarketDataResult {
+  provider?: "finviz" | "yahoo";
   symbol: string;
   requestedTimeframe: MarketDataTimeframe;
   effectiveTimeframe: MarketDataTimeframe;
@@ -75,7 +76,7 @@ export function getDefaultMarketDataRange(
   now: Date = new Date(),
 ): { from: Date; to: Date } {
   const days =
-    timeframe === "1d" ? 180 : timeframe === "1h" ? 30 : timeframe === "15m" ? 10 : 5;
+    timeframe === "1d" ? 365 : timeframe === "1h" ? 30 : timeframe === "15m" ? 10 : 5;
 
   return {
     from: new Date(now.getTime() - days * 24 * 60 * 60 * 1000),

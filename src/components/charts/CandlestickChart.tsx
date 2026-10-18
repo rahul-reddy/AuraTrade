@@ -1,564 +1,248 @@
-"use client";
+'use client'
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import {
-  createChart,
-  CandlestickSeries,
-  createSeriesMarkers,
-  type IChartApi,
-  type ISeriesApi,
-  type UTCTimestamp,
-  type SeriesMarker,
-  type Time,
-  type ISeriesMarkersPluginApi,
-} from "lightweight-charts";
-import type { MarketDataCandle, MarketDataTimeframe } from "@/lib/market-data/yahoo-client";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createChart, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers, createTextWatermark, TickMarkType, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type Time, type UTCTimestamp, type IPriceLine } from 'lightweight-charts'
+import { Focus, Maximize2, RefreshCw, Settings2 } from 'lucide-react'
+import type { MarketDataCandle, MarketDataTimeframe } from '@/lib/market-data/yahoo-client'
+import { buildTradeMarkers, ema, sma, rsi, normalizeCandles, yearRange, tradeYearRange, focusRange, fillTradingDay, DAY_MS, type ChartRange, type ChartTrade } from '@/lib/charts/chart-model'
+import { formatPrice, formatTradingDay } from '@/lib/format'
+export type { ChartTrade, ChartFill } from '@/lib/charts/chart-model'
 
-// ─── Shared types (exported for page / workspace) ────────────────────────────
-
-export interface ChartFill {
-  id: string;
-  side: string; // "BUY" | "SELL" | "SELL_SHORT" | "BUY_TO_COVER"
-  qty: number;
-  price: number;
-  time: string; // ISO date
+interface Props {
+  initialCandles: MarketDataCandle[]
+  initialTimeframe: MarketDataTimeframe
+  initialFallbackMessage: string | null
+  initialSource?: string
+  initialRange: ChartRange
+  trades: ChartTrade[]
+  symbol: string
+  focusTradeId: string | null
+  onSelectTrade: (id: string | null) => void
 }
+interface ChartData { candles: MarketDataCandle[]; timeframe: MarketDataTimeframe; range: ChartRange; source: string; message: string | null }
+const stamp = (iso: string) => Math.floor(Date.parse(iso) / 1000) as UTCTimestamp
+const LABELS: Record<MarketDataTimeframe, string> = { '1d': '1D', '1h': '1H', '15m': '15M', '5m': '5M', '1m': '1M' }
+const lineData = (candles: MarketDataCandle[], values: Array<number | null>) => values.flatMap((value, i) => value == null ? [] : [{ time: stamp(candles[i].time), value }])
+const shortVolume = (value: number) => Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(value)
 
-export interface ChartTrade {
-  id: string;
-  direction: string; // "LONG" | "SHORT"
-  entryTime: string; // ISO
-  exitTime: string | null;
-  entryPrice: number;
-  exitPrice: number | null;
-  totalQty: number;
-  netPnl: number | null;
-  isOpen: boolean;
-  durationSeconds: number | null;
-  setup: string | null;
-  fills: ChartFill[];
-}
-
-// ─── Internals ────────────────────────────────────────────────────────────────
-
-interface OhlcPoint {
-  time: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-interface ApiMarketDataResponse {
-  candles: MarketDataCandle[];
-  effectiveTimeframe: MarketDataTimeframe;
-  fallbackMessage: string | null;
-}
-
-const TIMEFRAME_OPTIONS: ReadonlyArray<MarketDataTimeframe> = ["1d", "1h", "15m", "5m", "1m"];
-
-const TIMEFRAME_LABELS: Record<MarketDataTimeframe, string> = {
-  "1d": "1D",
-  "1h": "1H",
-  "15m": "15M",
-  "5m": "5M",
-  "1m": "1M",
-};
-
-/** Duration of one candle bar in milliseconds per timeframe. Used for volume lookup. */
-const TF_DURATION_MS: Record<MarketDataTimeframe, number> = {
-  "1d": 86_400_000,
-  "1h": 3_600_000,
-  "15m": 900_000,
-  "5m": 300_000,
-  "1m": 60_000,
-};
-
-function toUTCTimestamp(isoString: string): UTCTimestamp {
-  return Math.floor(new Date(isoString).getTime() / 1000) as UTCTimestamp;
-}
-
-/** Pick ideal timeframe from visible duration in days. */
-function getPreferredTimeframe(visibleDays: number): MarketDataTimeframe {
-  if (visibleDays < 0.08) return "1m";
-  if (visibleDays < 0.5) return "5m";
-  if (visibleDays < 2) return "15m";
-  if (visibleDays < 14) return "1h";
-  return "1d";
-}
-
-/**
- * Build LWC markers from trade fills. Size scales with qty relative to maxQty.
- *
- * Color semantics:
- *   green  = opening a long position (BUY)
- *   red    = opening a short position (SELL_SHORT)
- *   amber  = closing any position (SELL, BUY_TO_COVER)
- *
- * This prevents BUY_TO_COVER from appearing identical to a long entry.
- */
-function buildMarkers(trades: ChartTrade[], maxQty: number): SeriesMarker<Time>[] {
-  const markers: SeriesMarker<Time>[] = [];
-
-  for (const trade of trades) {
-    for (const fill of trade.fills) {
-      const isBuyAction = fill.side === "BUY" || fill.side === "BUY_TO_COVER";
-      const isOpen = fill.side === "BUY" || fill.side === "SELL_SHORT";
-      const relSize = maxQty > 0 ? fill.qty / maxQty : 1;
-      const markerSize = Math.max(1, Math.round(relSize * 3));
-
-      // Entry fills: green (long open) or red (short open)
-      // Exit fills: amber for both long-close and short-close
-      const color = isOpen ? (isBuyAction ? "#22c55e" : "#ef4444") : "#f59e0b";
-
-      markers.push({
-        time: toUTCTimestamp(fill.time),
-        position: isBuyAction ? "belowBar" : "aboveBar",
-        color,
-        shape: isBuyAction ? "arrowUp" : "arrowDown",
-        text: `${isBuyAction ? "+" : "−"}${fill.qty}@${fill.price.toFixed(2)}`,
-        size: markerSize,
-      });
-    }
-  }
-
-  return markers.sort((a, b) => (a.time as number) - (b.time as number));
-}
-
-// ─── Props ────────────────────────────────────────────────────────────────────
-
-interface CandlestickChartProps {
-  initialCandles: MarketDataCandle[];
-  initialTimeframe: MarketDataTimeframe;
-  initialFallbackMessage: string | null;
-  trades: ChartTrade[];
-  symbol: string;
-  focusTradeId: string | null;
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function CandlestickChart({
-  initialCandles,
-  initialTimeframe,
-  initialFallbackMessage,
-  trades,
-  symbol,
-  focusTradeId,
-}: CandlestickChartProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<"Candlestick", Time> | null>(null);
-  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
-  const autoSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentTfRef = useRef<MarketDataTimeframe>(initialTimeframe);
-  const isFetchingRef = useRef(false);
-  const candlesRef = useRef<MarketDataCandle[]>(initialCandles);
-
-  const [timeframe, setTimeframe] = useState<MarketDataTimeframe>(initialTimeframe);
-  const [isLoading, setIsLoading] = useState(false);
-  const [fallbackMessage, setFallbackMessage] = useState<string | null>(initialFallbackMessage);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [hoveredOhlcv, setHoveredOhlcv] = useState<OhlcPoint | null>(null);
-
-  // #3 fix: use reduce instead of spread to avoid call-stack overflow on large fill arrays
-  const maxQty = useMemo(() => {
-    let max = 1;
-    for (const t of trades) {
-      for (const f of t.fills) {
-        if (f.qty > max) max = f.qty;
-      }
-    }
-    return max;
-  }, [trades]);
-
-  // ─── Fetch candles from API ─────────────────────────────────────────────────
-
-  const fetchCandles = useCallback(
-    async (
-      tf: MarketDataTimeframe,
-      from: Date,
-      to: Date,
-    ): Promise<{ candles: MarketDataCandle[]; effectiveTf: MarketDataTimeframe; fallback: string | null } | null> => {
-      if (isFetchingRef.current) return null;
-      isFetchingRef.current = true;
-
-      try {
-        const params = new URLSearchParams({
-          symbol,
-          timeframe: tf,
-          from: from.toISOString(),
-          to: to.toISOString(),
-        });
-        const res = await fetch(`/api/market-data?${params.toString()}`);
-        if (!res.ok) return null;
-        const data = (await res.json()) as ApiMarketDataResponse;
-        return {
-          candles: data.candles,
-          effectiveTf: data.effectiveTimeframe,
-          fallback: data.fallbackMessage,
-        };
-      } catch {
-        return null;
-      } finally {
-        isFetchingRef.current = false;
-      }
-    },
-    [symbol],
-  );
-
-  // ─── Switch timeframe (manual or auto) ─────────────────────────────────────
-
-  const switchTimeframe = useCallback(
-    async (tf: MarketDataTimeframe, opts?: { from?: Date; to?: Date }) => {
-      if (!chartRef.current || !seriesRef.current) return;
-
-      const visibleRange = chartRef.current.timeScale().getVisibleRange();
-      const visFromMs = visibleRange
-        ? (visibleRange.from as number) * 1000
-        : Date.now() - 90 * 86_400_000;
-      const visToMs = visibleRange ? (visibleRange.to as number) * 1000 : Date.now();
-      const durationMs = Math.max(visToMs - visFromMs, 7 * 86_400_000);
-
-      const from = opts?.from ?? new Date(visFromMs - durationMs);
-      const to = opts?.to ?? new Date(visToMs + durationMs);
-
-      setIsLoading(true);
-      setFetchError(null);
-      const result = await fetchCandles(tf, from, to);
-      setIsLoading(false);
-
-      if (!result) {
-        setFetchError("Failed to fetch market data");
-        // Still update TF state to reflect the user's explicit choice
-        currentTfRef.current = tf;
-        setTimeframe(tf);
-        return;
-      }
-
-      if (!seriesRef.current || !chartRef.current) return;
-
-      const { candles, effectiveTf, fallback } = result;
-
-      // #2 fix: zero candles is a meaningful failure — surface it and update TF state
-      if (candles.length === 0) {
-        setFetchError("No data available for this timeframe");
-        currentTfRef.current = tf;
-        setTimeframe(tf);
-        return;
-      }
-
-      candlesRef.current = candles;
-      currentTfRef.current = effectiveTf;
-      setTimeframe(effectiveTf);
-      setFallbackMessage(fallback);
-      setFetchError(null);
-
-      const chartData = candles.map((c) => ({
-        time: toUTCTimestamp(c.time),
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
-
-      seriesRef.current.setData(chartData);
-
-      if (markersRef.current) {
-        markersRef.current.setMarkers(buildMarkers(trades, maxQty));
-      }
-
-      // Restore visible range so user stays at the same window
-      if (visibleRange) {
-        try {
-          chartRef.current.timeScale().setVisibleRange(visibleRange);
-        } catch {
-          // Out of new data bounds — ignore
-        }
-      }
-    },
-    [fetchCandles, trades, maxQty],
-  );
-
-  // ─── Chart initialization (runs once on mount) ──────────────────────────────
-
+export default function CandlestickChart(props: Props) {
+  const { symbol, trades, focusTradeId, onSelectTrade } = props
+  const container = useRef<HTMLDivElement>(null)
+  const chart = useRef<IChartApi | null>(null)
+  const price = useRef<ISeriesApi<'Candlestick', Time> | null>(null)
+  const volume = useRef<ISeriesApi<'Histogram', Time> | null>(null)
+  const lines = useRef<Record<string, ISeriesApi<'Line', Time>>>({})
+  const markers = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
+  const controller = useRef<AbortController | null>(null)
+  const sequence = useRef(0)
+  const lastRequest = useRef({ range: props.initialRange, timeframe: props.initialTimeframe, label: '1Y' })
+  const restoreView = useRef<{ from: Time; to: Time } | null>(null)
+  const onSelect = useRef(onSelectTrade)
+  onSelect.current = onSelectTrade
+  const [data, setData] = useState<ChartData>(() => ({ candles: normalizeCandles(props.initialCandles, props.initialTimeframe), timeframe: props.initialTimeframe, range: props.initialRange, source: props.initialSource ?? 'cache', message: props.initialFallbackMessage }))
+  const current = useRef(data)
+  current.current = data
+  const [busy, setBusy] = useState(props.initialCandles.length === 0)
+  const [error, setError] = useState<string | null>(null)
+  const [hovered, setHovered] = useState<MarketDataCandle | null>(null)
+  const [rangeLabel, setRangeLabel] = useState('1Y')
+  const [showVolume, setShowVolume] = useState(true)
+  const [showRsi, setShowRsi] = useState(true)
+  const [showAverages, setShowAverages] = useState(true)
+  const [showTrades, setShowTrades] = useState(true)
+  const [showLevels, setShowLevels] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const selected = trades.find(t => t.id === focusTradeId)
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!expanded) return
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false) }
+    window.addEventListener('keydown', escape)
+    return () => window.removeEventListener('keydown', escape)
+  }, [expanded])
+  const mapping = useMemo(() => buildTradeMarkers(trades, data.candles, data.timeframe, focusTradeId), [trades, data.candles, data.timeframe, focusTradeId])
+  const mappingRef = useRef(mapping)
+  mappingRef.current = mapping
 
-    const chart = createChart(containerRef.current, {
-      layout: {
-        background: { color: "#101217" },
-        textColor: "#a5adbd",
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: "#1b1f28" },
-        horzLines: { color: "#1b1f28" },
-      },
-      crosshair: { mode: 1 },
-      rightPriceScale: {
-        borderColor: "#282d38",
-        textColor: "#a5adbd",
-      },
-      timeScale: {
-        borderColor: "#282d38",
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      handleScroll: true,
-      handleScale: true,
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
-    });
-
-    const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#22c55e",
-      downColor: "#ef4444",
-      borderUpColor: "#22c55e",
-      borderDownColor: "#ef4444",
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
-    });
-
-    // Load initial candle data
-    const chartData = candlesRef.current.map((c) => ({
-      time: toUTCTimestamp(c.time),
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
-    series.setData(chartData);
-
-    // Trade fill markers
-    const markersPlugin = createSeriesMarkers(series, buildMarkers(trades, maxQty));
-
-    // Crosshair OHLCV info panel
-    chart.subscribeCrosshairMove((param) => {
-      if (!param.time) {
-        setHoveredOhlcv(null);
-        return;
-      }
-      const raw = param.seriesData.get(series) as
-        | { open: number; high: number; low: number; close: number }
-        | undefined;
-      if (!raw) {
-        setHoveredOhlcv(null);
-        return;
-      }
-      const tMs = (param.time as number) * 1000;
-      // #9 fix: use per-timeframe tolerance instead of a hardcoded 60s
-      const tolerance = TF_DURATION_MS[currentTfRef.current] ?? 86_400_000;
-      const candle = candlesRef.current.find(
-        (c) => Math.abs(new Date(c.time).getTime() - tMs) <= tolerance,
-      );
-      setHoveredOhlcv({
-        time: new Date(tMs).toISOString(),
-        open: raw.open,
-        high: raw.high,
-        low: raw.low,
-        close: raw.close,
-        volume: candle?.volume ?? 0,
-      });
-    });
-
-    // Auto-timeframe switching on zoom (debounced 700ms)
-    chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
-      if (autoSwitchTimerRef.current) clearTimeout(autoSwitchTimerRef.current);
-      autoSwitchTimerRef.current = setTimeout(() => {
-        const vr = chart.timeScale().getVisibleRange();
-        if (!vr) return;
-        const durationDays = ((vr.to as number) - (vr.from as number)) / 86_400;
-        const idealTf = getPreferredTimeframe(durationDays);
-        if (idealTf !== currentTfRef.current) {
-          void switchTimeframe(idealTf);
-        }
-      }, 700);
-    });
-
-    // Responsive resize
-    const resizeObserver = new ResizeObserver(() => {
-      if (containerRef.current) {
-        chart.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
-    });
-    resizeObserver.observe(containerRef.current);
-
-    chartRef.current = chart;
-    seriesRef.current = series;
-    markersRef.current = markersPlugin;
-
-    return () => {
-      if (autoSwitchTimerRef.current) clearTimeout(autoSwitchTimerRef.current);
-      resizeObserver.disconnect();
-      chart.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-      markersRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once — chart is controlled imperatively via refs
-
-  // ─── Zoom to focused trade (or zoom out to all-trades view on deselect) ─────
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    if (!focusTradeId) {
-      // #13 fix: deselecting a trade zooms out to the full symbol view
-      if (trades.length > 0) {
-        // Use reduce to avoid Math.min/max spread stack overflow on large arrays (#3)
-        const earliestMs = trades.reduce(
-          (min, t) => Math.min(min, new Date(t.entryTime).getTime()),
-          Infinity,
-        );
-        const latestMs = trades.reduce(
-          (max, t) => Math.max(max, t.exitTime ? new Date(t.exitTime).getTime() : Date.now()),
-          -Infinity,
-        );
-        const spanMs = Math.max(latestMs - earliestMs, 30 * 86_400_000);
-        const padMs = spanMs * 0.15;
-        try {
-          chartRef.current.timeScale().setVisibleRange({
-            from: toUTCTimestamp(new Date(earliestMs - padMs).toISOString()),
-            to: toUTCTimestamp(new Date(latestMs + padMs).toISOString()),
-          });
-        } catch {
-          chartRef.current.timeScale().fitContent();
-        }
-      } else {
-        chartRef.current.timeScale().fitContent();
-      }
-      return;
-    }
-
-    const trade = trades.find((t) => t.id === focusTradeId);
-    if (!trade) return;
-
-    const entryMs = new Date(trade.entryTime).getTime();
-    const exitMs = trade.exitTime ? new Date(trade.exitTime).getTime() : Date.now();
-    const durationMs = Math.max(exitMs - entryMs, 86_400_000);
-    const paddingMs = Math.max(durationMs * 0.5, 5 * 86_400_000);
-
+  const load = useCallback(async (range: ChartRange, timeframe: MarketDataTimeframe, label: string) => {
+    lastRequest.current = { range, timeframe, label }
+    controller.current?.abort()
+    const abort = new AbortController()
+    controller.current = abort
+    const requestId = ++sequence.current
+    setBusy(true); setError(null)
+    const warmup = timeframe === '1d' ? 120 * DAY_MS : 0
+    const params = new URLSearchParams({ symbol, timeframe, from: new Date(Date.parse(range.from) - warmup).toISOString(), to: `${range.to}T23:59:59.999Z` })
     try {
-      chartRef.current.timeScale().setVisibleRange({
-        from: toUTCTimestamp(new Date(entryMs - paddingMs).toISOString()),
-        to: toUTCTimestamp(new Date(exitMs + paddingMs).toISOString()),
-      });
+      const response = await fetch(`/api/market-data?${params}`, { signal: abort.signal })
+      if (!response.ok) throw new Error('unavailable')
+      const payload = await response.json() as { candles: MarketDataCandle[]; effectiveTimeframe: MarketDataTimeframe; source: string; fallbackMessage: string | null }
+      const candles = normalizeCandles(payload.candles, payload.effectiveTimeframe)
+      if (!candles.some(c => c.time.slice(0,10) >= range.from && c.time.slice(0,10) <= range.to)) throw new Error('empty')
+      if (requestId !== sequence.current) return
+      restoreView.current = null
+      setData({ candles, timeframe: payload.effectiveTimeframe, range, source: payload.source, message: payload.fallbackMessage })
+      setRangeLabel(label)
+      setHovered(null)
     } catch {
-      // Out of data bounds — ignore
-    }
-  }, [focusTradeId, trades]);
+      if (!abort.signal.aborted && requestId === sequence.current) setError('Could not load this view. Your previous chart is preserved. Retry or choose another range.')
+    } finally { if (requestId === sequence.current) setBusy(false) }
+  }, [symbol])
 
-  // ─── Price lines for focused trade ─────────────────────────────────────────
+  useEffect(() => () => { controller.current?.abort(); sequence.current++ }, [])
+  useEffect(() => {
+    if (!props.initialCandles.length) void load(props.initialRange, props.initialTimeframe, '1Y')
+  }, [load, props.initialRange, props.initialTimeframe, props.initialCandles.length])
+
+
+  // Selecting a historical trade loads its year of context. Selecting inside the
+  // current window only highlights it; zooming is always an explicit action.
+  useEffect(() => {
+    if (!focusTradeId) return
+    const trade = trades.find(t => t.id === focusTradeId)
+    if (!trade) return
+    const day = trade.entryDay ?? fillTradingDay(trade.entryTime)
+    if (day < current.current.range.from || day > current.current.range.to) void load(tradeYearRange(trade), '1d', '1Y')
+  }, [focusTradeId, trades, load])
 
   useEffect(() => {
-    if (!seriesRef.current) return;
-    const trade = focusTradeId ? trades.find((t) => t.id === focusTradeId) : null;
-    if (!trade) return;
-
-    const entryLine = seriesRef.current.createPriceLine({
-      price: trade.entryPrice,
-      color: "#3b82f6",
-      lineWidth: 1,
-      lineStyle: 2,
-      axisLabelVisible: true,
-      title: `Entry ${trade.direction}`,
-    });
-
-    // #11 fix: use $ prefix and remove no-op /1 division
-    const exitLine =
-      trade.exitPrice != null
-        ? seriesRef.current.createPriceLine({
-            price: trade.exitPrice,
-            color: (trade.netPnl ?? 0) >= 0 ? "#22c55e" : "#ef4444",
-            lineWidth: 1,
-            lineStyle: 2,
-            axisLabelVisible: true,
-            title: `Exit ${(trade.netPnl ?? 0) >= 0 ? "+$" : "-$"}${Math.abs(trade.netPnl ?? 0).toFixed(0)}`,
-          })
-        : null;
-
+    if (!container.current) return
+    const instance = createChart(container.current, {
+      autoSize: true,
+      layout: { background: { color: '#10141c' }, textColor: '#a7b2c6', fontFamily: 'Inter, sans-serif', fontSize: 11, panes: { separatorColor: '#293142', separatorHoverColor: '#4c607f', enableResize: true } },
+      grid: { vertLines: { color: '#ffffff05' }, horzLines: { color: '#ffffff07' } },
+      crosshair: { mode: 0 },
+      localization: { timeFormatter: (time: Time) => {
+        if (typeof time !== 'number') return ''
+        const date = new Date(time * 1000)
+        return current.current.timeframe === '1d' ? formatTradingDay(date.toISOString().slice(0,10)) : new Intl.DateTimeFormat('en-US', {timeZone:'America/New_York',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(date) + ' ET'
+      } },
+      rightPriceScale: { borderColor: '#283244', minimumWidth: 72, scaleMargins: { top: .12, bottom: .08 } },
+      timeScale: { borderColor: '#283244', timeVisible: true, secondsVisible: false, rightOffset: 8, tickMarkFormatter: (time: Time, type: TickMarkType) => {
+        if (current.current.timeframe === '1d' || typeof time !== 'number' || (type !== TickMarkType.Time && type !== TickMarkType.TimeWithSeconds)) return null
+        return new Intl.DateTimeFormat('en-US', {timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(time * 1000))
+      } },
+    })
+    const candles = instance.addSeries(CandlestickSeries, { upColor: '#2dd4bf', downColor: '#fb7185', borderVisible: false, wickUpColor: '#2dd4bf', wickDownColor: '#fb7185', priceLineColor: '#7d8fae', priceLineWidth: 1 })
+    price.current = candles
+    chart.current = instance
+    markers.current = createSeriesMarkers(candles, [], { autoScale: false })
+    const common = { lineWidth: 1 as const, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }
+    lines.current.ema8 = instance.addSeries(LineSeries, { ...common, color: '#d6a95e', title: '' })
+    lines.current.ema21 = instance.addSeries(LineSeries, { ...common, color: '#60a5fa', lineWidth: 2 })
+    lines.current.sma50 = instance.addSeries(LineSeries, { ...common, color: '#a78bfa', lineWidth: 2 })
+    let pane = 1
+    if (showVolume) {
+      volume.current = instance.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceLineVisible: false, title: 'VOL' }, pane++)
+      volume.current.priceScale().applyOptions({ scaleMargins: { top: .15, bottom: 0 } })
+      lines.current.volume = instance.addSeries(LineSeries, { ...common, color: '#a7b2c6', priceFormat: { type: 'volume' } }, pane - 1)
+    }
+    if (showRsi) {
+      lines.current.rsi = instance.addSeries(LineSeries, { ...common, color: '#c084fc', lastValueVisible: true, title: 'RSI 14', autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) }, pane++)
+      lines.current.signal = instance.addSeries(LineSeries, { ...common, color: '#94a3b8' }, pane - 1)
+      for (const level of [30, 70]) lines.current.rsi.createPriceLine({ price: level, color: '#566178', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' })
+    }
+    instance.panes().forEach((p, index) => p.setStretchFactor(index === 0 ? 6 : 1.15))
+    createTextWatermark(instance.panes()[0], { horzAlign: 'center', vertAlign: 'center', lines: [{ text: symbol, color: '#7e94b515', fontSize: 100, fontFamily: 'Inter' }] })
+    instance.subscribeCrosshairMove(event => {
+      if (typeof event.time !== 'number') { setHovered(null); return }
+      const point = current.current.candles.find(c => stamp(c.time) === event.time)
+      setHovered(point ?? null)
+    })
+    instance.subscribeClick(event => {
+      const match = mappingRef.current.markers.find(marker => marker.id === event.hoveredObjectId)
+        ?? mappingRef.current.markers.find(marker => marker.time === event.time)
+      if (match) onSelect.current(match.tradeIds[0])
+    })
     return () => {
-      seriesRef.current?.removePriceLine(entryLine);
-      if (exitLine) seriesRef.current?.removePriceLine(exitLine);
-    };
-  }, [focusTradeId, trades]);
+      restoreView.current = instance.timeScale().getVisibleRange()
+      instance.remove(); chart.current = null; price.current = null; volume.current = null; markers.current = null; lines.current = {}
+    }
+  }, [symbol, showVolume, showRsi])
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!chart.current || !price.current) return
+    const candles = data.candles
+    price.current.setData(candles.map(c => ({ ...c, time: stamp(c.time) })))
+    const closes = candles.map(c => c.close)
+    lines.current.ema8?.setData(lineData(candles, ema(closes, 8)))
+    lines.current.ema21?.setData(lineData(candles, ema(closes, 21)))
+    lines.current.sma50?.setData(lineData(candles, sma(closes, 50)))
+    volume.current?.setData(candles.map(c => ({ time: stamp(c.time), value: c.volume, color: c.close >= c.open ? '#2dd4bf65' : '#fb718565' })))
+    lines.current.volume?.setData(lineData(candles, sma(candles.map(c => c.volume), 50)))
+    const oscillator = rsi(closes)
+    lines.current.rsi?.setData(lineData(candles, oscillator))
+    const signal = sma(oscillator.filter((value): value is number => value != null), 5)
+    lines.current.signal?.setData(lineData(candles, [...Array<number | null>(14).fill(null), ...signal]))
+    chart.current.applyOptions({ timeScale: { timeVisible: data.timeframe !== '1d' } })
+    if (candles.length) {
+      const view = restoreView.current
+      restoreView.current = null
+      chart.current.timeScale().setVisibleRange(view ?? { from: stamp(`${data.range.from}T00:00:00Z`), to: stamp(`${data.range.to}T23:59:59Z`) })
+    }
+  }, [data, showVolume, showRsi])
 
-  const closeIsUp = hoveredOhlcv != null && hoveredOhlcv.close >= hoveredOhlcv.open;
+  useEffect(() => {
+    markers.current?.setMarkers(showTrades ? mapping.markers.map(marker => ({ ...marker, time: marker.time as UTCTimestamp, size: 1 })) : [])
+    for (const key of ['ema8', 'ema21', 'sma50']) lines.current[key]?.applyOptions({ visible: showAverages })
+  }, [mapping, showTrades, showAverages, showVolume, showRsi])
 
+  useEffect(() => {
+    const series = price.current
+    if (!series || !selected || !showLevels) return
+    const levels: IPriceLine[] = [series.createPriceLine({ price: selected.entryPrice, color: '#60a5fa', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Entry' })]
+    if (selected.exitPrice != null) levels.push(series.createPriceLine({ price: selected.exitPrice, color: '#fbbf24', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Exit' }))
+    return () => { if (price.current === series) levels.forEach(line => series.removePriceLine(line)) }
+  }, [selected, showLevels, data, showVolume, showRsi])
+
+  function changeTimeframe(timeframe: MarketDataTimeframe) {
+    if (timeframe === '1d') { void load(yearRange(data.range.to), '1d', '1Y'); return }
+    const anchor = selected?.entryDay ?? (selected ? fillTradingDay(selected.entryTime) : data.range.to)
+    const end = Math.min(Date.parse(anchor) + 2 * DAY_MS, Date.now())
+    void load({ from: new Date(end - (timeframe === '1h' ? 20 : 5) * DAY_MS).toISOString().slice(0, 10), to: new Date(end).toISOString().slice(0, 10) }, timeframe, 'Custom')
+  }
+  function changeRange(label: string) {
+    if (label === 'Latest 1Y') { onSelectTrade(null); void load(yearRange(), '1d', '1Y'); return }
+    const end = data.range.to
+    const days = label === '3M' ? 90 : label === '6M' ? 180 : 365
+    const from = label === 'All trades' && trades.length ? trades.reduce((min, t) => (t.entryDay ?? fillTradingDay(t.entryTime)) < min ? t.entryDay ?? fillTradingDay(t.entryTime) : min, end) : new Date(Date.parse(end) - days * DAY_MS).toISOString().slice(0, 10)
+    void load({ from, to: label === 'All trades' ? new Date().toISOString().slice(0, 10) : end }, '1d', label)
+  }
+  const quote = hovered ?? data.candles.at(-1)
+  const inWindow = data.candles.filter(c => c.time.slice(0, 10) >= data.range.from && c.time.slice(0, 10) <= data.range.to)
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar: TF buttons + OHLCV panel + status */}
-      <div className="flex flex-wrap items-center gap-2 px-3 py-3 border-b border-zinc-800 bg-zinc-950 shrink-0">
-        {/* Timeframe buttons */}
-        <div className="flex items-center gap-0.5">
-          {TIMEFRAME_OPTIONS.map((tf) => (
-            <button
-              key={tf}
-              onClick={() => void switchTimeframe(tf)}
-              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
-                timeframe === tf
-                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                  : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 border border-transparent"
-              }`}
-            >
-              {TIMEFRAME_LABELS[tf]}
-            </button>
-          ))}
+    <div className={`chart-terminal flex min-w-0 flex-col ${expanded ? 'fixed inset-0 z-50 min-h-0 bg-zinc-950' : 'h-[820px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1'}`} data-testid="price-chart" data-timeframe={data.timeframe} data-marker-count={showTrades ? mapping.markers.length : 0} data-mapped-fill-count={mapping.mapped} data-candle-count={inWindow.length} data-range-from={data.range.from} data-range-to={data.range.to}>
+      <div className="chart-controls flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Candle interval">
+          {(Object.keys(LABELS) as MarketDataTimeframe[]).map(tf => <button type="button" key={tf} aria-pressed={data.timeframe === tf} onClick={() => changeTimeframe(tf)}>{LABELS[tf]}</button>)}
+          <span className="mx-2 h-4 w-px bg-zinc-700" />
+          {['3M', '6M', '1Y', 'All trades'].map(label => <button type="button" key={label} aria-pressed={data.timeframe === '1d' && rangeLabel === label} onClick={() => changeRange(label)}>{label}</button>)}
         </div>
-
-        {/* OHLCV info (updates on crosshair move) */}
-        <div className="border-l border-zinc-800 pl-3 ml-1 flex flex-wrap items-center gap-2.5 text-xs font-mono min-w-0">
-          {hoveredOhlcv ? (
-            <>
-              <span className="text-zinc-600">O</span>
-              <span className="text-zinc-300">{hoveredOhlcv.open.toFixed(2)}</span>
-              <span className="text-zinc-600">H</span>
-              <span className="text-green-400">{hoveredOhlcv.high.toFixed(2)}</span>
-              <span className="text-zinc-600">L</span>
-              <span className="text-red-400">{hoveredOhlcv.low.toFixed(2)}</span>
-              <span className="text-zinc-600">C</span>
-              <span className={closeIsUp ? "text-green-400" : "text-red-400"}>
-                {hoveredOhlcv.close.toFixed(2)}
-              </span>
-              <span className="text-zinc-700">·</span>
-              <span className="text-zinc-500">
-                {hoveredOhlcv.volume === 0
-                  ? "—"
-                  : hoveredOhlcv.volume >= 1_000_000
-                    ? `${(hoveredOhlcv.volume / 1_000_000).toFixed(2)}M`
-                    : hoveredOhlcv.volume >= 1_000
-                      ? `${(hoveredOhlcv.volume / 1_000).toFixed(0)}K`
-                      : hoveredOhlcv.volume.toLocaleString()}
-              </span>
-            </>
-          ) : (
-            <span className="text-zinc-700">hover for OHLCV</span>
-          )}
-        </div>
-
-        {/* Status indicators */}
-        <div className="ml-auto flex items-center gap-3 shrink-0">
-          {isLoading && (
-            <div className="w-3 h-3 rounded-full border border-blue-400 border-t-transparent animate-spin" />
-          )}
-          {fetchError && <span className="text-xs text-red-400">{fetchError}</span>}
-          {fallbackMessage && !isLoading && (
-            <span className="text-xs text-amber-400">{fallbackMessage}</span>
-          )}
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => changeRange('Latest 1Y')} title="Return to the latest year">Latest 1Y</button>
+          <button type="button" disabled={!selected} onClick={() => selected && void load(focusRange(selected), data.timeframe, 'Trade')}><Focus size={13} />Focus trade</button>
+          <button type="button" onClick={() => setExpanded(!expanded)} aria-label={expanded ? 'Exit expanded chart' : 'Expand chart'} aria-pressed={expanded}><Maximize2 size={14} /></button>
         </div>
       </div>
-
-      {/* Lightweight Charts container — fills remaining space */}
-      <div ref={containerRef} className="flex-1 min-h-0" />
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/70 px-4 py-2 text-[11px]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono" aria-label="Candle values">
+          <span className="text-zinc-400">{quote ? (data.timeframe === '1d' ? formatTradingDay(quote.time.slice(0, 10)) : new Intl.DateTimeFormat('en-US', {timeZone:'America/New_York',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(quote.time)) + ' ET') : 'No candles loaded'}</span>
+          {quote && <><span>O <b>{formatPrice(quote.open)}</b></span><span>H <b>{formatPrice(quote.high)}</b></span><span>L <b>{formatPrice(quote.low)}</b></span><span>C <b className={quote.close >= quote.open ? 'text-teal-300' : 'text-rose-400'}>{formatPrice(quote.close)}</b></span><span>Vol <b>{shortVolume(quote.volume)}</b></span></>}
+        </div>
+        <span className="text-zinc-400">{formatTradingDay(data.range.from)} — {formatTradingDay(data.range.to)}</span>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-[10px]">
+        <div className="flex flex-wrap gap-x-4 gap-y-2"><span className="text-amber-300">EMA 8</span><span className="text-blue-400">EMA 21</span><span className="text-violet-400">SMA 50</span>{showVolume && <span className="text-zinc-400">Volume · SMA 50</span>}{showRsi && <span className="text-fuchsia-400">RSI 14 · SMA 5</span>}</div>
+        <details className="relative"><summary className="flex cursor-pointer list-none items-center gap-1 text-zinc-300"><Settings2 size={13} />Display</summary><div className="absolute right-0 top-6 z-30 w-48 space-y-3 rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-xl">{[{ label: 'Moving averages', value: showAverages, set: setShowAverages }, { label: 'Volume pane', value: showVolume, set: setShowVolume }, { label: 'RSI pane', value: showRsi, set: setShowRsi }, { label: 'Trade annotations', value: showTrades, set: setShowTrades }, { label: 'Broker price levels', value: showLevels, set: setShowLevels }].map(item => <label key={item.label} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={item.value} onChange={e => item.set(e.target.checked)} />{item.label}</label>)}</div></details>
+      </div>
+      {(error || data.message) && <div role={error ? 'alert' : 'status'} className="flex flex-wrap items-center justify-between gap-2 border-y border-amber-500/15 bg-amber-500/5 px-4 py-2 text-xs text-amber-200"><span>{error ?? data.message}</span>{error && <button type="button" onClick={() => void load(lastRequest.current.range, lastRequest.current.timeframe, lastRequest.current.label)} className="inline-flex items-center gap-1 underline"><RefreshCw size={12} />Retry</button>}</div>}
+      <div className="relative flex min-h-[360px] flex-1 flex-col">
+        <div ref={container} className="absolute inset-0" role="img" aria-label={`${symbol} price, volume and RSI chart with trade annotations`} />
+        {busy && <div role="status" className="pointer-events-none absolute left-4 top-3 z-20 rounded border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-xs text-blue-300">Loading chart…</div>}
+        {!data.candles.length && !busy && <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-950/90"><div className="max-w-xs text-center"><p className="text-sm font-medium">Price history could not be loaded</p><p className="mt-2 text-xs leading-6 text-zinc-400">Your trades are still available in the inspector. Retry to load market context.</p><button type="button" className="action-secondary mt-4" onClick={() => void load(lastRequest.current.range, lastRequest.current.timeframe, lastRequest.current.label)}>Retry chart</button></div></div>}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-[10px] text-zinc-400"><span><span className="text-teal-300">E</span> Entry · <span className="text-amber-300">X</span> Exit · Click a marker to inspect a trade</span><span>{mapping.mapped}/{mapping.total} fills mapped to loaded candles · {data.source === 'finviz' ? 'Finviz daily' : data.source === 'yahoo' ? 'Yahoo' : data.source === 'cache-stale' ? 'Cached · stale' : data.source === 'unavailable' ? 'Unavailable' : 'Cached market data'}</span></div>
+      <details className="border-t border-zinc-800 px-4 py-2 text-[10px] text-zinc-400"><summary className="cursor-pointer">Chart annotations ({showTrades ? mapping.markers.length : 0})</summary><div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto py-2">{showTrades && mapping.markers.map(marker => <button type="button" key={marker.id} onClick={() => onSelectTrade(marker.tradeIds[0])} className="rounded border border-zinc-700 px-2 py-1 text-left hover:text-white" aria-label={`Inspect ${marker.text.startsWith('E') ? 'entry' : 'exit'} marker ${formatTradingDay(new Date(marker.time * 1000).toISOString().slice(0, 10))}`}>{marker.text.startsWith('E') ? 'Entry' : 'Exit'} · {formatTradingDay(new Date(marker.time * 1000).toISOString().slice(0, 10))} · {marker.fillIds.length} fills</button>)}</div></details>
+      <p className="px-4 pb-2 text-[10px] leading-5 text-zinc-500">Daily candles may be split-adjusted; the inspector preserves broker fill prices. Date-only fills are annotated on daily charts.</p>
     </div>
-  );
+  )
 }

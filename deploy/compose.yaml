@@ -43,6 +43,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?}
       AUTH_URL: https://${AURATRADE_SITE_HOST:?}
       AUTH_TRUST_HOST: "true"
+      # Optional, server-only Finviz daily export credential. Never a build arg.
+      AURATRADE_FINVIZ_TOKEN: ${AURATRADE_FINVIZ_TOKEN:-}
       # Fixed here, not read from .env: the hosted server never has public sign-up.
       AURATRADE_REGISTRATION: closed
     healthcheck:
