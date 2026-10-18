@@ -2,7 +2,43 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): calendar filters and chart navigation follow-up
+## Current handoff (2026-10-18): calendar/navigation follow-up deployed
+
+- **Live release:** `f73e356fc97b8482f4ef0fd253c13d354b736804` at
+  https://auratrades.quest. PR #25 was squash-merged through the guarded merge
+  script after full CI and exact-head Claude Opus approval with 0 blocking findings.
+  Ran `scripts/deploy.ps1 -Revision <full-sha> -Confirm "DEPLOY f73e356"` under the
+  owner's existing deployment instruction.
+- **Delivered:** newest-first heatmap months with year/month filters, clear and
+  empty-period states; filters affect only the calendar within the dashboard date
+  range. The chart's Trades link returns all symbols in the same account. The
+  chart header has prominent labeled symbol search and an Open chart button;
+  Enter and symbols without imported trades work as well.
+- **Validation:** application source `4e8fb3e` passed local lint (two existing
+  warnings), types, production build and **298 unit tests**. Final PR head
+  `03a3cde68b17d115f6e7a95eafe9be2286fccc14` adds documentation and browser-test
+  stabilization only; **17/17 browser tests** passed against the production build
+  and isolated test database. Final lint/types passed too. Full CI passed on the
+  exact merged/deployed SHA (harness, migrations/drift, lint/types, coverage, build,
+  browsers): https://github.com/rahul-reddy/AuraTrade/actions/runs/39158269380
+- **Deployment evidence:** server build/types passed; backup
+  `auratrade-20261018T192839Z-pre-f73e356.dump` (972K) completed before migration
+  checks. All 12 migrations were already applied; no schema change was required.
+  Web/database healthy and Caddy running after the switch.
+- **Live checks:** login 200; signed-out root/dashboard redirect to login;
+  registration closed. Desktop/mobile login rendered with 0 page errors and no
+  mobile overflow. Ephemeral server-side synthetic session verified authenticated
+  root 307 to dashboard and market-data API 200 with 250 Finviz MSFT daily candles.
+  Runtime client-bundle checks found both heatmap filter controls and chart symbol
+  search. No persistent production test account or owner password was used.
+  New UI interactions were exercised with synthetic multi-year history and broker
+  statements in the pre-deploy browser suite; screenshots in `.local/ui-preview/`.
+- **Scope / next action:** no P&L, ledger, parser, API, auth or schema changes.
+  README.md and docs/CHARTS.md explain the controls. Review/merge this docs-only
+  handoff through the normal gate; no application redeploy remains. Repository
+  visibility remains public as instructed. Runbook: docs/DEPLOYMENT.md.
+
+## Previous handoff (2026-10-18): calendar filters and chart navigation follow-up
 
 - **Implemented:** heatmap months sort newest first, with independent year/month
   selectors, clear and empty-period states. Calendar filters stay local to the
