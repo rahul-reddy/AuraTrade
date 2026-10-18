@@ -10,8 +10,10 @@ trade open at the latest year. The toolbar always displays the actual date windo
 - **All trades:** load from the first entry through today.
 - **Focus trade:** deliberately zoom around the selected position's entry and exit.
 - **1D / 1H / 15M / 5M / 1M:** explicit candle intervals. Wheel zoom and pan never
-  change them. Unsupported historical intraday ranges report a daily fallback, and
-  the active interval reflects the candles actually returned.
+  change them. Historical requests beyond the configured retention window use a
+  daily fallback; the active interval reflects the candles actually returned.
+  Yahoo can reject finer intervals even inside that window. Those failures preserve
+  the previous chart and offer retry; choose 1D for daily history.
 - **Display:** toggle annotations, moving averages, volume, RSI and broker price levels.
   Price/volume/RSI share one time scale; their price scales remain independent.
 - **Inspector:** filter the trade list, select a position and examine its original fills.
@@ -54,6 +56,8 @@ Daily cache timestamps are normalized to UTC midnight. Legacy rows from differen
 providers on the same date collapse to the most recently fetched quote without
 deleting stored data. Current daily views reuse a recently refreshed latest session
 over weekends/holidays, within the existing three-day coverage tolerance.
+Freshness means the latest covered session was retrieved within the past hour;
+it does not guarantee that the provider has published the most recent session.
 
 ## Indicators
 
