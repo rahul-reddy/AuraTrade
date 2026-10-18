@@ -49,8 +49,10 @@ test('root sign-in reaches the dashboard and the redesigned workspace supports r
   await expect(page.getByRole('heading', { name: 'Performance Dashboard', exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Equity Curve', exact: true })).toBeVisible()
+  await page.getByText('More performance statistics · best/worst day, streak, drawdown', { exact: true }).click()
   // With the synthetic all-winning history, even the worst day is profitable.
   await expect(page.getByRole('link', { name: /^Worst Day/ }).locator('p.font-mono')).toHaveClass(/text-green-400/)
+  await page.getByText('More performance statistics · best/worst day, streak, drawdown', { exact: true }).click()
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('dashboard-desktop.png') })
   await page.getByRole('link', { name: 'Trading calendar', exact: true }).click()
   await expect(page.locator('#calendar')).toBeInViewport()
@@ -64,6 +66,9 @@ test('root sign-in reaches the dashboard and the redesigned workspace supports r
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('trades-desktop.png') })
   await page.getByLabel('Search symbol', { exact: true }).fill('BROS')
   await expect(page).toHaveURL(/symbol=BROS/)
+  // GET form navigation updates the URL before the next document's links render.
+  // Wait for the filtered view's tab, rather than clicking the previous document.
+  await expect(page.getByRole('link', { name: 'Closed trades', exact: true })).toHaveAttribute('href', /symbol=BROS/)
   await page.getByRole('link', { name: 'Closed trades', exact: true }).click()
   await expect(page).toHaveURL(/status=closed/)
   expect(new URL(page.url()).searchParams.get('symbol')).toBe('BROS')

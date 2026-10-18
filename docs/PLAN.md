@@ -6,7 +6,7 @@
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
 - Will become SaaS. Account size: $250K–$1M (fractional Kelly emphasized)
 - Running locally for now (local PostgreSQL)
-- Market data: yahoo-finance2 only (free, no key)
+- Market data: Finviz daily exports when the server-only `AURATRADE_FINVIZ_TOKEN` is configured; Yahoo fallback and intraday (owner decision, 2026-10-18).
 - User will provide sample TOS CSV after initial build
 
 ## Standing Rules (enforced throughout)

@@ -2,7 +2,47 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): UI release deployed and verified
+## Current handoff (2026-10-18): functional trade-review chart revision
+
+- **Scope:** owner requested a more useful UI and a proper one-year daily stock
+  chart with their trades annotated, using the existing private Finviz token.
+  Work is on `feat/trade-review-charts`; the previous release remains live.
+- **Implemented:** explicit intervals/ranges, candle-aligned grouped entry/exit
+  markers, EMA 8/21 and SMA 50, separate volume/SMA 50 and Wilder RSI 14/SMA 5
+  panes, focus/reset controls, original-fill inspector, annotation selection,
+  symbol navigation, loading/retry and mobile stacking. Compact app chrome and
+  expandable secondary dashboard statistics prioritize review space.
+- **Data:** strict server-only Finviz daily CSV adapter; Yahoo intraday/fallback.
+  Daily cache keys normalize provider timestamps without deleting stored data.
+  Invalid exports fail closed; upstream errors cannot expose token-bearing URLs.
+  No ledger, broker prices, fees, money calculations or database schema changed.
+  Assumptions, indicator formulas and limitations: docs/CHARTS.md.
+- **Verified source:** `07e9f97565c8e895b5d2d31cdcea7161ef41a59f` passed
+  `npm run lint` (0 errors, two existing warnings), `npm run typecheck`,
+  `npm test` (**297/297**, 24 suites) and `npm run build`. Subsequent commits
+  only adapt browser tests to collapsed statistics and wait for active streamed/
+  filtered route content; assertions were preserved. Full browser regression on
+  `c17ee91674a3f0598c8aa5c0a3f4220ab66ceea9` passed **15/15** against the production
+  build and isolated `auratrade_ui_test` database. Final lint also passed.
+- **Data/browser evidence:** authenticated API returned 250 MSFT daily candles
+  from Finviz over one year. An additional real-Finviz BROS render mapped both
+  synthetic broker fills; its 122 available candles reflect post-IPO history.
+  Desktop/mobile screenshots inspected under `.local/ui-preview/`; browser test
+  covers non-overlap, controls, retry, annotation selection and zoom stability.
+  All 46 browser build files scanned: 0 matches for the configured private token.
+- **Next action:** open the PR, finish CI and independent review, address any
+  blocking findings and use the guarded merge workflow. Optional
+  runtime Finviz environment wiring is included; production token provisioning
+  and deployment are not yet performed for this revision. Repository stays public.
+- **Review follow-up:** PR #23's `39cf886` head passed full GitHub CI and independent
+  Claude Opus review with 0 blocking findings. `c9e11b2` addresses all five advisory
+  notes: preserve an active interval's range, normalize provider symbols, handle
+  missing export dates defensively, derive RSI signal warm-up from actual values
+  and align the sidebar brand height with the header. A browser assertion now
+  protects active-interval range preservation. Final checks and exact-head review
+  must run again on this follow-up before guarded merge/deployment.
+
+## Previous handoff (2026-10-18): UI release deployed and verified
 
 - **Live release:** `8a299fc561af20bee65a9c0793ff5c386dcfbc9e` is deployed at
   https://auratrades.quest. The owner approved deploying the concrete release after

@@ -1,7 +1,7 @@
 # The hosted AuraTrade stack on its Lightsail server (docs/DEPLOYMENT.md).
 # deploy/server-deploy.sh runs it as project "auratrade" with the server's
-# ~/auratrade/.env, which holds only AURATRADE_SITE_HOST, POSTGRES_PASSWORD
-# and AUTH_SECRET. Only Caddy publishes ports; the web server and database are
+# ~/auratrade/.env, which holds AURATRADE_SITE_HOST, POSTGRES_PASSWORD,
+# AUTH_SECRET and optionally AURATRADE_FINVIZ_TOKEN. Only Caddy publishes ports; the web server and database are
 # reachable only inside this compose network.
 name: auratrade
 services:
@@ -43,6 +43,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?}
       AUTH_URL: https://${AURATRADE_SITE_HOST:?}
       AUTH_TRUST_HOST: "true"
+      # Optional, server-only Finviz daily export credential. Never a build arg.
+      AURATRADE_FINVIZ_TOKEN: ${AURATRADE_FINVIZ_TOKEN:-}
       # Fixed here, not read from .env: the hosted server never has public sign-up.
       AURATRADE_REGISTRATION: closed
     healthcheck:

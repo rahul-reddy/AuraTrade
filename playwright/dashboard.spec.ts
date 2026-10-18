@@ -43,5 +43,6 @@ test('user can view the dashboard after importing trades', async ({ page }) => {
   await expect(page.getByText('Equity Curve')).toBeVisible()
   await expect(page.getByText('Kelly Sizing')).toBeVisible()
   await expect(page.getByText('P&L Distribution')).toBeVisible()
+  await page.getByText('More performance statistics · best/worst day, streak, drawdown', { exact: true }).click()
   await expect(page.getByText('Current Streak')).toBeVisible()
 })

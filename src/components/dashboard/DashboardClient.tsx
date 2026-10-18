@@ -363,7 +363,7 @@ export default function DashboardClient({
   return (
     <div className="text-white">
       <div className="workspace-page">
-        <PageHeader eyebrow="Performance / Overview" title="Performance Dashboard" description={<>Welcome back, {userName?.split(' ')[0] ?? userEmail.split('@')[0]}. Here’s your trading performance at a glance.</>}>
+        <PageHeader eyebrow="Performance / Overview" title="Performance Dashboard" description={<>Welcome back, {userName?.trim().split(/\s+/)[0] || userEmail.split('@')[0]}. Here’s your trading performance at a glance.</>}>
           <Link href={baseTradesHref} className="action-secondary">Review trades<ArrowUpRight size={15} /></Link>
         </PageHeader>
         <div className="mb-7 flex flex-wrap items-center justify-between gap-4 border-y border-zinc-800 py-4">
@@ -455,7 +455,9 @@ export default function DashboardClient({
                 sub={`Current avg size ${currentAvgSizeLabel}`}
               />
             </div>
-            <div className="mb-7 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&_.metric-card]:py-4 [&_.metric-card_p.font-mono]:text-xl">
+            <details className="mb-5 rounded-lg border border-zinc-800 bg-zinc-900/30">
+              <summary className="cursor-pointer px-4 py-3 text-xs text-zinc-300">More performance statistics · best/worst day, streak, drawdown</summary>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&_.metric-card]:py-4 [&_.metric-card_p.font-mono]:text-xl">
               <SummaryCard
                 href={insights.bestDay ? buildTradesHref(accountId, { status: 'closed', dateFrom: insights.bestDay.date, dateTo: insights.bestDay.date }) : baseTradesHref}
                 label="Best Day"
@@ -485,6 +487,7 @@ export default function DashboardClient({
                 tone="loss"
               />
             </div>
+            </details>
 
             <nav aria-label="Dashboard sections" className="mb-5 flex flex-wrap items-center gap-5 text-xs text-zinc-400">
               <span className="inline-flex items-center gap-2 font-medium text-zinc-200"><SlidersHorizontal size={14} />Explore your performance</span>

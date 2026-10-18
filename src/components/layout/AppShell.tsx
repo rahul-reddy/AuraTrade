@@ -193,6 +193,7 @@ export default function AppShell({ children, userEmail, accountName }: AppShellP
             <AnimatePresence initial={false}>
               <motion.div
                 key={pathname}
+                className={pathname.startsWith('/chart/') ? 'h-full min-h-0' : undefined}
                 variants={pageVariants}
                 initial={reduceMotion ? false : "initial"}
                 animate="animate"
