@@ -13,7 +13,7 @@
   default. A head bootstrap applies the saved theme before hydration. Native date
   controls follow the selected color scheme. Canvas charts resolve CSS tokens and
   recolor in place without replacing the canvas or requesting market data.
-- **Validation:** the application source in this commit passed local lint (0 errors,
+- **Validation:** application source `454eb43e53421be7befd5c8a6f7e5d81bb732f0d` passed local lint (0 errors,
   two existing unused-variable warnings), typecheck, production build, **298 unit
   tests** and **19/19 Playwright browser tests** against the production build on
   isolated `auratrade_ui_test`. The final browser run includes the last spinner and
