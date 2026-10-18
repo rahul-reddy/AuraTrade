@@ -70,11 +70,13 @@ export function TradesFilters({
       ref={formRef}
       method="GET"
       action="/trades"
-      className="flex flex-wrap items-center gap-2 mb-4"
+      aria-label="Filter trade history"
+      className="filter-bar flex flex-wrap items-center gap-2 mb-4"
     >
       {accountId && <input type="hidden" name="accountId" value={accountId} />}
 
       <Input
+        aria-label="Search symbol"
         name="symbol"
         defaultValue={initialSymbol ?? ''}
         onChange={submitDebounced}
@@ -84,6 +86,7 @@ export function TradesFilters({
       />
 
       <select
+        aria-label="Direction"
         name="direction"
         defaultValue={initialDirection ?? ''}
         onChange={submitImmediate}
@@ -95,6 +98,7 @@ export function TradesFilters({
       </select>
 
       <select
+        aria-label="Trade status"
         name="status"
         defaultValue={initialStatus ?? ''}
         onChange={submitImmediate}
@@ -106,6 +110,7 @@ export function TradesFilters({
       </select>
 
       <Input
+        aria-label="Setup"
         name="setup"
         defaultValue={initialSetup ?? ''}
         onChange={submitDebounced}
@@ -116,6 +121,7 @@ export function TradesFilters({
 
       <input
         type="date"
+        aria-label="Entry date from"
         name="dateFrom"
         defaultValue={initialDateFrom ?? ''}
         onChange={submitImmediate}
@@ -124,6 +130,7 @@ export function TradesFilters({
       <span className="text-zinc-600 text-sm">–</span>
       <input
         type="date"
+        aria-label="Entry date to"
         name="dateTo"
         defaultValue={initialDateTo ?? ''}
         onChange={submitImmediate}
@@ -142,6 +149,7 @@ export function TradesFilters({
       <div className="flex-1" />
 
       <select
+        aria-label="Trades per page"
         name="pageSize"
         defaultValue={String(initialPageSize)}
         onChange={submitImmediate}

@@ -2,7 +2,59 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-17): hosted deployment
+## Current handoff (2026-10-17): workspace redesign and home routing
+
+- **Implementation / PR:** `4d569a2e35cc35df377bc7ba54ac312f2df63a17` on
+  `feat/workspace-redesign`; [PR #20](https://github.com/rahul-reddy/AuraTrade/pull/20).
+  The following status-only commit records this tested implementation. The exact CI
+  result and independent review verdict are tracked on the PR's final head.
+- **Root cause and fix:** `/` still rendered create-next-app's starter page. Middleware
+  sent signed-out root visitors to `/login?callbackUrl=/`, and successful login returned
+  them to that placeholder. The root now redirects to `/dashboard`; protected deep-link
+  callbacks retain their existing behavior.
+- **Design:** a shared charcoal/blue system, brand mark, page headers, accessible
+  navigation and skip link, split authentication layout with password visibility,
+  first-import onboarding, dashboard hierarchy and section navigation, all/closed/open
+  trade views preserving other filters, labeled filters, improved table density,
+  guided import progress, coherent integrity settings, and responsive chart review.
+  Best/worst day colors now follow their displayed P&L sign. Financial calculations,
+  parsing, API authorization, schema and migrations are unchanged.
+- **Verification on `4d569a2`:** `npm run build` / direct Next build passed; TypeScript
+  (`node node_modules/typescript/bin/tsc --noEmit`) passed; ESLint (`npm run lint` and
+  final direct ESLint invocation) passed with two pre-existing unused-variable warnings
+  (`GroupedTrade`, `IDLE_ENRICHMENT`); Jest **267/267** passed. All **12 existing browser
+  tests** passed against the final production build; the final focused
+  `workspace-design.spec.ts` run passed **2/2** after adding the new assertions.
+  Earlier new-test failures were synchronization issues (dashboard enrichment wait,
+  asynchronous view navigation, and hidden streamed headings), corrected in the tests.
+- **Browser evidence:** production server on `127.0.0.1:3100` with a separate
+  `auratrade_ui_test` database (all 12 existing migrations applied fresh). Synthetic
+  users/statements only; the owner's local/hosted data was not touched. Inspected
+  desktop and 390px mobile screenshots for sign-in, onboarding, dashboard, trades,
+  imports, chart review and integrity settings. Browser checks include root login,
+  signed-in root redirect, deep-link login, visibility toggle, import stages, dashboard
+  anchors, trade-view filter preservation, and document/main-content overflow.
+- **Documentation:** `docs/UI-DESIGN.md` records the design and journeys; `README.md`
+  now documents actual local startup and checks instead of create-next-app instructions.
+- **CI / independent review:** CI on `42aece9fd574e94d06a44a7ffd18e2821ae6d264`
+  passed lint/types, harness checks, fresh migrations/drift, **267 unit tests**, build
+  and **14 browser tests** ([run](https://github.com/rahul-reddy/AuraTrade/actions/runs/39064575893)).
+  Claude Opus (medium, standard tier) approved that head with **0 blocking findings**
+  ([review](https://github.com/rahul-reddy/AuraTrade/pull/20#issuecomment-6240056409)).
+  Three advisory notes remain: empty-string greeting fallback, mobile rail overriding
+  the desktop collapse preference, and invalid status queries leaving no trade tab
+  selected. Gemini had zero quota; Claude's inherited API key had no credit; a retry
+  using its existing subscription login completed the review. No credential/settings
+  files were changed. The status-only follow-up must receive its own head-matched gate.
+- **Delivery / next action:** GitHub reports `rahul-reddy/AuraTrade` as **PUBLIC**, which
+  conflicts with AGENTS.md's instruction to keep it private. Visibility was not changed
+  in this task. An owner clarification is pending; resolve it before guarded merge.
+  Production deployment also remains pending the owner's typed `DEPLOY <merged-sha7>`
+  confirmation required by `scripts/deploy.ps1` / `docs/DEPLOYMENT.md`. No production
+  deployment is claimed here. Screenshots are saved locally under `.local/ui-preview/`
+  and in CI's verification artifact.
+
+## Previous handoff (2026-10-17): hosted deployment
 
 - **Decision:** owner chose Option A (its own Lightsail server, TenFold's pattern) and the
   domain `auratrades.quest` (Namecheap).

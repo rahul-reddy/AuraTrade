@@ -86,13 +86,13 @@ export default function ChartWorkspace({
 
   return (
     <div
-      className="flex flex-col h-full bg-zinc-950 text-white"
+      className="chart-review flex flex-col min-h-[700px] h-full bg-zinc-950 text-white"
       data-testid="chart-workspace"
       // Fill markers drawn on the canvas, exposed for browser tests.
       data-fill-count={trades.reduce((sum, trade) => sum + trade.fills.length, 0)}
     >
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5 border-b border-zinc-800 bg-zinc-900 shrink-0">
         <div className="flex items-center gap-4">
           <Link
             href={`/trades?accountId=${accountId}&symbol=${encodeURIComponent(symbol)}`}
@@ -110,7 +110,7 @@ export default function ChartWorkspace({
         </div>
 
         {/* Summary stats */}
-        <div className="flex items-center gap-6 text-sm font-mono">
+        <div className="flex flex-wrap items-center gap-5 text-sm font-mono">
           <div className="text-center">
             <div className="text-zinc-600 text-[10px] uppercase tracking-wider mb-0.5">Net P&L</div>
             <div className={totalNetPnl >= 0 ? "text-green-400 font-semibold" : "text-red-400 font-semibold"}>
@@ -135,9 +135,9 @@ export default function ChartWorkspace({
       </div>
 
       {/* ── Body: sidebar + chart ───────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
         {/* Trade list sidebar */}
-        <div className="w-64 shrink-0 border-r border-zinc-800 bg-zinc-900 flex flex-col overflow-hidden">
+        <div className="max-h-52 w-full sm:max-h-none sm:w-44 lg:w-64 shrink-0 border-r border-zinc-800 bg-zinc-900 flex flex-col overflow-hidden">
           <div className="px-4 py-2.5 border-b border-zinc-800 shrink-0">
             <p className="text-zinc-500 text-[11px] font-medium uppercase tracking-wider">
               Trades · {symbol}
@@ -156,6 +156,7 @@ export default function ChartWorkspace({
                   <button
                     key={trade.id}
                     onClick={() => handleTradeClick(trade.id)}
+                    aria-pressed={isSelected}
                     className={`w-full text-left px-4 py-3 border-b border-zinc-800/60 transition-colors cursor-pointer group ${
                       isSelected
                         ? "bg-blue-500/10 border-l-2 border-l-blue-500"
@@ -217,7 +218,7 @@ export default function ChartWorkspace({
         </div>
 
         {/* Chart area — fills remaining space */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 min-h-[450px] flex flex-col">
           <DynamicCandlestickChart
             initialCandles={initialCandles}
             initialTimeframe={initialTimeframe}

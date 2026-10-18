@@ -1,5 +1,6 @@
 "use client";
 
+import AuthShell from "@/components/auth/AuthShell";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -46,16 +47,11 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+    <AuthShell>
       <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
         <CardHeader className="space-y-1">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-md bg-blue-500 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">A</span>
-            </div>
-            <span className="text-white font-semibold text-lg">AuraTrade</span>
-          </div>
-          <CardTitle className="text-2xl text-white">Create account</CardTitle>
+          <p className="eyebrow mb-3">Your trading workspace</p>
+          <CardTitle role="heading" aria-level={1} className="text-2xl text-white">Create account</CardTitle>
           <CardDescription className="text-zinc-400">
             Start tracking your trading performance
           </CardDescription>
@@ -64,7 +60,7 @@ export function RegisterForm() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+              <div role="alert" className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
@@ -117,7 +113,7 @@ export function RegisterForm() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
             >
               {isLoading ? "Creating account…" : "Create account"}
             </Button>
@@ -131,6 +127,6 @@ export function RegisterForm() {
           </CardFooter>
         </form>
       </Card>
-    </div>
+    </AuthShell>
   );
 }

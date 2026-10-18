@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { ArrowUpRight, ArrowRight, SlidersHorizontal } from 'lucide-react'
+import PageHeader from '@/components/layout/PageHeader'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -166,14 +168,16 @@ function Panel({
   subtitle,
   children,
   className = '',
+  id,
 }: {
   title: string
   subtitle?: string
   children: React.ReactNode
   className?: string
+  id?: string
 }) {
   return (
-    <div className={`rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] ${className}`}>
+    <section id={id} className={`surface scroll-mt-6 p-5 sm:p-6 ${className}`}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold tracking-wide text-zinc-100">{title}</h2>
@@ -181,7 +185,7 @@ function Panel({
         </div>
       </div>
       {children}
-    </div>
+    </section>
   )
 }
 
@@ -191,12 +195,14 @@ function SummaryCard({
   value,
   sub,
   tone = 'neutral',
+  primary = false,
 }: {
   href: string
   label: string
   value: string
   sub?: string
   tone?: 'neutral' | 'profit' | 'loss'
+  primary?: boolean
 }) {
   const toneClass =
     tone === 'profit'
@@ -208,10 +214,10 @@ function SummaryCard({
   return (
     <Link
       href={href}
-      className="group rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 transition-all hover:border-blue-500/50 hover:bg-zinc-900"
+      className={`surface metric-card group p-5 transition-colors hover:border-blue-500/50 ${primary ? 'metric-primary' : ''}`}
     >
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</p>
-      <p className={`mt-3 font-mono text-2xl font-semibold ${toneClass}`}>{value}</p>
+      <div className="flex items-center justify-between gap-2"><p className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400">{label}</p><ArrowUpRight size={14} className="text-zinc-500 transition-colors group-hover:text-blue-400" /></div>
+      <p className={`mt-4 font-mono text-2xl font-medium tracking-tight ${toneClass}`}>{value}</p>
       {sub && <p className="mt-2 text-xs text-zinc-500 group-hover:text-zinc-400">{sub}</p>}
     </Link>
   )
@@ -308,7 +314,7 @@ export default function DashboardClient({
           <button
             type="button"
             onClick={() => dashboardQuery.refetch()}
-            className="mt-4 rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400"
+            className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
           >
             Retry
           </button>
@@ -356,27 +362,20 @@ export default function DashboardClient({
 
   return (
     <div className="text-white">
-      <div className="mx-auto max-w-[1680px] px-8 py-6">
-        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Performance Dashboard</h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              {accountName}
-              {' · '}
-              {userName ?? userEmail}
-              {' · '}
-              {metrics.totalTrades.toLocaleString()} closed trades in view
-            </p>
-          </div>
-
-          <form onSubmit={applyFilters} className="flex flex-wrap items-end gap-3">
+      <div className="workspace-page">
+        <PageHeader eyebrow="Performance / Overview" title="Performance Dashboard" description={<>Welcome back, {userName?.split(' ')[0] ?? userEmail.split('@')[0]}. Here’s your trading performance at a glance.</>}>
+          <Link href={baseTradesHref} className="action-secondary">Review trades<ArrowUpRight size={15} /></Link>
+        </PageHeader>
+        <div className="mb-7 flex flex-wrap items-center justify-between gap-4 border-y border-zinc-800 py-4">
+          <div className="flex items-center gap-3"><span className="h-1.5 w-1.5 rounded-full bg-blue-400" /><span className="text-xs font-medium text-zinc-300">{accountName}</span><span className="text-xs text-zinc-500">/ {metrics.totalTrades.toLocaleString()} closed trades</span></div>
+          <form onSubmit={applyFilters} className="flex flex-wrap items-end gap-2">
             <label className="text-xs text-zinc-500">
               From
               <input
                 type="date"
                 value={dateFromInput}
                 onChange={(event) => setDateFromInput(event.target.value)}
-                className="mt-1 block rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-blue-500"
+                className="mt-1 block rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none transition focus:border-blue-500"
               />
             </label>
             <label className="text-xs text-zinc-500">
@@ -385,19 +384,19 @@ export default function DashboardClient({
                 type="date"
                 value={dateToInput}
                 onChange={(event) => setDateToInput(event.target.value)}
-                className="mt-1 block rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-blue-500"
+                className="mt-1 block rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none transition focus:border-blue-500"
               />
             </label>
             <button
               type="submit"
-              className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400"
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               Apply
             </button>
             <button
               type="button"
               onClick={clearFilters}
-              className="rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
             >
               Clear
             </button>
@@ -413,7 +412,7 @@ export default function DashboardClient({
             <div className="mt-5 flex justify-center gap-3">
               <Link
                 href="/upload"
-                className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400"
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
               >
                 Upload trades
               </Link>
@@ -430,6 +429,7 @@ export default function DashboardClient({
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <SummaryCard
                 href={baseTradesHref}
+                primary
                 label="Total P&L"
                 value={formatCurrency(metrics.totalNetPnl)}
                 sub={`${metrics.totalTrades} closed trades`}
@@ -454,19 +454,21 @@ export default function DashboardClient({
                 value={formatPercent(metrics.kellyHalf)}
                 sub={`Current avg size ${currentAvgSizeLabel}`}
               />
+            </div>
+            <div className="mb-7 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&_.metric-card]:py-4 [&_.metric-card_p.font-mono]:text-xl">
               <SummaryCard
                 href={insights.bestDay ? buildTradesHref(accountId, { status: 'closed', dateFrom: insights.bestDay.date, dateTo: insights.bestDay.date }) : baseTradesHref}
                 label="Best Day"
                 value={insights.bestDay ? formatCurrency(insights.bestDay.pnl) : '—'}
                 sub={insights.bestDay ? formatTradingDay(insights.bestDay.date) : 'No day data'}
-                tone="profit"
+                tone={insights.bestDay ? insights.bestDay.pnl > 0 ? 'profit' : insights.bestDay.pnl < 0 ? 'loss' : 'neutral' : 'neutral'}
               />
               <SummaryCard
                 href={insights.worstDay ? buildTradesHref(accountId, { status: 'closed', dateFrom: insights.worstDay.date, dateTo: insights.worstDay.date }) : baseTradesHref}
                 label="Worst Day"
                 value={insights.worstDay ? formatCurrency(insights.worstDay.pnl) : '—'}
                 sub={insights.worstDay ? formatTradingDay(insights.worstDay.date) : 'No day data'}
-                tone="loss"
+                tone={insights.worstDay ? insights.worstDay.pnl > 0 ? 'profit' : insights.worstDay.pnl < 0 ? 'loss' : 'neutral' : 'neutral'}
               />
               <SummaryCard
                 href={baseTradesHref}
@@ -484,8 +486,16 @@ export default function DashboardClient({
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+            <nav aria-label="Dashboard sections" className="mb-5 flex flex-wrap items-center gap-5 text-xs text-zinc-400">
+              <span className="inline-flex items-center gap-2 font-medium text-zinc-200"><SlidersHorizontal size={14} />Explore your performance</span>
+              <a className="hover:text-blue-300" href="#equity">Equity & sizing</a>
+              <a className="hover:text-blue-300" href="#patterns">Trading patterns</a>
+              <a className="hover:text-blue-300" href="#calendar">Trading calendar</a>
+              <a className="hover:text-blue-300" href="#position-sizing">Position analysis<ArrowRight className="ml-1 inline" size={12} /></a>
+            </nav>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
               <Panel
+                id="equity"
                 title="Equity Curve"
                 subtitle="Daily cumulative P&L with drawdown overlay"
                 className="xl:col-span-8"
@@ -581,6 +591,7 @@ export default function DashboardClient({
               </Panel>
 
               <Panel
+                id="patterns"
                 title="P&L Distribution"
                 subtitle="Histogram of trade outcomes with a normal overlay"
                 className="xl:col-span-6"
@@ -748,6 +759,7 @@ export default function DashboardClient({
               </Panel>
 
               <Panel
+                id="calendar"
                 title="Monthly Heatmap"
                 subtitle="Daily realized P&L intensity across each month"
                 className="xl:col-span-6"
@@ -756,6 +768,7 @@ export default function DashboardClient({
               </Panel>
 
               <Panel
+                id="position-sizing"
                 title="Position Size Scatter"
                 subtitle="Average size versus outcome"
                 className="xl:col-span-6"

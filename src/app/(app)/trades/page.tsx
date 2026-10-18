@@ -1,3 +1,6 @@
+import PageHeader from '@/components/layout/PageHeader'
+import { ArrowUpRight } from 'lucide-react'
+import EmptyAccountState from '@/components/layout/EmptyAccountState'
 import Link from 'next/link'
 import { tradingDayRangeWhere } from '@/lib/trades/trading-date'
 import { getRequiredSession } from '@/lib/session'
@@ -93,24 +96,7 @@ export default async function TradesPage({
       })
 
   if (!account) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-zinc-400 mb-3">
-            {requestedAccountId ? 'Trading account not found.' : 'No trading account found.'}
-          </p>
-          {requestedAccountId ? (
-            <Link href="/trades" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
-              View your available accounts →
-            </Link>
-          ) : (
-            <Link href="/upload" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
-              Upload a CSV to get started →
-            </Link>
-          )}
-        </div>
-      </div>
-    )
+    return <EmptyAccountState missing={!!requestedAccountId} trades />
   }
 
   const rawSort = str(params, 'sortBy') ?? 'entryTime'
@@ -185,28 +171,26 @@ export default async function TradesPage({
 
   return (
     <div className="text-white">
-      <div className="px-8 py-6 max-w-[1600px]">
-        {/* Page header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Trade History</h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            {account.name}
-            {totalCount > 0 && (
-              <>
-                {' · '}
-                <span className="text-zinc-400">{totalCount.toLocaleString()} trades</span>
-                {closedCount !== totalCount && (
-                  <span className="text-green-500 ml-2 text-xs font-mono">
-                    {totalCount - closedCount} open
-                  </span>
-                )}
-              </>
-            )}
-          </p>
-        </div>
+      <div className="workspace-page">
+        <PageHeader eyebrow="Workspace / Trade journal" title="Trade History" description={<>{account.name} · {totalCount.toLocaleString()} trades{closedCount !== totalCount && <span className="ml-2 text-blue-400">{totalCount - closedCount} open</span>}</>}>
+          <Link href="/upload" className="action-secondary">Import statement<ArrowUpRight size={15} /></Link>
+        </PageHeader>
+
+        <nav aria-label="Trade views" className="mb-6 flex gap-6 border-b border-zinc-800 text-sm">
+          {[{ label: 'All trades', value: '' }, { label: 'Closed trades', value: 'closed' }, { label: 'Open positions', value: 'open' }].map(({ label, value }) => {
+            const query = new URLSearchParams()
+            for (const [key, param] of Object.entries(params)) {
+              if (typeof param === 'string' && key !== 'page' && key !== 'status') query.set(key, param)
+            }
+            query.set('accountId', account.id)
+            if (value) query.set('status', value)
+            const active = (str(params, 'status') ?? '') === value
+            return <Link key={label} href={`/trades?${query.toString()}`} aria-current={active ? 'page' : undefined} className={`border-b-2 pb-3 transition-colors ${active ? 'border-blue-400 text-blue-300' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}>{label}</Link>
+          })}
+        </nav>
 
         {/* Summary strip */}
-        <div className="grid grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-3 mb-7 lg:grid-cols-3 xl:grid-cols-6">
           <SummaryCard
             label="Net P&L"
             value={formatCurrency(totalNetPnl)}
@@ -321,11 +305,11 @@ function SummaryCard({
   sub?: string
 }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+    <div className="surface p-4 sm:p-5">
       <p className="text-zinc-500 text-[11px] font-medium uppercase tracking-wider mb-1.5">
         {label}
       </p>
-      <p className={`text-lg font-semibold font-mono leading-none ${valueClass ?? 'text-zinc-100'}`}>
+      <p className={`text-base sm:text-lg font-semibold font-mono leading-none ${valueClass ?? 'text-zinc-100'}`}>
         {value}
       </p>
       {sub && <p className="text-zinc-600 text-xs font-mono mt-1">{sub}</p>}
