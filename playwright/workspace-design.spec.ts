@@ -32,7 +32,9 @@ test('root sign-in reaches the dashboard and the redesigned workspace supports r
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('onboarding-desktop.png') })
 
   await page.getByRole('link', { name: 'Upload a CSV to get started →', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Import Trades', exact: true })).toBeVisible()
+  const importHeading = page.locator('#main-content').getByRole('heading', { name: 'Import Trades', exact: true })
+  await expect(importHeading).toHaveCount(1)
+  await expect(importHeading).toBeVisible()
   await expect(page.getByRole('list', { name: 'Import progress' }).locator('[aria-current="step"]')).toContainText('Choose statement')
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('import-desktop.png') })
   await page.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures', 'sample-trades.csv'))

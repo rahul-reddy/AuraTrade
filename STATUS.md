@@ -2,7 +2,33 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): annotated chart release deployed
+## Current handoff (2026-10-18): calendar filters and chart navigation follow-up
+
+- **Implemented:** heatmap months sort newest first, with independent year/month
+  selectors, clear and empty-period states. Calendar filters stay local to the
+  heatmap within the dashboard date range. The chart's Trades back link preserves
+  the account and clears symbol filtering. Chart symbol search now has a visible
+  label and explicit Open chart button, while supporting Enter and arbitrary
+  tickers without requiring an imported trade.
+- **Verified source:** `4e8fb3e06c626e6882e2d46824892bb583a8acc5` passed lint
+  (0 errors, two existing warnings), types, production build and **298 unit tests**.
+  Two new browser scenarios passed on the production build and isolated
+  `auratrade_ui_test` database, covering multi-year ordering/filter combinations,
+  no-data/reset, mobile overflow, button/Enter search, account preservation and
+  unfiltered return to a multi-symbol trade list. Full 17-test regression is running.
+  Desktop/mobile screenshots inspected in `.local/ui-preview/`.
+- **Scope / next action:** no P&L, ledger, parser, API, auth or schema changes.
+  Open the PR, finish full browser regression/CI, obtain exact-head independent
+  review, guarded-merge and deploy under the existing delivery instruction.
+  The previous annotated-chart release remains live until that succeeds.
+- **Review/test follow-up:** PR #25 head `f29efdd` passed full CI and independent
+  Claude Opus review with 0 blocking findings. Local regression exposed transient
+  duplicate headings during Next.js streaming. Browser assertions now scope those
+  headings to the active main workspace and wait for exactly one, preserving the
+  visibility checks. All four affected calendar/navigation/workspace scenarios
+  passed together; full regression is rerunning. Application source is unchanged.
+
+## Previous handoff (2026-10-18): annotated chart release deployed
 
 - **Live release:** `36be2af13e400d14aeaab590d52ff4a5331d5c06` at
   https://auratrades.quest. PR #23 was squash-merged through `scripts/merge-pr.ps1`
