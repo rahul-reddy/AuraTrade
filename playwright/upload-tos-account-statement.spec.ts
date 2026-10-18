@@ -56,9 +56,9 @@ test('thinkorswim Account Statement imports timestamped trades via the broker le
   // The chart draws every ledger fill of the imported trade: TOSA was bought
   // in two fills (60 + 40) and sold in one, so it has three markers.
   await page.goto('/chart/TOSA')
-  // AnimatePresence briefly keeps the previous page mounted during the route
-  // transition; wait for a single workspace before reading it.
-  const workspace = page.getByTestId('chart-workspace')
+  // Next.js can briefly retain a streamed copy outside the active main. Assert
+  // the workspace shown to the user rather than a hidden pending route tree.
+  const workspace = page.locator('#main-content').getByTestId('chart-workspace')
   await expect(workspace).toHaveCount(1, { timeout: 20_000 })
   await expect(workspace).toHaveAttribute('data-fill-count', '3')
 })

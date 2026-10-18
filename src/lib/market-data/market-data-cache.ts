@@ -1,7 +1,7 @@
+import { fetchChartMarketData } from './chart-data-provider';
 import { prisma } from "@/lib/prisma";
 import {
   INTRADAY_FALLBACK_MESSAGE,
-  fetchYahooMarketData,
   type FetchYahooMarketDataResult,
   type MarketDataCandle,
   type MarketDataTimeframe,
@@ -16,7 +16,7 @@ export interface GetMarketDataOptions {
 }
 
 export interface GetMarketDataResult extends FetchYahooMarketDataResult {
-  source: "cache" | "yahoo" | "cache-stale";
+  source: "cache" | "yahoo" | "finviz" | "cache-stale";
   stale: boolean;
 }
 
@@ -87,15 +87,20 @@ function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
+/** Daily provider timestamps differ (UTC midnight vs the session open). Collapse
+ * legacy duplicates by trading date, choosing the most recently fetched quote.
+ * Intraday bars keep their exact instants. No stored row is deleted or rewritten. */
 function formatCacheRows(rows: CacheRow[]): MarketDataCandle[] {
-  return rows.map((row) => ({
-    time: row.date.toISOString(),
-    open: row.open.toNumber(),
-    high: row.high.toNumber(),
-    low: row.low.toNumber(),
-    close: row.close.toNumber(),
-    volume: Number(row.volume),
-  }));
+  const byTime = new Map<string, CacheRow>()
+  for (const row of rows) {
+    const time = row.timeframe === '1d' ? `${row.date.toISOString().slice(0, 10)}T00:00:00.000Z` : row.date.toISOString()
+    const previous = byTime.get(time)
+    if (!previous || row.fetchedAt.getTime() > previous.fetchedAt.getTime()
+      || (row.fetchedAt.getTime() === previous.fetchedAt.getTime() && row.date.toISOString() === time)) byTime.set(time, row)
+  }
+  return [...byTime.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([time, row]) => ({
+    time, open: row.open.toNumber(), high: row.high.toNumber(), low: row.low.toNumber(), close: row.close.toNumber(), volume: Number(row.volume),
+  }))
 }
 
 function getCoverageToleranceMs(timeframe: MarketDataTimeframe): number {
@@ -139,8 +144,11 @@ export function hasUsableCache(
     return true;
   }
 
+  // Daily exports have no weekend/holiday bar. Only freshness of the latest
+  // covered session counts; refreshing older history cannot freshen its quote.
+  const latestDay = startOfUtcDay(rows[rows.length - 1].date).getTime();
   return rows.some((row) => {
-    return row.date.getTime() >= todayStart.getTime()
+    return (timeframe === "1d" ? startOfUtcDay(row.date).getTime() === latestDay : row.date.getTime() >= todayStart.getTime())
       && now.getTime() - row.fetchedAt.getTime() <= TODAY_STALE_MS;
   });
 }
@@ -154,7 +162,7 @@ async function persistCandles(
 ): Promise<void> {
   await Promise.all(
     candles.map((candle) => {
-      const date = new Date(candle.time);
+      const date = new Date(timeframe === "1d" ? `${candle.time.slice(0,10)}T00:00:00.000Z` : candle.time);
       return prismaClient.marketDataCache.upsert({
         where: {
           symbol_date_timeframe: {
@@ -193,7 +201,7 @@ export async function getMarketData(
 ): Promise<GetMarketDataResult> {
   const prismaClient = deps.prismaClient ?? (prisma as unknown as PrismaLike);
   const now = deps.now?.() ?? new Date();
-  const fetcher = deps.fetcher ?? fetchYahooMarketData;
+  const fetcher = deps.fetcher ?? fetchChartMarketData;
   const preferredTimeframe = resolvePreferredMarketDataTimeframe(
     options.timeframe,
     options.from,
@@ -238,7 +246,7 @@ export async function getMarketData(
 
     return {
       ...fetched,
-      source: "yahoo",
+      source: fetched.provider ?? "yahoo",
       stale: false,
     };
   } catch (error) {

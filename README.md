@@ -21,6 +21,18 @@ Open `http://localhost:3000`. The root URL leads to the dashboard after sign-in.
 Registration is available locally by default; `AURATRADE_REGISTRATION=closed`
 disables it. The hosted deployment always closes public registration.
 
+## Trade-review charts
+
+Chart pages default to one year of daily candles, with trade annotations, EMA 8/21,
+SMA 50, separate volume and RSI panes, and a broker-fill inspector. Intervals change
+only through the toolbar; zooming does not switch data feeds or candle intervals.
+
+Set `AURATRADE_FINVIZ_TOKEN` in the ignored `.env` for Finviz daily price exports.
+The key is optional and server-only. Daily requests fall back to Yahoo if Finviz is
+unavailable; intraday requests use Yahoo. Hosted deployment passes the key at runtime
+through the server's `.env`, never a build argument or browser request. See
+[chart behavior and data assumptions](docs/CHARTS.md).
+
 ## Verification
 
 ```sh

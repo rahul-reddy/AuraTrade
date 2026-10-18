@@ -1,4 +1,4 @@
-import { getMarketData } from "@/lib/market-data/market-data-cache";
+import { getMarketData, hasUsableCache } from "@/lib/market-data/market-data-cache";
 import type { MarketDataTimeframe } from "@/lib/market-data/yahoo-client";
 
 function decimal(value: number) {
@@ -31,6 +31,19 @@ function makeCacheRow(options: {
 }
 
 describe("getMarketData", () => {
+  it("reuses recently refreshed daily history on a weekend without inventing a weekend bar", () => {
+    const rows = [makeCacheRow({ time: "2026-10-16T00:00:00Z", fetchedAt: "2026-10-18T14:00:00Z", timeframe: "1d" })];
+    expect(hasUsableCache(rows, "1d", new Date("2026-10-15"), new Date("2026-10-18T23:59:59Z"), new Date("2026-10-18T14:30:00Z"))).toBe(true);
+  });
+
+  it("does not treat a refreshed older daily bar as a fresh latest session", () => {
+    const rows = [
+      makeCacheRow({ time: "2026-10-15T00:00:00Z", fetchedAt: "2026-10-18T14:00:00Z", timeframe: "1d" }),
+      makeCacheRow({ time: "2026-10-16T00:00:00Z", fetchedAt: "2026-10-18T12:00:00Z", timeframe: "1d" }),
+    ];
+    expect(hasUsableCache(rows, "1d", new Date("2026-10-15"), new Date("2026-10-18T23:59:59Z"), new Date("2026-10-18T14:30:00Z"))).toBe(false);
+  });
+
   it("returns fresh cache data without refetching", async () => {
     const findMany = jest.fn().mockResolvedValue([
       makeCacheRow({
@@ -248,3 +261,22 @@ describe("getMarketData", () => {
     );
   });
 });
+
+
+it('collapses legacy daily cache timestamps by newest fetch rather than provider clock time', async () => {
+  const findMany = jest.fn().mockResolvedValue([
+    makeCacheRow({time:'2026-10-16T00:00:00.000Z',timeframe:'1d',fetchedAt:'2026-10-18T12:00:00Z',close:104}),
+    makeCacheRow({time:'2026-10-16T13:30:00.000Z',timeframe:'1d',fetchedAt:'2026-10-16T20:00:00Z',close:99}),
+  ])
+  const result = await getMarketData({symbol:'AAPL',timeframe:'1d',from:new Date('2026-10-16'),to:new Date('2026-10-16T23:59:59Z')}, {prismaClient:{marketDataCache:{findMany,upsert:jest.fn()}},now:()=>new Date('2026-10-18T12:30:00Z'),fetcher:jest.fn()})
+  expect(result.candles).toHaveLength(1)
+  expect(result.candles[0]).toMatchObject({time:'2026-10-16T00:00:00.000Z',close:104})
+})
+
+it('writes new daily cache keys at calendar midnight while retaining intraday instants', async () => {
+  const upsert = jest.fn().mockResolvedValue(undefined)
+  const options = {symbol:'AAPL',timeframe:'1d' as const,from:new Date('2026-10-16'),to:new Date('2026-10-16T23:59:59Z')}
+  const fetcher = jest.fn().mockResolvedValue({symbol:'AAPL',requestedTimeframe:'1d',effectiveTimeframe:'1d',provider:'finviz',fallbackMessage:null,candles:[{time:'2026-10-16T13:30:00Z',open:100,high:105,low:99,close:104,volume:1000}]})
+  await getMarketData(options,{prismaClient:{marketDataCache:{findMany:jest.fn().mockResolvedValue([]),upsert}},fetcher})
+  expect(upsert.mock.calls[0][0].where.symbol_date_timeframe.date.toISOString()).toBe('2026-10-16T00:00:00.000Z')
+})

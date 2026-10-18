@@ -46,12 +46,13 @@ together are about $26–28 a month, so that alert will fire until the owner rai
 
 ## The server's `.env`
 
-`~/auratrade/.env`, mode 600, owned by `ubuntu`. Exactly three keys:
+`~/auratrade/.env`, mode 600, owned by `ubuntu`. Three required keys plus an optional Finviz daily-export token:
 
 ```
 AURATRADE_SITE_HOST=auratrades.quest
 POSTGRES_PASSWORD=...   # openssl rand -hex 24
 AUTH_SECRET=...         # openssl rand -base64 32; never the dev value
+AURATRADE_FINVIZ_TOKEN=... # optional; server-only, never sent to browsers
 ```
 
 Changing `AUTH_SECRET` signs everyone out. Changing `POSTGRES_PASSWORD` after the

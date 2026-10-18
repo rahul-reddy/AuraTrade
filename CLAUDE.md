@@ -38,7 +38,7 @@ Target feel: **"Bloomberg terminal meets modern SaaS dashboard."** This should l
 16. **Mixed-action broker statements require a dry-run first** — if a statement contains option actions, expirations, or position-affecting non-trade rows (journals/transfers/mergers), do not canonically import it until the raw-row + option-aware redesign can model those events safely
 
 ## Tech Decisions (already made, don't revisit)
-- Market data: `yahoo-finance2` only (no API key needed)
+- Market data: Finviz daily exports when `AURATRADE_FINVIZ_TOKEN` is configured, with Yahoo fallback; Yahoo for intraday (owner decision, 2026-10-18). Keep the token server-only.
 - Prisma v6: datasource URL in `prisma.config.ts`, client outputs to `src/generated/prisma`
 - shadcn v4: zinc base color, CSS variables on, components in `src/components/ui/`
 - Database: PostgreSQL in Docker (`auratrade-pg` container, port 5432)
