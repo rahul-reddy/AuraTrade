@@ -19,6 +19,10 @@ trade open at the latest year. The toolbar always displays the actual date windo
 - **Inspector:** filter the trade list, select a position and examine its original fills.
   Compact E/X markers group crowded fills; selecting a marker opens its trade. A
   keyboard-accessible annotations list provides the same selection outside the canvas.
+- **Symbol search:** use the labeled search in the chart header and press Enter or
+  Open chart to review another ticker, including symbols with no imported trades.
+  The current account is preserved. The Trades back link returns to all symbols
+  in that account, without carrying over the chart's symbol filter.
 
 A failed range request preserves the previous chart. Retry repeats the failed request.
 Pending requests are aborted when superseded, and late responses cannot overwrite the

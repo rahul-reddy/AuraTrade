@@ -27,7 +27,8 @@ import {
 } from 'recharts'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton'
 import { formatCurrency, formatDuration, formatTradingDay } from '@/lib/format'
-import type { DashboardPayload, HeatmapMonth } from '@/lib/dashboard/types'
+import type { DashboardPayload } from '@/lib/dashboard/types'
+import TradingHeatmap from '@/components/dashboard/TradingHeatmap'
 
 interface DashboardClientProps {
   accountId: string
@@ -220,49 +221,6 @@ function SummaryCard({
       <p className={`mt-4 font-mono text-2xl font-medium tracking-tight ${toneClass}`}>{value}</p>
       {sub && <p className="mt-2 text-xs text-zinc-500 group-hover:text-zinc-400">{sub}</p>}
     </Link>
-  )
-}
-
-function Heatmap({ months }: { months: HeatmapMonth[] }) {
-  if (months.length === 0) {
-    return <p className="text-sm text-zinc-500">No daily history yet.</p>
-  }
-
-  return (
-    <div className="space-y-4">
-      {months.map((month) => (
-        <div key={month.monthKey}>
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm text-zinc-300">{month.monthLabel}</p>
-            <p className={`font-mono text-xs ${month.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {formatCurrency(month.totalPnl)}
-            </p>
-          </div>
-          <div className="grid grid-cols-7 gap-2">
-            {month.days.map((day) => {
-              const bg =
-                day.pnl > 0
-                  ? `rgba(34, 197, 94, ${0.12 + day.intensity * 0.55})`
-                  : day.pnl < 0
-                    ? `rgba(239, 68, 68, ${0.12 + day.intensity * 0.55})`
-                    : 'rgba(63, 63, 70, 0.45)'
-
-              return (
-                <div
-                  key={day.date}
-                  className="rounded-xl border border-zinc-800 p-2 text-center"
-                  style={{ backgroundColor: bg }}
-                  title={`${day.date}: ${formatCurrency(day.pnl)} (${day.tradeCount} trades)`}
-                >
-                  <p className="font-mono text-xs text-zinc-200">{day.day}</p>
-                  <p className="mt-1 text-[10px] text-zinc-400">{formatCurrency(day.pnl)}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -767,7 +725,7 @@ export default function DashboardClient({
                 subtitle="Daily realized P&L intensity across each month"
                 className="xl:col-span-6"
               >
-                <Heatmap months={insights.monthlyHeatmap} />
+                <TradingHeatmap key={`${accountId}:${initialDateFrom ?? ''}:${initialDateTo ?? ''}`} months={insights.monthlyHeatmap} />
               </Panel>
 
               <Panel
