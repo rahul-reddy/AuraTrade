@@ -51,7 +51,7 @@ export function RegisterForm() {
       <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
         <CardHeader className="space-y-1">
           <p className="eyebrow mb-3">Your trading workspace</p>
-          <CardTitle role="heading" aria-level={1} className="text-2xl text-white">Create account</CardTitle>
+          <CardTitle role="heading" aria-level={1} className="text-2xl text-foreground">Create account</CardTitle>
           <CardDescription className="text-zinc-400">
             Start tracking your trading performance
           </CardDescription>
@@ -60,7 +60,7 @@ export function RegisterForm() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div role="alert" className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+              <div role="alert" className="rounded-md bg-loss/10 border border-loss/20 px-4 py-3 text-sm text-loss">
                 {error}
               </div>
             )}
@@ -75,7 +75,7 @@ export function RegisterForm() {
                 onChange={(e) => setName(e.target.value)}
                 required
                 autoComplete="name"
-                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-blue-500"
+                className="bg-zinc-800 border-zinc-700 text-foreground placeholder:text-zinc-500 focus:border-primary"
               />
             </div>
 
@@ -89,7 +89,7 @@ export function RegisterForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-blue-500"
+                className="bg-zinc-800 border-zinc-700 text-foreground placeholder:text-zinc-500 focus:border-primary"
               />
             </div>
 
@@ -104,7 +104,7 @@ export function RegisterForm() {
                 required
                 autoComplete="new-password"
                 minLength={8}
-                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-blue-500"
+                className="bg-zinc-800 border-zinc-700 text-foreground placeholder:text-zinc-500 focus:border-primary"
               />
             </div>
           </CardContent>
@@ -113,14 +113,14 @@ export function RegisterForm() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
             >
               {isLoading ? "Creating account…" : "Create account"}
             </Button>
 
             <p className="text-sm text-zinc-400 text-center">
               Already have an account?{" "}
-              <Link href="/login" className="text-blue-400 hover:text-blue-300">
+              <Link href="/login" className="text-primary hover:text-primary">
                 Sign in
               </Link>
             </p>

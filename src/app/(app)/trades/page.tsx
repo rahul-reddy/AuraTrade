@@ -170,9 +170,9 @@ export default async function TradesPage({
   )
 
   return (
-    <div className="text-white">
+    <div className="text-foreground">
       <div className="workspace-page">
-        <PageHeader eyebrow="Workspace / Trade journal" title="Trade History" description={<>{account.name} · {totalCount.toLocaleString()} trades{closedCount !== totalCount && <span className="ml-2 text-blue-400">{totalCount - closedCount} open</span>}</>}>
+        <PageHeader eyebrow="Workspace / Trade journal" title="Trade History" description={<>{account.name} · {totalCount.toLocaleString()} trades{closedCount !== totalCount && <span className="ml-2 text-primary">{totalCount - closedCount} open</span>}</>}>
           <Link href="/upload" className="action-secondary">Import statement<ArrowUpRight size={15} /></Link>
         </PageHeader>
 
@@ -185,7 +185,7 @@ export default async function TradesPage({
             query.set('accountId', account.id)
             if (value) query.set('status', value)
             const active = (str(params, 'status') ?? '') === value
-            return <Link key={label} href={`/trades?${query.toString()}`} aria-current={active ? 'page' : undefined} className={`border-b-2 pb-3 transition-colors ${active ? 'border-blue-400 text-blue-300' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}>{label}</Link>
+            return <Link key={label} href={`/trades?${query.toString()}`} aria-current={active ? 'page' : undefined} className={`border-b-2 pb-3 transition-colors ${active ? 'border-primary text-primary' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}>{label}</Link>
           })}
         </nav>
 
@@ -194,7 +194,7 @@ export default async function TradesPage({
           <SummaryCard
             label="Net P&L"
             value={formatCurrency(totalNetPnl)}
-            valueClass={totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}
+            valueClass={totalNetPnl >= 0 ? 'text-profit' : 'text-loss'}
           />
           <SummaryCard
             label="Win Rate"
@@ -206,21 +206,21 @@ export default async function TradesPage({
             value={profitFactor != null ? profitFactor.toFixed(2) : closedCount > 0 ? '∞' : '—'}
             valueClass={
               profitFactor != null && profitFactor >= 1.5
-                ? 'text-green-400'
+                ? 'text-profit'
                 : profitFactor != null && profitFactor < 1
-                ? 'text-red-400'
+                ? 'text-loss'
                 : undefined
             }
           />
           <SummaryCard
             label="Avg Win"
             value={avgWin > 0 ? formatCurrency(avgWin) : '—'}
-            valueClass="text-green-400"
+            valueClass="text-profit"
           />
           <SummaryCard
             label="Avg Loss"
             value={avgLoss > 0 ? formatCurrency(-avgLoss) : '—'}
-            valueClass="text-red-400"
+            valueClass="text-loss"
           />
           <SummaryCard
             label="Total Fees"
@@ -252,13 +252,13 @@ export default async function TradesPage({
               {hasFilters ? (
                 <Link
                   href={`/trades?accountId=${account.id}`}
-                  className="text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-primary hover:text-primary transition-colors"
                 >
                   Clear all filters
                 </Link>
               ) : (
                 <>
-                  <Link href="/upload" className="text-blue-400 hover:text-blue-300 transition-colors">
+                  <Link href="/upload" className="text-primary hover:text-primary transition-colors">
                     Upload a CSV
                   </Link>{' '}
                   to populate your trade history.

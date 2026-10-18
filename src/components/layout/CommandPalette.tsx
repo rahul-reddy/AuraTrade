@@ -72,15 +72,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
         <CommandGroup heading="Filter Trades">
           <CommandItem onSelect={() => navigate('/trades?status=closed&direction=LONG')}>
-            <TrendingUp className="mr-2 h-4 w-4 text-green-500" />
+            <TrendingUp className="mr-2 h-4 w-4 text-profit" />
             View Long Trades
           </CommandItem>
           <CommandItem onSelect={() => navigate('/trades?status=closed&direction=SHORT')}>
-            <TrendingDown className="mr-2 h-4 w-4 text-red-400" />
+            <TrendingDown className="mr-2 h-4 w-4 text-loss" />
             View Short Trades
           </CommandItem>
           <CommandItem onSelect={() => navigate('/trades?status=open')}>
-            <LineChart className="mr-2 h-4 w-4 text-blue-400" />
+            <LineChart className="mr-2 h-4 w-4 text-primary" />
             View Open Positions
           </CommandItem>
         </CommandGroup>

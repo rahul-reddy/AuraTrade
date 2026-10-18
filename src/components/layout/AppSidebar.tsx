@@ -158,7 +158,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
           const itemClass = cn(
             'group flex items-center gap-3 rounded-lg px-3 py-3 text-[13px] transition-colors',
             isActive
-              ? 'bg-blue-500/10 text-blue-300 ring-1 ring-inset ring-blue-400/15'
+              ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
               : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100',
             item.disabled && 'opacity-40',
             collapsed && 'justify-center px-0',
@@ -203,7 +203,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
             onClick={() => signOut({ callbackUrl: '/login' })}
             aria-label="Sign out"
             title="Sign out"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-red-400"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-loss"
           >
             <LogOut className="h-4 w-4" />
           </button>
@@ -218,7 +218,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
               onClick={() => signOut({ callbackUrl: '/login' })}
               aria-label="Sign out"
               title="Sign out"
-              className="sidebar-signout flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-red-400"
+              className="sidebar-signout flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-loss"
             >
               <LogOut className="h-3.5 w-3.5" />
               <span className="sidebar-expanded">Sign out</span>

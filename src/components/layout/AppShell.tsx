@@ -63,7 +63,7 @@ class ShellErrorBoundary extends Component<
             <button
               type="button"
               onClick={() => this.setState({ hasError: false, message: '' })}
-              className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+              className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Try again
             </button>
@@ -180,7 +180,7 @@ export default function AppShell({ children, userEmail, accountName }: AppShellP
   useKeyboardShortcuts(openPalette)
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-zinc-950 text-white">
+    <div className="flex h-dvh w-full overflow-hidden bg-zinc-950 text-foreground">
       <a className="skip-link" href="#main-content">Skip to content</a>
       <AppSidebar userEmail={userEmail} accountName={accountName} />
 
