@@ -128,14 +128,14 @@ function DropZone({ onFile }: { onFile: (file: File) => void }) {
         flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed
         cursor-pointer transition-all duration-150 min-h-[300px] p-8 sm:p-12 w-full
         ${active
-          ? 'border-blue-500 bg-blue-500/5'
+          ? 'border-primary bg-primary/5'
           : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500'
         }
       `}
     >
       <input {...getInputProps()} />
-      <div className={`p-4 rounded-full ${active ? 'bg-blue-500/10' : 'bg-zinc-800'}`}>
-        <Upload className={`w-8 h-8 ${active ? 'text-blue-400' : 'text-zinc-500'}`} />
+      <div className={`p-4 rounded-full ${active ? 'bg-primary/10' : 'bg-zinc-800'}`}>
+        <Upload className={`w-8 h-8 ${active ? 'text-primary' : 'text-zinc-500'}`} />
       </div>
       <div className="text-center">
         <p className="text-zinc-200 font-medium">
@@ -198,19 +198,19 @@ function PreviewCard({
         {summary.blockedTradeRows > 0 && (
           <StatRow
             label="Blocked trade rows"
-            value={<span className="font-mono text-yellow-400">{summary.blockedTradeRows.toLocaleString()}</span>}
+            value={<span className="font-mono text-warning">{summary.blockedTradeRows.toLocaleString()}</span>}
           />
         )}
         {summary.optionRows > 0 && (
           <StatRow
             label="Option rows"
-            value={<span className="font-mono text-blue-400">{summary.optionRows.toLocaleString()}</span>}
+            value={<span className="font-mono text-primary">{summary.optionRows.toLocaleString()}</span>}
           />
         )}
         {summary.positionAffectingNonTradeRows > 0 && (
           <StatRow
             label="Position-affecting non-trade rows"
-            value={<span className="font-mono text-yellow-400">{summary.positionAffectingNonTradeRows.toLocaleString()}</span>}
+            value={<span className="font-mono text-warning">{summary.positionAffectingNonTradeRows.toLocaleString()}</span>}
           />
         )}
         <StatRow label="Rows skipped" value={<span className="font-mono text-zinc-500">{summary.skippedRows.toLocaleString()}</span>} />
@@ -224,7 +224,7 @@ function PreviewCard({
           <StatRow
             label="Open positions"
             value={
-              <Badge variant="outline" className="border-yellow-600 text-yellow-400 font-mono text-xs">
+              <Badge variant="outline" className="border-warning text-warning font-mono text-xs">
                 {summary.openPositions}
               </Badge>
             }
@@ -234,7 +234,7 @@ function PreviewCard({
           <StatRow
             label="Est. net P&L"
             value={
-              <span className={`font-mono font-semibold flex items-center gap-1 ${pnlPositive ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`font-mono font-semibold flex items-center gap-1 ${pnlPositive ? 'text-profit' : 'text-loss'}`}>
                 {pnlPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                 {pnlPositive ? '+' : ''}${summary.estimatedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
@@ -265,7 +265,7 @@ function PreviewCard({
           <>
             <Separator className="bg-zinc-800 my-3" />
             <div className="py-2 space-y-2">
-              <div className="flex items-center gap-2 text-red-400">
+              <div className="flex items-center gap-2 text-loss">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span className="text-sm font-medium">Import blocked for safety</span>
               </div>
@@ -283,7 +283,7 @@ function PreviewCard({
           <>
             <Separator className="bg-zinc-800 my-3" />
             <div className="py-2 space-y-2">
-              <div className="flex items-center gap-2 text-yellow-400">
+              <div className="flex items-center gap-2 text-warning">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span className="text-sm font-medium">Grouper warnings ({summary.warnings.length})</span>
               </div>
@@ -318,9 +318,9 @@ function PreviewCard({
                   <div className="text-right">
                     <p className="font-mono text-sm text-zinc-100">{action.count}</p>
                     {action.blockedCount > 0 ? (
-                      <p className="text-[11px] text-yellow-400">{action.blockedCount} blocked</p>
+                      <p className="text-[11px] text-warning">{action.blockedCount} blocked</p>
                     ) : (
-                      <p className="text-[11px] text-green-400">{action.importableCount} importable</p>
+                      <p className="text-[11px] text-profit">{action.importableCount} importable</p>
                     )}
                   </div>
                 </div>
@@ -360,11 +360,11 @@ function PreviewCard({
           <Button
             onClick={onConfirm}
             disabled={isConfirming || !summary.canImport}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white"
+            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             {isConfirming ? (
               <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                 Importing…
               </span>
             ) : !summary.canImport ? (
@@ -386,12 +386,12 @@ function EnrichmentBanner({ enrichment }: { enrichment: EnrichmentState }) {
 
   if (enrichment.status === 'done') {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-3 text-sm">
-        <Cpu className="w-4 h-4 text-blue-400 shrink-0" />
-        <span className="text-blue-300">
+      <div className="flex items-center gap-2.5 rounded-lg bg-primary/10 border border-primary/20 px-4 py-3 text-sm">
+        <Cpu className="w-4 h-4 text-primary shrink-0" />
+        <span className="text-primary">
           Context enriched — {enrichment.tradesEnriched} trades updated with technical indicators.
           {enrichment.errorCount > 0 && (
-            <span className="text-yellow-400 ml-1">({enrichment.errorCount} symbols skipped)</span>
+            <span className="text-warning ml-1">({enrichment.errorCount} symbols skipped)</span>
           )}
         </span>
       </div>
@@ -400,9 +400,9 @@ function EnrichmentBanner({ enrichment }: { enrichment: EnrichmentState }) {
 
   if (enrichment.status === 'error') {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-sm">
-        <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
-        <span className="text-yellow-300">
+      <div className="flex items-center gap-2.5 rounded-lg bg-warning/10 border border-warning/20 px-4 py-3 text-sm">
+        <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+        <span className="text-warning">
           {enrichment.message ?? 'Context enrichment failed. Trades are still imported.'}
         </span>
       </div>
@@ -416,7 +416,7 @@ function EnrichmentBanner({ enrichment }: { enrichment: EnrichmentState }) {
   return (
     <div className="w-full space-y-2">
       <div className="flex items-center gap-2.5 text-sm text-zinc-400">
-        <span className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin shrink-0" />
+        <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin shrink-0" />
         <span>
           Enriching trade context…{' '}
           {enrichment.total > 0
@@ -427,7 +427,7 @@ function EnrichmentBanner({ enrichment }: { enrichment: EnrichmentState }) {
       {enrichment.total > 0 && (
         <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
           <div
-            className="h-full bg-blue-500 rounded-full transition-all duration-300"
+            className="h-full bg-primary rounded-full transition-all duration-300"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -455,8 +455,8 @@ function SuccessCard({
     <Card className="bg-zinc-900 border-zinc-800 w-full max-w-xl">
       <CardContent className="pt-8 pb-6">
         <div className="flex flex-col items-center text-center gap-4">
-          <div className="p-3 rounded-full bg-green-500/10">
-            <CheckCircle className="w-8 h-8 text-green-400" />
+          <div className="p-3 rounded-full bg-profit/10">
+            <CheckCircle className="w-8 h-8 text-profit" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-zinc-100">Import complete</h2>
@@ -466,12 +466,12 @@ function SuccessCard({
             <StatRow label="New executions added" value={<span className="font-mono">{newExecCount}</span>} />
             <StatRow label="Round-trip trades" value={<span className="font-mono">{totalTrades}</span>} />
             {openPositions > 0 && (
-              <StatRow label="Open positions" value={<span className="font-mono text-yellow-400">{openPositions}</span>} />
+              <StatRow label="Open positions" value={<span className="font-mono text-warning">{openPositions}</span>} />
             )}
             <StatRow
               label="Est. net P&L"
               value={
-                <span className={`font-mono font-semibold ${estimatedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`font-mono font-semibold ${estimatedPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
                   {estimatedPnl >= 0 ? '+' : ''}${estimatedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               }
@@ -661,13 +661,13 @@ export default function UploadPage() {
   const reset = useCallback(() => setPhase({ kind: 'idle' }), [])
 
   return (
-    <div className="text-white">
+    <div className="text-foreground">
       <div className="workspace-page">
         <PageHeader eyebrow="Workspace / Import center" title="Import Trades" description="Bring your trading history into focus. Review every statement before it becomes part of your account." />
         <ol aria-label="Import progress" className="mb-8 flex flex-wrap gap-6 border-b border-zinc-800 pb-5 text-xs sm:gap-10">
           {['Choose statement', 'Review preview', 'Explore trades'].map((label, index) => {
             const step = phase.kind === 'success' ? 2 : phase.kind === 'preview' || phase.kind === 'confirming' ? 1 : 0
-            return <li key={label} aria-current={step === index ? 'step' : undefined} className={`flex items-center gap-2.5 ${step === index ? 'text-blue-300' : 'text-zinc-500'}`}><span className={`flex h-6 w-6 items-center justify-center rounded-full border font-mono text-[10px] ${step === index ? 'border-blue-500/50 bg-blue-500/10' : 'border-zinc-700'}`}>{index + 1}</span>{label}</li>
+            return <li key={label} aria-current={step === index ? 'step' : undefined} className={`flex items-center gap-2.5 ${step === index ? 'text-primary' : 'text-zinc-500'}`}><span className={`flex h-6 w-6 items-center justify-center rounded-full border font-mono text-[10px] ${step === index ? 'border-primary/50 bg-primary/10' : 'border-zinc-700'}`}>{index + 1}</span>{label}</li>
           })}
         </ol>
         <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -709,11 +709,11 @@ export default function UploadPage() {
         )}
 
         {phase.kind === 'error' && (
-          <Card className="bg-zinc-900 border-red-900 w-full max-w-xl">
+          <Card className="bg-zinc-900 border-loss w-full max-w-xl">
             <CardContent className="pt-6 pb-6">
               <div className="flex flex-col items-center text-center gap-4">
-                <div className="p-3 rounded-full bg-red-500/10">
-                  <AlertTriangle className="w-7 h-7 text-red-400" />
+                <div className="p-3 rounded-full bg-loss/10">
+                  <AlertTriangle className="w-7 h-7 text-loss" />
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-zinc-100">Something went wrong</h2>
@@ -732,14 +732,14 @@ export default function UploadPage() {
         )}
         </div>
         <aside className="surface p-6">
-          <div className="mb-5 flex items-center gap-2 text-sm font-medium"><FileText size={16} className="text-blue-400" />Prepare your statement</div>
+          <div className="mb-5 flex items-center gap-2 text-sm font-medium"><FileText size={16} className="text-primary" />Prepare your statement</div>
           <p className="eyebrow mb-2">Recommended / thinkorswim</p>
-          <p className="text-sm leading-7 text-zinc-300">Open <strong className="font-medium text-white">Monitor → Account Statement</strong>. Set your date range, then export the statement as a CSV.</p>
+          <p className="text-sm leading-7 text-zinc-300">Open <strong className="font-medium text-foreground">Monitor → Account Statement</strong>. Set your date range, then export the statement as a CSV.</p>
           <p className="mt-3 text-xs leading-6 text-zinc-400">Includes execution times for more precise trade history. Keep the Account Trade History and Cash Balance sections for fills and fees.</p>
           <div className="my-5 border-t border-zinc-800" />
           <p className="eyebrow mb-2">Also supported / Schwab</p>
           <p className="text-xs leading-6 text-zinc-400">Export your Transaction History as CSV. This format includes dates without execution times.</p>
-          <div className="mt-6 rounded-lg border border-blue-500/15 bg-blue-500/5 p-4 text-xs leading-6 text-zinc-300"><CheckCircle size={15} className="mb-2 text-blue-400" />You’ll see a preview of trades, fees, and any warnings before you confirm.</div>
+          <div className="mt-6 rounded-lg border border-primary/15 bg-primary/5 p-4 text-xs leading-6 text-zinc-300"><CheckCircle size={15} className="mb-2 text-primary" />You’ll see a preview of trades, fees, and any warnings before you confirm.</div>
         </aside>
         </div>
       </div>

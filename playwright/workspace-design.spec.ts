@@ -53,7 +53,7 @@ test('root sign-in reaches the dashboard and the redesigned workspace supports r
   await expect(page.getByRole('heading', { name: 'Equity Curve', exact: true })).toBeVisible()
   await page.getByText('More performance statistics · best/worst day, streak, drawdown', { exact: true }).click()
   // With the synthetic all-winning history, even the worst day is profitable.
-  await expect(page.getByRole('link', { name: /^Worst Day/ }).locator('p.font-mono')).toHaveClass(/text-green-400/)
+  await expect(page.getByRole('link', { name: /^Worst Day/ }).locator('p.font-mono')).toHaveClass(/text-profit/)
   await page.getByText('More performance statistics · best/worst day, streak, drawdown', { exact: true }).click()
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('dashboard-desktop.png') })
   await page.getByRole('link', { name: 'Trading calendar', exact: true }).click()

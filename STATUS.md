@@ -2,7 +2,36 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): calendar/navigation follow-up deployed
+## Current handoff (2026-10-18): Espresso & Acid light/dark themes
+
+- **Implemented:** the owner's chosen Espresso & Acid palette across auth, workspace,
+  tables, import previews, integrity screens, error/loading states, dialogs, toasts,
+  dashboard SVG charts and the trading calendar. Dark uses espresso/citron; light
+  uses parchment/cream/olive. Green/rose financial meanings remain consistent.
+- **Mode control:** sun/moon buttons on auth and workspace screens persist the
+  browser preference, sync tabs, and work when storage is blocked. Dark is the
+  default. A head bootstrap applies the saved theme before hydration. Native date
+  controls follow the selected color scheme. Canvas charts resolve CSS tokens and
+  recolor in place without replacing the canvas or requesting market data.
+- **Validation:** the application source in this commit passed local lint (0 errors,
+  two existing unused-variable warnings), typecheck, production build, **298 unit
+  tests** and **19/19 Playwright browser tests** against the production build on
+  isolated `auratrade_ui_test`. The final browser run includes the last spinner and
+  table-placeholder contrast refinements. The two new browser scenarios cover both
+  modes, auth/navigation/reload persistence, real cross-tab storage events, bootstrap
+  without client bundles, blocked storage, mounted canvas recoloring, preserved
+  selection, dialogs and mobile controls. No page errors in either theme scenario.
+- **Visual evidence:** inspected desktop dashboard/login/chart and mobile chart
+  screenshots. Fourteen synthetic screenshots retained in ignored
+  `.local/ui-preview/espresso-acid/`. Calculated key text/semantic/chart colors
+  against card surfaces and action ink against button fills: all exceed 4.5:1 in
+  both modes. This is a check of these pairings, not a full accessibility audit.
+- **Scope / next action:** no financial formula, parser, ledger, API/auth, schema or
+  dependency changes. Startup remains README.md. Open the PR, obtain green CI and
+  exact-head independent review, then use the guarded merge script. Hosted release
+  remains `f73e356` until a deployment is requested.
+
+## Previous handoff (2026-10-18): calendar/navigation follow-up deployed
 
 - **Live release:** `f73e356fc97b8482f4ef0fd253c13d354b736804` at
   https://auratrades.quest. PR #25 was squash-merged through the guarded merge

@@ -12,12 +12,12 @@ interface TradesErrorProps {
 
 export default function TradesError({ error, reset }: TradesErrorProps) {
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-zinc-950 text-foreground flex items-center justify-center px-4">
       <Card className="w-full max-w-lg bg-zinc-900 border-zinc-800">
         <CardContent className="pt-8 pb-7">
           <div className="flex flex-col items-center text-center gap-4">
-            <div className="p-3 rounded-full bg-red-500/10">
-              <AlertTriangle className="w-7 h-7 text-red-400" />
+            <div className="p-3 rounded-full bg-loss/10">
+              <AlertTriangle className="w-7 h-7 text-loss" />
             </div>
 
             <div className="space-y-2">
@@ -34,13 +34,13 @@ export default function TradesError({ error, reset }: TradesErrorProps) {
             </div>
 
             <div className="flex items-center gap-3 pt-2">
-              <Button onClick={reset} className="bg-blue-600 hover:bg-blue-500 text-white">
+              <Button onClick={reset} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 Retry
               </Button>
               <Button
                 asChild
                 variant="outline"
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-foreground"
               >
                 <Link href="/dashboard">Back to dashboard</Link>
               </Button>

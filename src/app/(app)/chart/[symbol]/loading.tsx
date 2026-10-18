@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SymbolChartLoading() {
   return (
-    <div className="flex flex-col h-screen bg-zinc-950 text-white">
+    <div className="flex flex-col h-screen bg-zinc-950 text-foreground">
       {/* Header skeleton */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
         <div className="flex items-center gap-4">

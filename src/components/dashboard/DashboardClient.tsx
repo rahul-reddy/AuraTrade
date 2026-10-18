@@ -145,7 +145,7 @@ function ChartTooltip({
           <div key={`${entry.dataKey ?? entry.name ?? 'row'}-${index}`} className="flex items-center gap-2 text-xs">
             <span
               className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: entry.color ?? '#71717a' }}
+              style={{ backgroundColor: entry.color ?? 'var(--muted-foreground)' }}
             />
             <span className="text-zinc-400">{entry.name ?? entry.dataKey}</span>
             <span className="font-mono text-zinc-100">
@@ -207,17 +207,17 @@ function SummaryCard({
 }) {
   const toneClass =
     tone === 'profit'
-      ? 'text-green-400'
+      ? 'text-profit'
       : tone === 'loss'
-        ? 'text-red-400'
+        ? 'text-loss'
         : 'text-zinc-100'
 
   return (
     <Link
       href={href}
-      className={`surface metric-card group p-5 transition-colors hover:border-blue-500/50 ${primary ? 'metric-primary' : ''}`}
+      className={`surface metric-card group p-5 transition-colors hover:border-primary/50 ${primary ? 'metric-primary' : ''}`}
     >
-      <div className="flex items-center justify-between gap-2"><p className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400">{label}</p><ArrowUpRight size={14} className="text-zinc-500 transition-colors group-hover:text-blue-400" /></div>
+      <div className="flex items-center justify-between gap-2"><p className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400">{label}</p><ArrowUpRight size={14} className="text-zinc-500 transition-colors group-hover:text-primary" /></div>
       <p className={`mt-4 font-mono text-2xl font-medium tracking-tight ${toneClass}`}>{value}</p>
       {sub && <p className="mt-2 text-xs text-zinc-500 group-hover:text-zinc-400">{sub}</p>}
     </Link>
@@ -261,7 +261,7 @@ export default function DashboardClient({
 
   if (dashboardQuery.isError || !dashboardQuery.data) {
     return (
-      <div className="flex items-center justify-center p-8 py-24 text-white">
+      <div className="flex items-center justify-center p-8 py-24 text-foreground">
         <div className="max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6 text-center">
           <h1 className="text-xl font-semibold">Dashboard unavailable</h1>
           <p className="mt-2 text-sm text-zinc-400">
@@ -272,7 +272,7 @@ export default function DashboardClient({
           <button
             type="button"
             onClick={() => dashboardQuery.refetch()}
-            className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             Retry
           </button>
@@ -319,13 +319,13 @@ export default function DashboardClient({
   })
 
   return (
-    <div className="text-white">
+    <div className="text-foreground">
       <div className="workspace-page">
         <PageHeader eyebrow="Performance / Overview" title="Performance Dashboard" description={<>Welcome back, {userName?.trim().split(/\s+/)[0] || userEmail.split('@')[0]}. Here’s your trading performance at a glance.</>}>
           <Link href={baseTradesHref} className="action-secondary">Review trades<ArrowUpRight size={15} /></Link>
         </PageHeader>
         <div className="mb-7 flex flex-wrap items-center justify-between gap-4 border-y border-zinc-800 py-4">
-          <div className="flex items-center gap-3"><span className="h-1.5 w-1.5 rounded-full bg-blue-400" /><span className="text-xs font-medium text-zinc-300">{accountName}</span><span className="text-xs text-zinc-500">/ {metrics.totalTrades.toLocaleString()} closed trades</span></div>
+          <div className="flex items-center gap-3"><span className="h-1.5 w-1.5 rounded-full bg-primary" /><span className="text-xs font-medium text-zinc-300">{accountName}</span><span className="text-xs text-zinc-500">/ {metrics.totalTrades.toLocaleString()} closed trades</span></div>
           <form onSubmit={applyFilters} className="flex flex-wrap items-end gap-2">
             <label className="text-xs text-zinc-500">
               From
@@ -333,7 +333,7 @@ export default function DashboardClient({
                 type="date"
                 value={dateFromInput}
                 onChange={(event) => setDateFromInput(event.target.value)}
-                className="mt-1 block rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none transition focus:border-blue-500"
+                className="mt-1 block rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none transition focus:border-primary"
               />
             </label>
             <label className="text-xs text-zinc-500">
@@ -342,19 +342,19 @@ export default function DashboardClient({
                 type="date"
                 value={dateToInput}
                 onChange={(event) => setDateToInput(event.target.value)}
-                className="mt-1 block rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none transition focus:border-blue-500"
+                className="mt-1 block rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none transition focus:border-primary"
               />
             </label>
             <button
               type="submit"
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Apply
             </button>
             <button
               type="button"
               onClick={clearFilters}
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-foreground"
             >
               Clear
             </button>
@@ -363,20 +363,20 @@ export default function DashboardClient({
 
         {metrics.totalTrades === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-10 text-center">
-            <h2 className="text-xl font-semibold text-white">No realized trades in this window</h2>
+            <h2 className="text-xl font-semibold text-foreground">No realized trades in this window</h2>
             <p className="mt-2 text-sm text-zinc-400">
               Adjust the date filters or upload more history to populate the dashboard.
             </p>
             <div className="mt-5 flex justify-center gap-3">
               <Link
                 href="/upload"
-                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
               >
                 Upload trades
               </Link>
               <Link
                 href={buildTradesHref(accountId, { status: 'closed' })}
-                className="rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+                className="rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-foreground"
               >
                 View trade history
               </Link>
@@ -449,10 +449,10 @@ export default function DashboardClient({
 
             <nav aria-label="Dashboard sections" className="mb-5 flex flex-wrap items-center gap-5 text-xs text-zinc-400">
               <span className="inline-flex items-center gap-2 font-medium text-zinc-200"><SlidersHorizontal size={14} />Explore your performance</span>
-              <a className="hover:text-blue-300" href="#equity">Equity & sizing</a>
-              <a className="hover:text-blue-300" href="#patterns">Trading patterns</a>
-              <a className="hover:text-blue-300" href="#calendar">Trading calendar</a>
-              <a className="hover:text-blue-300" href="#position-sizing">Position analysis<ArrowRight className="ml-1 inline" size={12} /></a>
+              <a className="hover:text-primary" href="#equity">Equity & sizing</a>
+              <a className="hover:text-primary" href="#patterns">Trading patterns</a>
+              <a className="hover:text-primary" href="#calendar">Trading calendar</a>
+              <a className="hover:text-primary" href="#position-sizing">Position analysis<ArrowRight className="ml-1 inline" size={12} /></a>
             </nav>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
               <Panel
@@ -466,25 +466,25 @@ export default function DashboardClient({
                     <AreaChart data={equityCurve}>
                       <defs>
                         <linearGradient id="equityFill" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.02} />
                         </linearGradient>
                         <linearGradient id="drawdownFill" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="0%" stopColor="#ef4444" stopOpacity={0.28} />
-                          <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="var(--loss)" stopOpacity={0.28} />
+                          <stop offset="100%" stopColor="var(--loss)" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="date" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                       <YAxis
                         yAxisId="left"
-                        tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                         tickFormatter={(value: number) => formatCurrency(value)}
                       />
                       <YAxis
                         yAxisId="right"
                         orientation="right"
-                        tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                         tickFormatter={(value: number) => `${value.toFixed(0)}%`}
                       />
                       <Tooltip
@@ -499,13 +499,13 @@ export default function DashboardClient({
                         }
                       />
                       <Legend />
-                      <ReferenceLine y={0} yAxisId="left" stroke="#52525b" />
+                      <ReferenceLine y={0} yAxisId="left" stroke="var(--input)" />
                       <Area
                         type="monotone"
                         yAxisId="right"
                         dataKey="drawdownPct"
                         name="Drawdown %"
-                        stroke="#ef4444"
+                        stroke="var(--loss)"
                         fill="url(#drawdownFill)"
                       />
                       <Area
@@ -513,7 +513,7 @@ export default function DashboardClient({
                         yAxisId="left"
                         dataKey="cumulativePnl"
                         name="Cumulative P&L"
-                        stroke="#3b82f6"
+                        stroke="var(--chart-1)"
                         fill="url(#equityFill)"
                       />
                     </AreaChart>
@@ -535,8 +535,8 @@ export default function DashboardClient({
                     </p>
                   </div>
                   {[
-                    { label: 'Full Kelly', value: formatPercent(metrics.kellyFull), tone: 'text-blue-400' },
-                    { label: 'Half Kelly', value: formatPercent(metrics.kellyHalf), tone: 'text-green-400' },
+                    { label: 'Full Kelly', value: formatPercent(metrics.kellyFull), tone: 'text-primary' },
+                    { label: 'Half Kelly', value: formatPercent(metrics.kellyHalf), tone: 'text-profit' },
                     { label: 'Quarter Kelly', value: formatPercent(metrics.kellyQuarter), tone: 'text-zinc-200' },
                   ].map((row) => (
                     <div key={row.label} className="flex items-center justify-between rounded-xl border border-zinc-800 px-4 py-3">
@@ -560,9 +560,9 @@ export default function DashboardClient({
                 <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={insights.pnlDistribution}>
-                      <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="midpoint" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
-                      <YAxis tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="midpoint" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                       <Tooltip
                         content={
                           <ChartTooltip
@@ -577,12 +577,12 @@ export default function DashboardClient({
                         }
                       />
                       <Legend />
-                      <Bar dataKey="count" name="Trades" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="count" name="Trades" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
                       <Line
                         type="monotone"
                         dataKey="normalCount"
                         name="Normal curve"
-                        stroke="#f59e0b"
+                        stroke="var(--chart-4)"
                         strokeWidth={2}
                         dot={false}
                       />
@@ -599,9 +599,9 @@ export default function DashboardClient({
                 <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={insights.rollingWinRate}>
-                      <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="tradeNumber" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
-                      <YAxis tick={{ fill: '#a1a1aa', fontSize: 12 }} domain={[0, 100]} />
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="tradeNumber" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} domain={[0, 100]} />
                       <Tooltip
                         content={
                           <ChartTooltip
@@ -612,12 +612,12 @@ export default function DashboardClient({
                         }
                         labelFormatter={(label) => `Trade #${label}`}
                       />
-                      <ReferenceLine y={50} stroke="#52525b" strokeDasharray="4 4" />
+                      <ReferenceLine y={50} stroke="var(--input)" strokeDasharray="4 4" />
                       <Line
                         type="monotone"
                         dataKey="winRate"
                         name="Win rate %"
-                        stroke="#22c55e"
+                        stroke="var(--profit)"
                         strokeWidth={2.5}
                         dot={false}
                       />
@@ -634,9 +634,9 @@ export default function DashboardClient({
                 <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={insights.dayOfWeek}>
-                      <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
-                      <YAxis tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="day" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                       <Tooltip
                         content={
                           <ChartTooltip
@@ -652,7 +652,7 @@ export default function DashboardClient({
                       />
                       <Bar dataKey="pnl" name="P&L" radius={[6, 6, 0, 0]}>
                         {insights.dayOfWeek.map((entry) => (
-                          <Cell key={entry.day} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />
+                          <Cell key={entry.day} fill={entry.pnl >= 0 ? 'var(--profit)' : 'var(--loss)'} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -668,12 +668,12 @@ export default function DashboardClient({
                 <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={insights.sectorBreakdown.slice(0, 6)} layout="vertical">
-                      <CartesianGrid stroke="#27272a" strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                       <YAxis
                         type="category"
                         dataKey="sector"
-                        tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                         width={100}
                       />
                       <Tooltip
@@ -691,7 +691,7 @@ export default function DashboardClient({
                       />
                       <Bar dataKey="pnl" name="P&L" radius={[0, 6, 6, 0]}>
                         {insights.sectorBreakdown.slice(0, 6).map((entry) => (
-                          <Cell key={entry.sector} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />
+                          <Cell key={entry.sector} fill={entry.pnl >= 0 ? 'var(--profit)' : 'var(--loss)'} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -737,12 +737,12 @@ export default function DashboardClient({
                 <div className="h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart>
-                      <CartesianGrid stroke="#27272a" strokeDasharray="3 3" />
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
                       <XAxis
                         type="number"
                         dataKey="x"
                         name="Size"
-                        tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                         tickFormatter={(value: number) =>
                           insights.avgPositionSizeFraction != null ? `${value.toFixed(1)}%` : `$${Math.round(value)}`
                         }
@@ -751,7 +751,7 @@ export default function DashboardClient({
                         type="number"
                         dataKey="pnl"
                         name="P&L"
-                        tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                         tickFormatter={(value: number) => formatCurrency(value)}
                       />
                       <Tooltip
@@ -769,8 +769,8 @@ export default function DashboardClient({
                         }
                         cursor={{ strokeDasharray: '4 4' }}
                       />
-                      <ReferenceLine y={0} stroke="#52525b" />
-                      <Scatter name="Trades" data={insights.sizeScatter} fill="#3b82f6" />
+                      <ReferenceLine y={0} stroke="var(--input)" />
+                      <Scatter name="Trades" data={insights.sizeScatter} fill="var(--chart-1)" />
                     </ScatterChart>
                   </ResponsiveContainer>
                 </div>
@@ -784,19 +784,19 @@ export default function DashboardClient({
                 <div className="h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart>
-                      <CartesianGrid stroke="#27272a" strokeDasharray="3 3" />
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
                       <XAxis
                         type="number"
                         dataKey="x"
                         name="Duration"
-                        tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                         tickFormatter={(value: number) => formatDuration(value)}
                       />
                       <YAxis
                         type="number"
                         dataKey="pnl"
                         name="P&L"
-                        tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                         tickFormatter={(value: number) => formatCurrency(value)}
                       />
                       <Tooltip
@@ -811,8 +811,8 @@ export default function DashboardClient({
                         }
                         cursor={{ strokeDasharray: '4 4' }}
                       />
-                      <ReferenceLine y={0} stroke="#52525b" />
-                      <Scatter name="Trades" data={insights.durationScatter} fill="#22c55e" />
+                      <ReferenceLine y={0} stroke="var(--input)" />
+                      <Scatter name="Trades" data={insights.durationScatter} fill="var(--profit)" />
                     </ScatterChart>
                   </ResponsiveContainer>
                 </div>

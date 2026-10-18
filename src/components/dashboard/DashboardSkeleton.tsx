@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export default function DashboardSkeleton() {
   return (
-    <div className="text-white">
+    <div className="text-foreground">
       <div className="workspace-page">
         <div className="mb-6">
           <Skeleton className="h-8 w-56 mb-2 bg-zinc-800" />

@@ -39,12 +39,12 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
 
   if (!account) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-950 text-foreground flex items-center justify-center">
         <div className="text-center">
           <p className="text-zinc-400 mb-3">
             {requestedAccountId ? "Trading account not found." : "No trading account found."}
           </p>
-          <Link href="/upload" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
+          <Link href="/upload" className="text-primary hover:text-primary text-sm transition-colors">
             Upload a CSV to get started →
           </Link>
         </div>

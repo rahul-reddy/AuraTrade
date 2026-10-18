@@ -45,16 +45,16 @@ export default function TradingHeatmap({ months }: { months: HeatmapMonth[] }) {
           <section key={month.monthKey} aria-label={month.monthLabel} data-testid="heatmap-month" data-month={month.monthKey}>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm text-zinc-300">{month.monthLabel}</h3>
-              <p className={`font-mono text-xs ${month.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(month.totalPnl)}</p>
+              <p className={`font-mono text-xs ${month.totalPnl >= 0 ? 'text-profit' : 'text-loss'}`}>{formatCurrency(month.totalPnl)}</p>
             </div>
             <div className="grid grid-cols-7 gap-2">
               {month.days.map(day => {
-                const backgroundColor = day.pnl > 0 ? `rgba(34, 197, 94, ${0.12 + day.intensity * 0.55})`
-                  : day.pnl < 0 ? `rgba(239, 68, 68, ${0.12 + day.intensity * 0.55})` : 'rgba(63, 63, 70, 0.45)'
+                const backgroundColor = day.pnl > 0 ? `color-mix(in srgb, var(--profit) ${8 + day.intensity * 20}%, var(--card))`
+                  : day.pnl < 0 ? `color-mix(in srgb, var(--loss) ${8 + day.intensity * 20}%, var(--card))` : 'var(--muted)'
                 return (
-                  <div key={day.date} className="rounded-xl border border-zinc-800 p-2 text-center" style={{ backgroundColor }} title={`${day.date}: ${formatCurrency(day.pnl)} (${day.tradeCount} trades)`}>
+                  <div key={day.date} className="rounded-xl border border-zinc-800 p-2 text-center" data-pnl-tone={day.pnl > 0 ? 'profit' : day.pnl < 0 ? 'loss' : 'neutral'} style={{ backgroundColor }} title={`${day.date}: ${formatCurrency(day.pnl)} (${day.tradeCount} trades)`}>
                     <p className="font-mono text-xs text-zinc-200">{day.day}</p>
-                    <p className="mt-1 text-[10px] text-zinc-400">{formatCurrency(day.pnl)}</p>
+                    <p className="mt-1 text-[10px] text-foreground">{formatCurrency(day.pnl)}</p>
                   </div>
                 )
               })}

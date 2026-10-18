@@ -21,6 +21,13 @@ Open `http://localhost:3000`. The root URL leads to the dashboard after sign-in.
 Registration is available locally by default; `AURATRADE_REGISTRATION=closed`
 disables it. The hosted deployment always closes public registration.
 
+## Appearance
+
+Espresso & Acid supports light and dark mode. Use the sun/moon button on the
+sign-in screen or workspace toolbar; the choice persists in this browser and syncs
+across tabs. Dark is the default. Light mode uses parchment, cream and olive; dark
+mode uses espresso and citron. Charts and financial colors adapt with the UI.
+
 ## Trade-review charts
 
 Chart pages default to one year of daily candles, with trade annotations, EMA 8/21,
