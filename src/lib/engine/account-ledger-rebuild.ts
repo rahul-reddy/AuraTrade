@@ -549,6 +549,7 @@ export interface TradeAnnotation {
   tags: string[]
   notes: string | null
   notesUpdatedAt: Date | null
+  journalId?: string | null
 }
 
 export interface RebuiltTradeIdentity {
@@ -629,7 +630,7 @@ export function matchAnnotations(
 
   const annotated = new Map<number, TradeAnnotation>()
   for (const [index, trade] of pairs) {
-    if (trade.tags.length > 0 || trade.notes != null) annotated.set(index, trade)
+    if (trade.tags.length > 0 || trade.notes != null || trade.journalId != null) annotated.set(index, trade)
   }
   return annotated
 }
@@ -678,6 +679,7 @@ export async function rebuildLedgerTradesForAccount(
       tags: true,
       notes: true,
       notesUpdatedAt: true,
+      journalId: true,
       brokerStatementImportId: true,
     },
   })
@@ -705,6 +707,7 @@ export async function rebuildLedgerTradesForAccount(
       tags: trade.tags,
       notes: trade.notes,
       notesUpdatedAt: trade.notesUpdatedAt,
+      journalId: trade.journalId,
     })),
     ledger.positions.map((position) => ({
       sourceKey: sourceKeyOf(position),
@@ -740,7 +743,7 @@ export async function rebuildLedgerTradesForAccount(
       id: tradeId,
       sourceKey: sourceKeyOf(position),
       ...(annotation
-        ? { tags: annotation.tags, notes: annotation.notes, notesUpdatedAt: annotation.notesUpdatedAt }
+        ? { tags: annotation.tags, notes: annotation.notes, notesUpdatedAt: annotation.notesUpdatedAt, journalId: annotation.journalId }
         : {}),
     })
     position.fills.forEach((fill, seq) => {

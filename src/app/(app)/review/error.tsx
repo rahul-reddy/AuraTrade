@@ -1,0 +1,2 @@
+'use client'
+export default function Error({ reset }: { reset: () => void }) { return <div className="workspace-page"><div role="alert" className="surface p-6"><h1 className="text-xl font-medium">Daily review is unavailable</h1><p className="mt-2 text-sm text-muted-foreground">Your saved journals are retained. Please try loading the workspace again.</p><button type="button" className="action-primary mt-4" onClick={reset}>Retry daily review</button></div></div> }

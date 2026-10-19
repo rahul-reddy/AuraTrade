@@ -6,6 +6,7 @@ import { signOut } from 'next-auth/react'
 import { useSyncExternalStore } from 'react'
 import {
   LayoutDashboard,
+  NotebookPen,
   LineChart,
   Upload,
   Settings,
@@ -46,6 +47,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: LineChart,
     hint: 'g t',
   },
+  { label: 'Daily Review', href: '/review', icon: NotebookPen },
+  { label: 'Edge Analysis', href: '/insights', icon: LineChart },
+  { label: 'Playbooks', href: '/playbooks', icon: NotebookPen },
+  { label: 'Weekly Review', href: '/weekly-review', icon: NotebookPen },
+  { label: 'Health', href: '/settings/health', icon: Settings },
   {
     label: 'Upload',
     href: '/upload',
@@ -148,12 +154,12 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
       {!collapsed && <p className="sidebar-expanded eyebrow px-6 pb-3 pt-6">Workspace</p>}
 
       {/* Nav */}
-      <nav className="flex flex-1 flex-col gap-1.5 px-3 py-2">
+      <nav className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
           // Use exact match for root-like paths, prefix+slash for nested ones
           const isActive =
-            pathname === item.href || pathname.startsWith(item.href + '/') || (item.label === 'Settings' && pathname.startsWith('/settings')) || (item.label === 'Trades' && pathname.startsWith('/chart/'))
+            pathname === item.href || pathname.startsWith(item.href + '/') || (item.label === 'Settings' && pathname.startsWith('/settings') && !pathname.startsWith('/settings/health')) || (item.label === 'Trades' && pathname.startsWith('/chart/'))
 
           const itemClass = cn(
             'group flex items-center gap-3 rounded-lg px-3 py-3 text-[13px] transition-colors',

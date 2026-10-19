@@ -6,6 +6,25 @@ next?
 
 ## Visual system
 
+The workspace now connects daily review, chart-side journals, personal playbooks,
+edge analysis, weekly experiments and operational health. Journal writing uses
+explicit save actions and version conflicts retain the unsaved draft. Screenshots
+are authenticated PNG/JPEG/WebP attachments (3 MB each, five per journal, 100 MB
+per account). Rebuilds retain journals independently from derived trade IDs.
+
+Personal setup labels and plan adherence describe the trader's process. Inferred
+setups and classifier scores describe the rule-based engine. The UI keeps these
+distinct; a profitable result does not automatically mean a good decision.
+
+Edge analysis exposes sample size and uncertainty before any inference. Each
+group expands to the actual trades. A weekly review ends in one measurable
+behavior experiment and provides a field for the subsequent observation.
+
+Saved filter views and chart displays persist in browser storage and synchronize
+tabs. Blocked storage leaves preferences usable in the current document. The eye
+control masks account amounts for presentation; prices, journals and images remain
+visible. The head bootstrap masks server-rendered amounts before hydration.
+
 - **Espresso & Acid** (owner choice, 2026-10-18): warm surfaces, citron branding,
   olive/citron actions and mineral/glacier blue chart accents. Green/rose retain
   their financial meaning in both modes.

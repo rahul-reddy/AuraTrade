@@ -139,6 +139,8 @@ export default async function SymbolChartPage({ params, searchParams }: ChartPag
       totalNetPnl={totalNetPnl}
       winRate={winRate}
       openCount={openCount}
+      initialJournal={getParam(sp, "journal") === "1"}
+      reviewDate={/^\d{4}-\d{2}-\d{2}$/.test(getParam(sp, "reviewDate") ?? "") ? getParam(sp, "reviewDate") : undefined}
     />
   );
 }

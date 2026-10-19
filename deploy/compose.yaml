@@ -47,6 +47,9 @@ services:
       AURATRADE_FINVIZ_TOKEN: ${AURATRADE_FINVIZ_TOKEN:-}
       # Fixed here, not read from .env: the hosted server never has public sign-up.
       AURATRADE_REGISTRATION: closed
+      AURATRADE_HEALTH_FILE: /app/operational-health/status.json
+    volumes:
+      - ${HOME}/auratrade/health:/app/operational-health:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/login"]
       interval: 10s
