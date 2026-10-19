@@ -235,7 +235,44 @@ servers' ports and automatic snapshots were unchanged. The budget has no cost fi
 so it tracks the whole account (both servers, ≈ $26–28) until it is filtered to
 `project=auratrade`. The optional TenFold deny (`deny-auratrade`) is not attached.
 
-## Container image on GHCR
+## Operational health
+
+`/settings/health` is authenticated and shows import alerts for the selected owned
+account, daily-cache retrieval age for its symbols, and host backup/restore
+evidence. Retrieval age is not a live-price guarantee. Failed uploads in the last
+7 days and processing jobs older than 30 minutes are flagged. Alerts are in-app;
+external notifications have not been configured.
+
+Deploy copies `backup.sh`, `restore-check.sh` and `health-status.py` to the stable
+`~/auratrade/bin/` directory. Health records contain only state and timestamps in
+`~/auratrade/health/status.json`; the web container mounts that directory read-only.
+The existing daily backup schedule is retained. Deployment manages one additional
+cron line, `# auratrade-restore-check`, at 03:45 Sunday in the server's timezone.
+The job uses `flock` to prevent concurrent restore checks. Server prerequisites:
+Python 3, `flock`, `crontab` and Docker (present on the hosted Ubuntu server).
+
+Run a verification manually after deployment:
+
+```sh
+~/auratrade/bin/restore-check.sh
+cat ~/auratrade/health/status.json
+```
+
+The script selects the newest finalized dump, creates a database named
+`auratrade_restore_check_<UTC timestamp>_<pid>`, restores with `--exit-on-error`,
+queries the migration/trades/users tables, and drops only the database it
+successfully created. A failed creation never triggers a drop. The live database
+is never a restore target. A restore or cleanup failure records failed evidence.
+This validates restorability and queryability, not every business invariant or
+off-host disaster recovery. Restore checks use server disk/CPU temporarily.
+
+Backup failures now exit nonzero, including a stopped database, and remove partial
+dumps. Atomic, locked evidence updates preserve the last success across failures.
+No evidence or corrupt JSON is unknown, never healthy. A backup older than 36 hours
+or restore verification older than 10 days needs attention. Inspect
+`~/auratrade/restore-check.log` and the existing backup job log when a job fails.
+
+## Container image on GHCR (delivery)
 
 Separately, every push to `main` that passes CI publishes
 `ghcr.io/rahul-reddy/auratrade-web:<full sha>` (`.github/workflows/delivery.yml`). The

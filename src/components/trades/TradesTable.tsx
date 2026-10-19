@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { PrivateAmount } from '@/components/providers/AmountPrivacy'
 import type { Prisma } from '@/generated/prisma'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -246,7 +247,7 @@ export function TradesTable({
                           : 'text-zinc-500'
                       }
                     >
-                      {formatCurrency(pnl)}
+                      <PrivateAmount>{formatCurrency(pnl)}</PrivateAmount>
                     </span>
                   </TableCell>
 

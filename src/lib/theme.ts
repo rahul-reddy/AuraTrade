@@ -8,6 +8,7 @@ export const themeBootstrap = `(() => {
   try { if (localStorage.getItem('${THEME_STORAGE_KEY}') === 'light') theme = 'light'; } catch {}
   document.documentElement.dataset.theme = theme;
   document.documentElement.classList.toggle('dark', theme === 'dark');
+  try { document.documentElement.dataset.privateAmounts = localStorage.getItem('auratrade-hide-amounts') === 'true' ? 'hidden' : 'visible'; } catch {}
 })();`
 
 /** Canvas cannot resolve CSS variables itself. Read the same tokens as the DOM. */

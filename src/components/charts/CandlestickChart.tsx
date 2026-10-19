@@ -6,6 +6,7 @@ import { Focus, Maximize2, RefreshCw, Settings2 } from 'lucide-react'
 import type { MarketDataCandle, MarketDataTimeframe } from '@/lib/market-data/yahoo-client'
 import { buildTradeMarkers, ema, sma, rsi, normalizeCandles, yearRange, tradeYearRange, focusRange, fillTradingDay, DAY_MS, type ChartRange, type ChartTrade } from '@/lib/charts/chart-model'
 import { useTheme } from '@/components/providers/useTheme'
+import { useChartSetting } from '@/components/providers/useBrowserSetting'
 import { readChartColors } from '@/lib/theme'
 import { formatPrice, formatTradingDay } from '@/lib/format'
 export type { ChartTrade, ChartFill } from '@/lib/charts/chart-model'
@@ -51,11 +52,11 @@ export default function CandlestickChart(props: Props) {
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<MarketDataCandle | null>(null)
   const [rangeLabel, setRangeLabel] = useState('1Y')
-  const [showVolume, setShowVolume] = useState(true)
-  const [showRsi, setShowRsi] = useState(true)
-  const [showAverages, setShowAverages] = useState(true)
-  const [showTrades, setShowTrades] = useState(true)
-  const [showLevels, setShowLevels] = useState(false)
+  const [showVolume, setShowVolume] = useChartSetting('volume', true)
+  const [showRsi, setShowRsi] = useChartSetting('rsi', true)
+  const [showAverages, setShowAverages] = useChartSetting('averages', true)
+  const [showTrades, setShowTrades] = useChartSetting('trades', true)
+  const [showLevels, setShowLevels] = useChartSetting('levels', false)
   const [expanded, setExpanded] = useState(false)
   const selected = trades.find(t => t.id === focusTradeId)
   useEffect(() => {

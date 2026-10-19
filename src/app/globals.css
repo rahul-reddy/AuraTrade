@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Pre-hydration masking for server-rendered account amounts. */
+html[data-private-amounts="hidden"] [data-private-amount="true"] {
+  font-size: 0;
+}
+html[data-private-amounts="hidden"] [data-private-amount="true"]::after {
+  content: "••••";
+  font-size: 0.875rem;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Espresso & Acid: role-based light/dark colors. Dark is the initial default. */
@@ -202,3 +211,10 @@ input[type="date"] { min-width: 0; }
 .chart-terminal b { font-weight: 500; }
 .chart-terminal summary::-webkit-details-marker { display: none; }
 .chart-terminal { background: var(--background); }
+
+/* Journal controls share the palette and keep writing readable in either mode. */
+.journal-label { display: block; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.journal-field { display: block; width: 100%; min-width: 0; border: 1px solid var(--input); border-radius: 7px; background: var(--background); padding: 9px 10px; font-size: 13px; line-height: 1.5; color: var(--foreground); }
+.journal-field::placeholder { color: var(--muted-foreground); opacity: .8; }
+textarea.journal-field { resize: vertical; }
+.journal-field:focus { border-color: var(--primary); }

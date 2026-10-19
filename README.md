@@ -45,7 +45,36 @@ filter only the calendar within the dashboard's date range; Clear calendar filte
 restores all available months. Chart symbol search opens another ticker directly,
 and the Trades back link returns to all symbols in the current account.
 
-## Verification
+## Review and research workflows
+
+- **Daily Review** lists trades with activity on an exchange session, tracks the
+  review queue, and saves a reflection with one focus for the next session.
+- **Journal** sits beside the chart: thesis, personal setup, planned stop, plan
+  adherence, mistakes, lessons, notes/tags and up to five raster screenshots.
+  Journals survive ledger rebuilds; unmatched journals remain discoverable on
+  their original review day. Planned stops are journal records, not risk overrides.
+- **Playbooks** store entry/exit/invalidation rules and selected example journals.
+  Archiving preserves links. Personal labels remain distinct from inferred setups.
+- **Edge Analysis** groups known closed results by playbook, personal/inferred
+  setup, direction, regime or plan adherence, with sample counts, 95% Wilson
+  win-rate intervals and links to the underlying trades. Dates refer to closes.
+- **Weekly Review** brings together entry-session journals and daily reflections
+  to record one experiment, its success criteria and the later result.
+- **Source data & confidence** in the chart inspector traces exact broker rows
+  across statement files. Legacy/mismatched raw provenance is explicitly unavailable.
+- Trades support browser-local **saved views**. Chart display settings persist;
+  **j/k** and previous/next controls move through the current symbol's filtered
+  trades. Shortcuts are inactive while typing.
+- The toolbar eye masks account P&L, fees and balances for screen sharing. It is
+  a presentation preference; data, journals, prices and screenshots remain available.
+- **Health** shows account import alerts, daily-cache retrieval age, and hosted
+  backup/restore evidence. Missing evidence is unknown; no external notifications
+  are configured. See [operational monitoring](docs/DEPLOYMENT.md#operational-health).
+
+Schwab daily synchronization waits for developer access approval. Account security
+improvements are deferred until after this non-security roadmap, per the owner.
+
+## Verification commands
 
 ```sh
 npm run lint
@@ -53,12 +82,17 @@ npm run typecheck
 npm test
 npm run build
 npm run test:e2e
+python3 -m unittest discover -s scripts/tests -p test_operational_scripts.py
 ```
 
 Browser tests create synthetic accounts and import synthetic statements. Use a
 separate test database. `PLAYWRIGHT_BASE_URL` targets an already running server;
 otherwise Playwright starts the development server. The new workspace browser test
 captures desktop and mobile screenshots under the ignored `test-results/` folder.
+The operational script tests run on Linux with stub Docker commands and temporary
+directories. On Windows, run them inside a Linux Python container. For production
+browser checks alongside a dev server, set `AURATRADE_ISOLATED_BUILD=1` for both
+build and start to use `.next-validation` without sharing dev build artifacts.
 
 ## Project guides
 

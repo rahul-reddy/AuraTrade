@@ -7,18 +7,35 @@
 # snapshot, so these dumps are also inside that snapshot.
 set -eu
 label=${1:?usage: backup.sh <label>}
+case "$label" in
+    daily | pre-*) ;;
+    *) echo "Unsupported backup label." >&2; exit 2 ;;
+esac
+case "$label" in *[!a-z0-9-]*) echo "Invalid backup label." >&2; exit 2 ;; esac
 dir="$HOME/auratrade/backups"
 umask 077
 mkdir -p "$dir"
+health="$HOME/auratrade/bin/health-status.py"
+out=""
+failed() {
+    code=$?
+    if [ "$code" -ne 0 ]; then
+        [ -z "$out" ] || rm -f "$out.partial"
+        python3 "$health" backup failed || echo "Could not record backup health." >&2
+    fi
+}
+trap failed EXIT
+python3 "$health" backup running
 
 if ! docker inspect -f '{{.State.Running}}' auratrade-db-1 2>/dev/null | grep -q true; then
-    echo "Database container is not running; nothing to back up." >&2
-    exit 0
+    echo "Database container is not running; backup failed." >&2
+    exit 1
 fi
 
 out="$dir/auratrade-$(date -u +%Y%m%dT%H%M%SZ)-$label.dump"
 docker exec auratrade-db-1 pg_dump -U auratrade -Fc auratrade > "$out.partial"
 mv "$out.partial" "$out"
+python3 "$health" backup success
 echo "Backup written: $out ($(du -h "$out" | cut -f1))"
 
 case "$label" in

@@ -8,6 +8,8 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import { TradesFilters } from '@/components/trades/TradesFilters'
 import { TradesTable } from '@/components/trades/TradesTable'
+import SavedViews from '@/components/trades/SavedViews'
+import { PrivateAmount } from '@/components/providers/AmountPrivacy'
 import { formatCurrency } from '@/lib/format'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -229,6 +231,7 @@ export default async function TradesPage({
         </div>
 
         {/* Filters */}
+        <SavedViews accountId={account.id} />
         <TradesFilters
           key={filterKey}
           filterKey={filterKey}
@@ -310,7 +313,7 @@ function SummaryCard({
         {label}
       </p>
       <p className={`text-base sm:text-lg font-semibold font-mono leading-none ${valueClass ?? 'text-zinc-100'}`}>
-        {value}
+        {value.includes('$') ? <PrivateAmount>{value}</PrivateAmount> : value}
       </p>
       {sub && <p className="text-zinc-600 text-xs font-mono mt-1">{sub}</p>}
     </div>

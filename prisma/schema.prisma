@@ -111,6 +111,10 @@ model TradingAccount {
   executions     Execution[]
   trades         RoundTripTrade[]
   dailySnapshots DailySnapshot[]
+  journals       TradeJournal[]
+  dailyReviews   DailyReview[]
+  playbooks      Playbook[]
+  weeklyReviews  WeeklyReview[]
 
   @@index([userId])
 }
@@ -339,6 +343,9 @@ model RoundTripTrade {
   tags            String[]
   notes           String?   @db.Text
   notesUpdatedAt  DateTime?
+  // The journal is durable: rebuilding/deleting a trade never deletes user writing.
+  journalId       String? @unique
+  journal         TradeJournal? @relation(fields: [journalId], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -445,4 +452,101 @@ model MarketDataCache {
 
   @@unique([symbol, date, timeframe])
   @@index([symbol, timeframe, date])
+}
+
+/// User-authored review, retained independently of derived/rebuilt trades.
+/// Snapshot identity keeps unmatched reviews discoverable after a broker correction.
+model TradeJournal {
+  id              String @id @default(cuid())
+  accountId       String
+  symbol          String
+  direction       String
+  entryTime       DateTime
+  entryTradingDate DateTime @db.Date
+  thesis          String @default("") @db.Text
+  setup           String @default("")
+  plannedStop     Decimal? @db.Decimal(12, 4)
+  mistakes        String[]
+  lesson          String @default("") @db.Text
+  notes           String @default("") @db.Text
+  tags            String[]
+  planAdherence   String @default("UNASSESSED")
+  reviewedAt      DateTime?
+  version         Int @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  account         TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  trade           RoundTripTrade?
+  attachments     JournalAttachment[]
+  playbookLink    PlaybookJournal?
+  @@index([accountId, entryTradingDate])
+}
+
+model JournalAttachment {
+  id          String @id @default(cuid())
+  journalId   String
+  contentType String
+  byteSize    Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+  journal     TradeJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  @@index([journalId])
+}
+
+model DailyReview {
+  id          String @id @default(cuid())
+  accountId   String
+  tradingDate DateTime @db.Date
+  whatWorked  String @default("") @db.Text
+  toImprove   String @default("") @db.Text
+  nextFocus   String @default("") @db.Text
+  notes       String @default("") @db.Text
+  reviewedAt  DateTime?
+  version     Int @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  account     TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@unique([accountId, tradingDate])
+}
+
+model Playbook {
+  id            String @id @default(cuid())
+  accountId     String
+  name          String
+  description   String @default("") @db.Text
+  entryCriteria String @default("") @db.Text
+  exitCriteria  String @default("") @db.Text
+  invalidation  String @default("") @db.Text
+  archived      Boolean @default(false)
+  version       Int @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  account       TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  journals      PlaybookJournal[]
+  @@index([accountId, archived])
+}
+
+model PlaybookJournal {
+  id         String @id @default(cuid())
+  playbookId String
+  journalId  String @unique
+  isExample  Boolean @default(false)
+  playbook   Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  journal    TradeJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  @@index([playbookId])
+}
+
+model WeeklyReview {
+  id              String @id @default(cuid())
+  accountId       String
+  weekStart       DateTime @db.Date
+  observation     String @default("") @db.Text
+  experiment      String @default("") @db.Text
+  successCriteria String @default("") @db.Text
+  result          String @default("") @db.Text
+  version         Int @default(1)
+  updatedAt       DateTime @updatedAt
+  account         TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@unique([accountId, weekStart])
 }

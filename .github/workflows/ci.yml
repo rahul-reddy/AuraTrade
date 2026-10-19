@@ -91,6 +91,11 @@ jobs:
         run: |
           pwsh -NoProfile -File scripts/cross-review-selftest.ps1
           uv run --no-project --with pyyaml python scripts/validate_skills.py
+      - name: Verify operational backup and restore scripts
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          for script in deploy/backup.sh deploy/restore-check.sh deploy/server-deploy.sh; do sh -n "$script"; done
+          python3 -m unittest discover -s scripts/tests -p test_operational_scripts.py
       - run: npx prisma generate
         if: steps.scope.outputs.docs_only != 'true'
       - run: npm run lint && npm run typecheck
