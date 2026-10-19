@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import ThemeToggle from '@/components/layout/ThemeToggle'
+import { AmountPrivacyToggle } from '@/components/providers/AmountPrivacy'
 
 // The platform never changes during a session, so there is nothing to subscribe to.
 const subscribeNever = () => () => {}
@@ -47,11 +48,12 @@ export default function TopBar({ onOpenPalette, accountName }: TopBarProps) {
         <Layers className="h-3.5 w-3.5 shrink-0" />
         <span className="max-w-48 truncate font-medium text-zinc-300">{contextLabel}</span>
         <ChevronRight className="hidden h-3 w-3 shrink-0 sm:block" />
-        <span className="hidden text-zinc-400 sm:block">{pathname.startsWith('/chart/') ? 'Trade review' : pathname.startsWith('/trades') ? 'Trade history' : pathname.startsWith('/upload') ? 'Import center' : pathname.startsWith('/settings') ? 'Settings' : 'Performance'}</span>
+        <span className="hidden text-zinc-400 sm:block">{pathname.startsWith('/chart/') ? 'Trade review' : pathname.startsWith('/weekly-review') ? 'Weekly review' : pathname.startsWith('/playbooks') ? 'Playbooks' : pathname.startsWith('/insights') ? 'Edge analysis' : pathname.startsWith('/review') ? 'Daily review' : pathname.startsWith('/trades') ? 'Trade history' : pathname.startsWith('/upload') ? 'Import center' : pathname.startsWith('/settings') ? 'Settings' : 'Performance'}</span>
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
       <ThemeToggle />
+      <AmountPrivacyToggle />
       <button
         type="button"
         onClick={onOpenPalette}

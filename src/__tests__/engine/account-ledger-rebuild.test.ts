@@ -722,3 +722,12 @@ describe('evaluateAccountImport', () => {
     expect(decision.blockers).toEqual(['Unsupported broker action category: UNKNOWN'])
   })
 })
+
+it('carries a journal-only annotation to a uniquely matched rebuilt trade', () => {
+  const old: TradeAnnotation = {
+    sourceKey: 'statement:0', symbol: 'SYN', direction: 'LONG', entryTime: new Date('2026-01-15T15:00:00Z'),
+    sourceFormat: 'TOS_ACCOUNT_STATEMENT', tags: [], notes: null, notesUpdatedAt: null, journalId: 'durable-journal',
+  }
+  const result = matchAnnotations([old], [{ sourceKey: old.sourceKey!, symbol: old.symbol, direction: old.direction, entryTime: old.entryTime, sourceFormat: old.sourceFormat }])
+  expect(result.get(0)?.journalId).toBe('durable-journal')
+})

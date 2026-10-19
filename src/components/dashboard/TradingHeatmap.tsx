@@ -1,14 +1,16 @@
 'use client'
+import { useCurrencyFormat } from '@/components/providers/AmountPrivacy'
 
 import { useState } from 'react'
 import type { HeatmapMonth } from '@/lib/dashboard/types'
-import { formatCurrency } from '@/lib/format'
+
 
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const selectClass = 'h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-xs text-zinc-200'
 
 export default function TradingHeatmap({ months }: { months: HeatmapMonth[] }) {
   const [year, setYear] = useState('')
+  const formatCurrency = useCurrencyFormat()
   const [monthNumber, setMonthNumber] = useState('')
   // Sort a copy: dashboard series and their financial calculations stay intact.
   const ordered = [...months].sort((a, b) => b.monthKey.localeCompare(a.monthKey))

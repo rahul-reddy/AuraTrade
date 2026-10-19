@@ -5,6 +5,8 @@ import { SessionProvider } from 'next-auth/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { useTheme } from './useTheme'
+import { AmountPrivacyProvider } from './AmountPrivacy'
+import { DraftLinkGuard } from './DraftNavigationGuard'
 
 export default function AppProviders({ children }: { children: ReactNode }) {
   const { theme } = useTheme()
@@ -24,7 +26,7 @@ export default function AppProviders({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <AmountPrivacyProvider><DraftLinkGuard />{children}</AmountPrivacyProvider>
         <Toaster theme={theme} position="bottom-right" richColors />
       </QueryClientProvider>
     </SessionProvider>

@@ -1,11 +1,12 @@
 'use client'
+import { useCurrencyFormat } from '@/components/providers/AmountPrivacy'
 
 import Link from 'next/link'
 import PageHeader from '@/components/layout/PageHeader'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, DatabaseBackup, RefreshCcw, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatCurrency, formatDate, formatPrice } from '@/lib/format'
+import { formatDate, formatPrice } from '@/lib/format'
 import type { IntegrityReport } from '@/lib/settings/integrity'
 
 interface IntegrityClientProps {
@@ -136,6 +137,7 @@ async function runIntegrityAction(
 }
 
 export default function IntegrityClient({ accountId, accountName }: IntegrityClientProps) {
+  const formatCurrency = useCurrencyFormat()
   const queryClient = useQueryClient()
 
   const integrityQuery = useQuery({

@@ -3,6 +3,12 @@
 > Last updated: 2026-03-20
 
 ## Context
+- **Owner-approved follow-up (2026-10-18):** full non-security roadmap: durable
+  chart-side journal and screenshots; daily review/reflection; playbook rules and
+  examples; grouped edge analysis with uncertainty and trade drill-down; weekly
+  experiment; exact source inspection; saved views/chart preferences/j-k review;
+  presentation amount masking; import/cache/backup/restore health. Account
+  security comes last. Schwab connector implementation waits for access approval.
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
 - Will become SaaS. Account size: $250K–$1M (fractional Kelly emphasized)
 - Running locally for now (local PostgreSQL)

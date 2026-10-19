@@ -1,4 +1,5 @@
 'use client'
+import { useCurrencyFormat } from '@/components/providers/AmountPrivacy'
 
 import Link from 'next/link'
 import { ArrowUpRight, ArrowRight, SlidersHorizontal } from 'lucide-react'
@@ -26,7 +27,7 @@ import {
   YAxis,
 } from 'recharts'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton'
-import { formatCurrency, formatDuration, formatTradingDay } from '@/lib/format'
+import { formatDuration, formatTradingDay } from '@/lib/format'
 import type { DashboardPayload } from '@/lib/dashboard/types'
 import TradingHeatmap from '@/components/dashboard/TradingHeatmap'
 
@@ -135,6 +136,7 @@ function ChartTooltip({
     },
   ) => string
 }) {
+  const formatCurrency = useCurrencyFormat()
   if (!active || !payload || payload.length === 0) return null
 
   return (
@@ -233,6 +235,7 @@ export default function DashboardClient({
   initialDateTo,
 }: DashboardClientProps) {
   const router = useRouter()
+  const formatCurrency = useCurrencyFormat()
   const searchParams = useSearchParams()
   const [dateFromInput, setDateFromInput] = useState(initialDateFrom ?? '')
   const [dateToInput, setDateToInput] = useState(initialDateTo ?? '')

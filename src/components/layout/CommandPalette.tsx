@@ -1,9 +1,11 @@
 'use client'
+import { confirmUnsavedNavigation } from '@/components/providers/DraftNavigationGuard'
 
 import { useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
+  NotebookPen,
   LineChart,
   Upload,
   TrendingUp,
@@ -34,6 +36,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const navigate = useCallback(
     (href: string) => {
+      if (!confirmUnsavedNavigation()) return
       onClose()
       router.push(href)
     },
@@ -57,6 +60,11 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             Trades
             <span className="ml-auto text-xs text-zinc-500">g t</span>
           </CommandItem>
+          <CommandItem onSelect={() => navigate('/review')}><NotebookPen className="mr-2 h-4 w-4 text-zinc-400" />Daily Review</CommandItem>
+          <CommandItem onSelect={() => navigate('/insights')}><LineChart className="mr-2 h-4 w-4 text-zinc-400" />Edge Analysis</CommandItem>
+          <CommandItem onSelect={() => navigate('/playbooks')}><NotebookPen className="mr-2 h-4 w-4 text-zinc-400" />Playbooks</CommandItem>
+          <CommandItem onSelect={() => navigate('/weekly-review')}><NotebookPen className="mr-2 h-4 w-4 text-zinc-400" />Weekly Review</CommandItem>
+          <CommandItem onSelect={() => navigate('/settings/health')}><Settings className="mr-2 h-4 w-4 text-zinc-400" />Operational Health</CommandItem>
           <CommandItem onSelect={() => navigate('/upload')}>
             <Upload className="mr-2 h-4 w-4 text-zinc-400" />
             Upload CSV

@@ -1,4 +1,5 @@
 'use client'
+import { confirmUnsavedNavigation } from '@/components/providers/DraftNavigationGuard'
 
 import { Component, useState, useEffect, useCallback, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
@@ -128,15 +129,15 @@ function useKeyboardShortcuts(onOpenPalette: () => void) {
         switch (e.key) {
           case 'd':
             e.preventDefault()
-            router.push('/dashboard')
+            if (confirmUnsavedNavigation()) router.push('/dashboard')
             break
           case 't':
             e.preventDefault()
-            router.push('/trades')
+            if (confirmUnsavedNavigation()) router.push('/trades')
             break
           case 'c':
             e.preventDefault()
-            router.push('/trades')
+            if (confirmUnsavedNavigation()) router.push('/trades')
             break
         }
         return
@@ -154,7 +155,7 @@ function useKeyboardShortcuts(onOpenPalette: () => void) {
           break
         case 'u':
           e.preventDefault()
-          router.push('/upload')
+          if (confirmUnsavedNavigation()) router.push('/upload')
           break
       }
     }

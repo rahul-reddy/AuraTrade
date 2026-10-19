@@ -36,9 +36,13 @@ dc up -d --wait db
 
 # The scripts cron and the owner run live at stable paths, refreshed per deploy.
 mkdir -p "$root/bin"
+mkdir -p "$root/health"
+chmod 755 "$root/health"
 cp "$release/deploy/backup.sh" "$root/bin/backup.sh"
 cp "$release/deploy/dc.sh" "$root/bin/dc"
-chmod 700 "$root/bin/backup.sh" "$root/bin/dc"
+cp "$release/deploy/health-status.py" "$root/bin/health-status.py"
+cp "$release/deploy/restore-check.sh" "$root/bin/restore-check.sh"
+chmod 700 "$root/bin/backup.sh" "$root/bin/dc" "$root/bin/health-status.py" "$root/bin/restore-check.sh"
 
 echo "== Backing up before migrating"
 "$root/bin/backup.sh" "pre-${sha%"${sha#???????}"}"
@@ -49,6 +53,8 @@ dc --profile tools run --rm migrate
 echo "== Starting $sha"
 dc up -d --wait --remove-orphans web caddy
 printf '%s\n' "$sha" > "$root/CURRENT"
+# Preserve existing jobs, replacing only AuraTrade's managed restore-check line.
+(crontab -l 2>/dev/null | grep -v '# auratrade-restore-check' || true; printf '45 3 * * 0 %s/bin/restore-check.sh >> %s/restore-check.log 2>&1 # auratrade-restore-check\n' "$root" "$root") | crontab -
 
 # Keep the newest three releases (rollback targets) and their images.
 ls -1t "$root/releases" | tail -n +4 | while read -r old; do

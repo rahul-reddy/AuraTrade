@@ -71,6 +71,9 @@ test('root sign-in reaches the dashboard and the redesigned workspace supports r
   // GET form navigation updates the URL before the next document's links render.
   // Wait for the filtered view's tab, rather than clicking the previous document.
   await expect(page.getByRole('link', { name: 'Closed trades', exact: true })).toHaveAttribute('href', /symbol=BROS/)
+  // This is a native GET-form navigation: SSR links can appear before the new
+  // document finishes loading. Let that navigation complete before clicking.
+  await page.waitForLoadState('load')
   await page.getByRole('link', { name: 'Closed trades', exact: true }).click()
   await expect(page).toHaveURL(/status=closed/)
   expect(new URL(page.url()).searchParams.get('symbol')).toBe('BROS')

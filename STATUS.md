@@ -2,7 +2,60 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-18): Espresso & Acid deployed and verified live
+## Current handoff (2026-10-19): non-security roadmap ready for review
+
+- **Owner scope:** implement the full non-security roadmap. Account security is
+  deferred until last. Schwab daily synchronization waits for developer approval
+  (owner has applied; estimated two business days). The hosted release remains
+  `300cf90` until this branch passes review, CI, merge and deployment.
+- **Branch:** `feat/trade-journal-daily-review`, based on `7f555c4`. Implementation
+  is ready for PR/CI/cross-model review and is not deployed yet. It includes chart-side structured journals/screenshots,
+  daily review/reflection, playbooks/examples, edge analysis, weekly experiments,
+  exact broker-row provenance, saved views/chart preferences/j-k navigation,
+  presentation amount masking and operational health/restore verification.
+- **Data boundaries:** journals are independent of derived trade rows and retain
+  their identity across reprocessing; unmatched journals appear on their original
+  entry review day. User writing uses version checks. Planned stops do not change
+  initialRisk/rMultiple. Personal labels remain separate from classifier output.
+  Daily realized P&L and grouped analysis reuse existing metrics and broker fees,
+  counting known closed results by exit trading date. Raw provenance requires a
+  stable source identity plus exact stored-fill agreement; no fuzzy matching.
+- **Schema:** two additive migrations, `20261018210000_trade_journal_review` and
+  `20261018221500_playbooks_weekly_review`, applied successfully to local development
+  and isolated `auratrade_ui_test` databases (14 migrations). Production still has
+  12. Neither applied migration was edited. Deployment must back up first.
+- **Local validation (implementation working tree before the release commit):**
+  `npm run lint` (0 errors, two existing warnings), `npm run typecheck`, `npm test`
+  (**321 tests / 31 suites**), isolated production build and the complete browser
+  suite (**20/20**) passed. Browsers used port 3100 and isolated `auratrade_ui_test`.
+  New coverage includes failed-save retention, attachment size/count/type limits,
+  pending-save controls, stale-tab conflicts, foreign ownership rejection, ledger
+  reprocess preservation, CSV notes, daily/weekly reflections, playbook assignment,
+  archiving, analysis drill-downs, source rows, saved views, chart preferences and
+  j/k navigation. Light/dark/mobile screenshots were visually inspected and are
+  retained in ignored `.local/ui-preview/roadmap/`.
+- **Migration validation:** all 14 migrations also applied to a newly created
+  disposable local database; `prisma migrate diff --from-migrations ...
+  --to-schema-datamodel ... --shadow-database-url ... --exit-code` reported no
+  difference. The validation helper dropped only the two databases it created.
+- **Operational checks:** eight Linux tests passed with stub Docker calls and
+  disposable temp directories. These cover stopped DB/dump failure, finalized
+  backups, missing dumps, restore failure, create failure (never drop), cleanup of
+  only this invocation's created DB, and atomic health evidence preservation.
+  Dump/restore errors suppress raw tool diagnostics; failure tests check that
+  synthetic private row content cannot enter stdout or stderr.
+  Actual hosted restore proof is pending deployment. Harness self-test and skill
+  validator passed. CI now runs the operational tests too.
+- **Local verification:** a separately running dev server owns `.next`; optional
+  `AURATRADE_ISOLATED_BUILD=1` keeps build/start verification in `.next-validation`.
+  Generated build/local artifacts are ignored by ESLint/Jest. Default CI/deploy
+  build paths are unchanged. Startup and feature guide: README.md; operations:
+  docs/DEPLOYMENT.md. Public repository visibility was verified unchanged. The
+  server preflight confirmed Python, flock, cron, healthy services and 45 GB free.
+  Next action: record the release commit/PR, pass exact-head CI and cross-model
+  review, guarded merge, deploy, run live read-only smoke and a real restore check.
+
+## Previous handoff (2026-10-18): Espresso & Acid deployed and verified live
 
 - **Live release:** `300cf90de329b4b748e52da24c925969c0995a66` at
   https://auratrades.quest. PR #27 was squash-merged through the guarded merge
