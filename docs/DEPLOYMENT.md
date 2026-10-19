@@ -271,6 +271,8 @@ dumps. Atomic, locked evidence updates preserve the last success across failures
 No evidence or corrupt JSON is unknown, never healthy. A backup older than 36 hours
 or restore verification older than 10 days needs attention. Inspect
 `~/auratrade/restore-check.log` and the existing backup job log when a job fails.
+Dump/restore diagnostics are replaced with generic failure messages: PostgreSQL
+COPY errors can include raw row values, which must not reach operational logs.
 
 ## Container image on GHCR (delivery)
 

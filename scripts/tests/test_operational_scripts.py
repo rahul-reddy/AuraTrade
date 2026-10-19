@@ -26,8 +26,8 @@ printf '%s\\n' "$*" >> "$CALL_LOG"
 case "$*" in
   inspect*) [ "${FAIL_INSPECT:-0}" = 0 ] && echo true; exit 0 ;;
   *createdb*) [ "${FAIL_CREATE:-0}" = 0 ]; exit $? ;;
-  *pg_restore*) cat >/dev/null; [ "${FAIL_RESTORE:-0}" = 0 ]; exit $? ;;
-  *pg_dump*) printf 'synthetic dump'; [ "${FAIL_DUMP:-0}" = 0 ]; exit $? ;;
+  *pg_restore*) cat >/dev/null; if [ "${FAIL_RESTORE:-0}" != 0 ]; then echo 'synthetic-private-restore-row' >&2; exit 1; fi; exit 0 ;;
+  *pg_dump*) printf 'synthetic dump'; if [ "${FAIL_DUMP:-0}" != 0 ]; then echo 'synthetic-private-dump-row' >&2; exit 1; fi; exit 0 ;;
 esac
 exit 0
 ''')
@@ -48,6 +48,7 @@ exit 0
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.status()["backup"]["state"], "failed")
         self.assertEqual(list((self.base / "backups").iterdir()), [])
+        self.assertNotIn("synthetic-private-dump-row", result.stdout + result.stderr)
 
     def test_backup_requires_running_database_and_rejects_path_labels(self):
         self.assertNotEqual(self.run_script("backup.sh", "daily", FAIL_INSPECT="1").returncode, 0)
@@ -78,7 +79,9 @@ exit 0
 
     def test_failed_restore_cleans_up_and_stays_failed(self):
         (self.base / "backups/auratrade-20261018T120000Z-daily.dump").write_text("synthetic")
-        self.assertNotEqual(self.run_script("restore-check.sh", FAIL_RESTORE="1").returncode, 0)
+        result = self.run_script("restore-check.sh", FAIL_RESTORE="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("synthetic-private-restore-row", result.stdout + result.stderr)
         self.assertIn("dropdb -U auratrade auratrade_restore_check_", self.log.read_text())
         self.assertEqual(self.status()["restore"]["state"], "failed")
 

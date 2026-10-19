@@ -42,6 +42,8 @@
   disposable temp directories. These cover stopped DB/dump failure, finalized
   backups, missing dumps, restore failure, create failure (never drop), cleanup of
   only this invocation's created DB, and atomic health evidence preservation.
+  Dump/restore errors suppress raw tool diagnostics; failure tests check that
+  synthetic private row content cannot enter stdout or stderr.
   Actual hosted restore proof is pending deployment. Harness self-test and skill
   validator passed. CI now runs the operational tests too.
 - **Local verification:** a separately running dev server owns `.next`; optional

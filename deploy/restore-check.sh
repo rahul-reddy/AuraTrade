@@ -32,7 +32,12 @@ dump=$(find "$root/backups" -maxdepth 1 -type f -name 'auratrade-*.dump' -printf
 [ -n "$dump" ] || { echo "No finalized backup is available." >&2; exit 1; }
 docker exec auratrade-db-1 createdb -U auratrade "$check_db"
 created=true
-docker exec -i auratrade-db-1 pg_restore -U auratrade --no-owner --exit-on-error -d "$check_db" < "$root/backups/$dump"
+if ! docker exec -i auratrade-db-1 pg_restore -U auratrade --no-owner --exit-on-error -d "$check_db" < "$root/backups/$dump" >/dev/null 2>&1; then
+    # COPY diagnostics can contain raw restored row values, including broker
+    # fields or credentials. Record failure without placing them in job logs.
+    echo "Backup restore failed; private database diagnostics are not logged." >&2
+    exit 1
+fi
 # Validate schema and queryability. Do not print restored user data or counts.
 docker exec auratrade-db-1 psql -U auratrade -d "$check_db" -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM "_prisma_migrations"; SELECT count(*) FROM "RoundTripTrade"; SELECT count(*) FROM "User";' >/dev/null
 echo "Backup restored and queried successfully in a disposable database."

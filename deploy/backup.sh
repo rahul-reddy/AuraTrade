@@ -33,7 +33,10 @@ if ! docker inspect -f '{{.State.Running}}' auratrade-db-1 2>/dev/null | grep -q
 fi
 
 out="$dir/auratrade-$(date -u +%Y%m%dT%H%M%SZ)-$label.dump"
-docker exec auratrade-db-1 pg_dump -U auratrade -Fc auratrade > "$out.partial"
+if ! docker exec auratrade-db-1 pg_dump -U auratrade -Fc auratrade > "$out.partial" 2>/dev/null; then
+    echo "Database dump failed; private database diagnostics are not logged." >&2
+    exit 1
+fi
 mv "$out.partial" "$out"
 python3 "$health" backup success
 echo "Backup written: $out ($(du -h "$out" | cut -f1))"
