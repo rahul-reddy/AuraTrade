@@ -2,7 +2,62 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-19): non-security roadmap ready for review
+## Current handoff (2026-10-19): full non-security roadmap deployed
+
+- **Live release:** `687011de23182e6882e1bd11601594c325c12589` at
+  https://auratrades.quest. PR #29 was squash-merged by `scripts/merge-pr.ps1`
+  after exact-head CI and independent Claude Opus approval of PR head `b7904c3`
+  (critical tier, medium effort, 0 blocking findings). The merged file tree is
+  identical to the reviewed head. Server CURRENT matches the live release.
+- **Delivered:** chart-side journals and authenticated screenshots; daily review
+  queues/reflections; personal playbooks/rules/example trades; edge analysis with
+  uncertainty and trade drill-downs; weekly experiments; exact broker-row source
+  inspection; browser-local saved views and chart displays; j/k review navigation;
+  presentation amount masking; operational import/cache/backup/restore health.
+  Espresso & Acid light/dark mode is retained throughout. README.md documents
+  startup, workflows, storage limits and source-data limitations.
+- **Validation:** local implementation checks passed lint (0 errors, two existing
+  warnings), types, production build, **321 unit tests / 31 suites**, **20/20
+  browser tests**, eight Linux operational tests, fresh migration deployment and
+  zero schema drift. Exact-release main CI independently passed all checks,
+  including coverage, all 20 browsers and both advisory scans:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39250390338 . PR-head CI:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39248724502 . Windows
+  harness passed too. Local synthetic desktop/mobile screenshots were inspected
+  and retained under ignored `.local/ui-preview/roadmap/`.
+- **Rollout:** `scripts/deploy.ps1 -Revision <full-sha> -Confirm "DEPLOY 687011d"`
+  built the images/types successfully while the previous app kept serving.
+  Pre-migration backup `auratrade-20261019T122227Z-pre-687011d.dump` completed
+  (1.1 MB). Both additive migrations applied successfully; production now has
+  **14 applied migrations**. Web, PostgreSQL and Caddy were healthy after the swap.
+  Public smoke: login 200, signed-out dashboard redirects, registration closed.
+- **Actual restore proof:** a fresh post-deploy backup,
+  `auratrade-20261019T122251Z-daily.dump` (1.1 MB), was restored and queried by the
+  shipped `restore-check.sh` in a newly created disposable database. Cleanup
+  succeeded; a separate catalog query confirmed **0** remaining restore-check
+  databases. Backup and restore evidence both show success. The managed cron
+  entry runs weekly at **03:45 Sunday, server timezone Etc/UTC**. Job output is
+  credential-free; raw dump/restore diagnostics are suppressed. Runbook:
+  docs/DEPLOYMENT.md#operational-health.
+- **Live application checks:** read-only authenticated checks returned 200 for all
+  five new pages and their APIs, plus journal and provenance endpoints. Invalid
+  account requests returned 404. The health API reported healthy backup/restore
+  evidence and a DB query confirmed 14 migrations. No production test account or
+  application data was created. Real Chromium checked login desktop/mobile in
+  both modes, reload persistence and cross-tab synchronization: **0 page errors**.
+- **Review follow-ups (advisory):** add safe structured failure diagnostics without
+  raw row data; bound/aggregate edge-analysis reads for very large accounts;
+  provide recovery for a failed disposable-DB cleanup without risking live DBs;
+  defer the chart journal's first query until needed while preserving drafts.
+  Current restore cleanup passed. Alerts are in-app; no external notifications
+  are configured. Restore checks prove queryable restoration, not every business
+  invariant or off-host disaster recovery.
+- **Next action:** account security remains deferred until the owner starts that
+  phase. Schwab synchronization waits for developer approval; no connector was
+  built ahead of that approval. Review/merge this documentation-only handoff;
+  it requires no application redeploy. Repository visibility remains public.
+
+## Previous handoff (2026-10-19): non-security roadmap ready for review
 
 - **Owner scope:** implement the full non-security roadmap. Account security is
   deferred until last. Schwab daily synchronization waits for developer approval
