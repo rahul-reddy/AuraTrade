@@ -62,7 +62,7 @@ test('Schwab preview, transactional confirm, ownership, retry, concurrent reques
     await expect(main.getByRole('alert')).toContainText('Synthetic temporary failure')
     await expect(main.getByRole('button', { name: 'Confirm sync', exact: true })).toBeEnabled()
     await main.getByRole('button', { name: 'Confirm sync', exact: true }).click()
-    await expect(main.getByRole('status')).toContainText('Sync complete')
+    await expect(main.getByRole('status').filter({ hasText: 'Sync complete' })).toBeVisible()
     const trade = await db.roundTripTrade.findFirstOrThrow({ where: { accountId: account.id } })
     expect(trade.netPnl?.toString()).toBe('99.83')
     expect((await page.request.post('/api/brokers/schwab', { data: { action: 'confirm', hash: initialHash, autoSync: false } })).status()).toBe(409)

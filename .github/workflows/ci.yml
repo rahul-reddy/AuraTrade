@@ -31,6 +31,8 @@ jobs:
       NEXT_TELEMETRY_DISABLED: '1'
       # Synthetic broker fixtures only; no requests to Schwab in CI.
       SCHWAB_TOKEN_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      SCHWAB_CLIENT_ID: synthetic-ci-client
+      SCHWAB_CLIENT_SECRET: synthetic-ci-secret
       SCHWAB_TEST_DATABASE_URL: postgresql://auratrade:auratrade_ci@127.0.0.1:5432/auratrade_ci
     steps:
       - uses: actions/checkout@v4

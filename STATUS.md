@@ -49,6 +49,12 @@
   Schwab and inspect the first preview after deployment. Finish exact-head CI,
   independent cross-model review, guarded merge, deploy, and read-only live smoke.
   Account-security product work remains deferred.
+- **PR / CI follow-up:** PR #31 head `3b54c3c` passed the full local 21-browser
+  suite. Initial GitHub CI passed migrations/lint/types/352 unit tests/build but
+  exposed an ambiguous browser status selector when dummy client credentials
+  were absent. The fixture now supplies synthetic credentials and waits for the
+  specific completion status. No broker request or import correctness failure
+  occurred. Re-run exact-head CI and independent review after this test fix.
 
 ## Previous handoff (2026-10-19): full non-security roadmap deployed
 
