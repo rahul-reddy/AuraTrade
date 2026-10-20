@@ -19,7 +19,8 @@ root="$HOME/auratrade"
 mkdir -p "$root"
 # Also serializes workstation deployments with GitHub Actions deployments.
 exec 9>"$root/deploy.lock"
-flock -x 9
+echo 'Waiting for the production deployment lock (up to 300 seconds).'
+flock -x -w 300 9 || { echo 'Timed out waiting for the production deployment lock.' >&2; exit 1; }
 release="$root/releases/$sha"
 envfile="$root/.env"
 [ -f "$release/deploy/compose.yaml" ] || { echo "Missing release $release" >&2; exit 1; }
@@ -97,8 +98,8 @@ dc up -d --wait --remove-orphans web caddy
 # Allow the proxy to settle, but never publish CURRENT without both checks.
 public_ready=0
 for attempt in 1 2 3 4 5 6; do
-    login=$(curl --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' "https://$site_host/login") || login=0
-    registration=$(curl --silent --show-error --max-time 15 --request POST --output /dev/null --write-out '%{http_code}' "https://$site_host/api/auth/register") || registration=0
+    login=$(curl --silent --show-error --resolve "$site_host:443:127.0.0.1" --max-time 15 --output /dev/null --write-out '%{http_code}' "https://$site_host/login") || login=0
+    registration=$(curl --silent --show-error --resolve "$site_host:443:127.0.0.1" --max-time 15 --request POST --output /dev/null --write-out '%{http_code}' "https://$site_host/api/auth/register") || registration=0
     if [ "$login" = 200 ] && [ "$registration" = 403 ]; then public_ready=1; break; fi
     sleep 2
 done

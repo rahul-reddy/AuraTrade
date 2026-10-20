@@ -52,11 +52,13 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: auratrade-migrate:${{ env.REVISION }}
-          labels: org.opencontainers.image.revision=${{ env.REVISION }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.REVISION }}
+            org.opencontainers.image.source=https://github.com/rahul-reddy/AuraTrade
           cache-from: |
-            type=gha,scope=app
+            type=gha,scope=migrate
             type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=app
+          cache-to: type=gha,mode=max,scope=migrate
       - name: Build web image off-host
         if: steps.current.outputs.deploy == 'true'
         uses: docker/build-push-action@v6
@@ -65,11 +67,13 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: auratrade-web:${{ env.REVISION }}
-          labels: org.opencontainers.image.revision=${{ env.REVISION }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.REVISION }}
+            org.opencontainers.image.source=https://github.com/rahul-reddy/AuraTrade
           cache-from: |
-            type=gha,scope=app
+            type=gha,scope=migrate
             type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=app
+          cache-to: type=gha,mode=max,scope=web
       - name: Publish web image
         if: steps.current.outputs.deploy == 'true'
         run: |

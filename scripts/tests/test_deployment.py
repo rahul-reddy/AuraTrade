@@ -26,6 +26,7 @@ if tool=='docker':
   if os.environ.get('BAD_LABEL'):value['Config']['Labels']['org.opencontainers.image.revision']='c'*40
   if os.environ.get('BAD_PLATFORM'):value['Architecture']='arm64'
   if os.environ.get('BAD_ENV'):value['Config']['Env']=['AUTH_SECRET=synthetic-private-value']
+  if os.environ.get('UNKNOWN_ENV'):value['Config']['Env']=['UNEXPECTED_API_KEY=synthetic-private-value']
   if '--format' not in args:print(json.dumps([value]))
   else:
    template=args[args.index('--format')+1]
@@ -89,7 +90,7 @@ class DeploymentTests(unittest.TestCase):
         (self.base / '.env').write_text('synthetic fixture')
         (self.base / 'CURRENT').write_text(PREVIOUS)
         self.env = {**os.environ, 'HOME': str(self.home), 'PATH': f'{self.bin}:{os.environ["PATH"]}', 'CALL_LOG': str(self.log),
-                    'RELEASE_SHA': SHA, 'SOURCE_RELEASE': str(self.base / 'releases' / SHA), 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_REPOSITORY': 'rahul-reddy/AuraTrade'}
+                    'RELEASE_SHA': SHA, 'SOURCE_RELEASE': str(self.base / 'releases' / SHA), 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_REPOSITORY': 'rahul-reddy/AuraTrade', 'GITHUB_STEP_SUMMARY': str(self.home / 'summary')}
 
     def tearDown(self):
         self.temp.cleanup()
@@ -113,6 +114,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = self.calls()
         self.assertNotIn(' build ', calls)
+        self.assertIn('--resolve example.com:443:127.0.0.1', calls)
         self.assertLess(calls.index('pg_dump'), calls.index('run --rm migrate'))
         self.assertLess(calls.index('run --rm migrate'), calls.index('up -d --wait --remove-orphans web caddy'))
         self.assertEqual(self.current(), SHA)
@@ -161,7 +163,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(len(groups), 2, groups)
 
     def test_runner_rejects_bad_checkout_ci_or_image_environment_without_ssh(self):
-        for flags in [{'CHECKOUT_SHA': PREVIOUS}, {'CI_COUNT': '0'}, {'FAIL_MAIN_API': '1'}, {'BAD_MAIN_RESPONSE': '1'}, {'BAD_ENV': '1'}, {'BAD_PLATFORM': '1'}, {'BAD_LABEL': '1'}]:
+        for flags in [{'CHECKOUT_SHA': PREVIOUS}, {'CI_COUNT': '0'}, {'FAIL_MAIN_API': '1'}, {'BAD_MAIN_RESPONSE': '1'}, {'BAD_ENV': '1'}, {'UNKNOWN_ENV': '1'}, {'BAD_PLATFORM': '1'}, {'BAD_LABEL': '1'}]:
             with self.subTest(flags=flags):
                 result = self.runner(**flags)
                 self.assertNotEqual(result.returncode, 0)
@@ -198,6 +200,21 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.current(), SHA)
         self.assertIn('pg_dump', self.calls())
         self.assertEqual(list((self.base / 'incoming').iterdir()), [])
+        self.assertIn(SHA, (self.home / 'summary').read_text())
+
+    def test_cleanup_keeps_active_and_rollback_releases_even_outside_newest_three(self):
+        for index, letter in enumerate('cdef'):
+            folder = self.base / 'releases' / (letter * 40)
+            folder.mkdir(); os.utime(folder, (100 + index, 100 + index))
+        os.utime(self.base / 'releases' / SHA, (2, 2))
+        os.utime(self.base / 'releases' / PREVIOUS, (1, 1))
+        notes = self.base / 'releases' / 'operator-notes'; notes.mkdir(); os.utime(notes, (0, 0))
+        result = self.server()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.base / 'releases' / SHA).is_dir())
+        self.assertTrue((self.base / 'releases' / PREVIOUS).is_dir())
+        self.assertTrue(notes.is_dir())
+        self.assertFalse((self.base / 'releases' / ('c' * 40)).exists())
 
     def test_corrupt_transfer_is_rejected_before_image_load_and_incoming_files_are_removed(self):
         result = self.runner(EXEC_REMOTE='1', TAMPER_TRANSFER='1')

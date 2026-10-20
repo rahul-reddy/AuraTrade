@@ -36,7 +36,8 @@ for kind in ('web','migrate'):
     value=json.loads((root/f'{kind}.json').read_text())[0]
     if value['Os']!='linux' or value['Architecture']!='amd64' or value['Config'].get('Labels',{}).get('org.opencontainers.image.revision')!=sha:
         raise SystemExit('Unexpected image platform/revision')
-    if any(re.match(r'(SCHWAB_|AUTH_SECRET=|NEXTAUTH_SECRET=|DATABASE_URL=|AURATRADE_FINVIZ_TOKEN=)',s) for s in value['Config'].get('Env',[])):
+    allowed={'PATH','NODE_VERSION','YARN_VERSION','NODE_ENV','NEXT_TELEMETRY_DISABLED','PORT','HOSTNAME'}
+    if any(s.partition('=')[0] not in allowed for s in value['Config'].get('Env',[])):
         raise SystemExit('Runtime configuration must not be baked into images')
     image_id=value['Id']
     if not re.fullmatch(r'sha256:[0-9a-f]{64}',image_id): raise SystemExit('Invalid image identity')

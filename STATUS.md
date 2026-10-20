@@ -30,10 +30,20 @@
   verified, repository deployment secrets installed without printing private values.
   No broker/DB credentials enter GitHub or builds. The server holds no GitHub token.
 - **Validation:** 358 units / 34 suites and lint/types passed locally (two existing
-  lint warnings). All **20** deployment/operational tests passed, including real
+  lint warnings). All **21** deployment/operational tests passed, including real
   receiver checksum validation, corrupt-transfer refusal, cleanup, retry handling,
   serialized swaps and rollback. Actionlint 1.7.12, shell syntax, cross-review
   self-test and repository skill validation passed. CI now runs deployment tests.
+- **Review correction:** first PR #35 review blocked the host-side public DNS/
+  hairpin health check. It now uses HTTPS `--resolve <host>:443:127.0.0.1` through
+  Caddy, preserving SNI/certificate validation; the runner still probes publicly.
+  Both exact loopback probes were exercised on production: login 200, registration
+  403. Follow-up tests verify loopback flags and preservation of active/rollback
+  releases even outside the newest three. Cache scopes and OCI source labels are
+  restored, lock waits time out, image ENV is allowlisted, and synthetic summaries
+  stay in test temp directories. Prior review:
+  https://github.com/rahul-reddy/AuraTrade/pull/35#issuecomment-6298707059 .
+  Final exact-head CI and independent re-review are required before merge.
 - **Next:** finish final shell/deployment checks, PR CI and independent review,
   guarded-merge automation, then observe its first real automatic production
   deployment and verify CURRENT/public/authenticated health. No further per-merge

@@ -65,7 +65,8 @@ successful main push CI triggers `Deliver container`. The job builds both Linux
 images on GitHub's runner, publishes the web image, then transfers the exact Git
 source and checksummed images over SSH. It verifies exact-SHA CI and image
 identity/platform/revision, backs up before migrating, waits for healthy services
-and checks public login/closed registration before atomically updating CURRENT.
+and checks HTTPS login/closed registration through loopback Caddy before atomically
+updating CURRENT. The GitHub runner separately probes the public login endpoint.
 No new confirmation is required after each reviewed merge.
 
 Deployments serialize through a GitHub concurrency group (in-progress deploys
@@ -82,9 +83,10 @@ stored in Git. No GitHub credentials are stored on the server. Broker/database
 secrets remain in its private runtime `.env`, never build arguments or image ENV.
 
 Backup or migration failures stop before changing the application. If app startup
-or public checks fail, the server attempts to restore the previous application;
+or loopback proxy checks fail, the server attempts to restore the previous application;
 database migrations are retained, never reversed automatically. A failed rollback
-requires operator intervention. Destructive migrations still require an explicit
+requires operator intervention. External probe failures mark the workflow failed
+for investigation. Destructive migrations still require an explicit
 owner decision and backup under AGENTS.md. The workflow makes no cloud resource
 or pricing changes. Builds stay off the 2 GB host.
 
