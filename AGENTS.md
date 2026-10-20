@@ -17,6 +17,10 @@ Trade analytics platform for a discretionary equity trader: imports Schwab/think
 - The repository is intentionally public (owner decision, 2026-10-18). Preserve public visibility. After reviewing the diff, use scripts/merge-pr.ps1 to require successful CI and match the reviewed head SHA.
 - Preserve unrelated changes. Coordinate file ownership before multiple agents edit the same files.
 - Update STATUS.md with evidence, remaining work and next action in every meaningful handoff.
+- Owner decision (2026-10-20): automatically deploy successful merged-main CI revisions
+  through the off-host delivery workflow. This repository-specific authorization
+  replaces the owner's general manual-deploy default; do not ask again per merge.
+  Keep independent PR review, exact-SHA CI, backups and deployment health gates.
 - Do not claim tests passed unless you ran them on the current revision.
 
 ## Cross-model code review
