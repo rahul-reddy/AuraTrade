@@ -2,7 +2,50 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Schwab live-format preview correction
+## Current handoff (2026-10-20): Schwab preview fix merged; deployment awaits owner
+
+- **Ready release:** `022f186c978250d4dac0a21fbddd24cfff1a80c5`, guarded squash
+  merge of PR #33. Its tree matches reviewed head `1eec053` exactly. Independent
+  Claude Opus medium critical-tier review approved with **0 blocking findings**:
+  https://github.com/rahul-reddy/AuraTrade/pull/33#issuecomment-6297397979 .
+- **Delivered in code:** narrowly accept observed USD SMA buying-power bookkeeping
+  and explicitly typed single-leg ETFs. Report the day blocking preview and keep
+  mutual funds/options/position events blocked. Owner selected the optional
+  first-sync date feature: the preview labels its actual saved boundary even after
+  input edits or failed refetch; explicit confirmation commits it, daily overlap
+  respects it and reconnect preserves it. No schema or financial formula changes.
+- **Validation:** final local 358 units / 34 suites, full lint (two existing
+  warnings), standalone types, production build and focused real Schwab browser
+  test passed. Before the final label clarification, all 21 browser tests passed
+  locally without retries. Final PR CI passed all required gates, fresh migration
+  and zero drift, 358 units and 20 browsers first attempt plus one unrelated chart
+  test on retry; Schwab passed first attempt:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39468356518 .
+  Merged release CI is the separate exact-SHA deployment gate:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39469424562 .
+- **Artifacts / deployment:** Linux/amd64 web and migrate images were built
+  off-host from `git archive` of the merged release, with matching revision labels
+  and no environment files in the source context. The ignored local packaging
+  helper checks exact-main CI and runtime-only environment boundaries before
+  exporting/checksumming images. Do not build on the 2 GB production server.
+  **Not deployed:** the owner's updated standing workflow requires confirmation
+  for manual deployments. Production still reports `57e7c92`; backup/restore
+  evidence is successful and there are zero leftover restore-check databases.
+- **Limits:** no canonical live import or history exclusion was performed. The
+  owner must choose the initial start date and review/confirm the resulting batch;
+  mutual-fund history needs separate review. The first review's preview-boundary
+  advisory is fixed. Remaining advisories are clearer messaging for alternative
+  collective-fund subtypes, optional date-input min/max and the server-local
+  variable name `window`; unsupported layouts and invalid dates already fail closed.
+  The earlier secret advisory exited unsuccessfully with zero SARIF results;
+  this is not evidence of a completed clean secret scan.
+- **Next:** obtain owner confirmation for release `022f186`, use the off-host
+  checksum/image-identity-checked backup/migrate/swap sequence, then check live
+  Connections and the improved preview error. Leave actual history exclusion and
+  canonical confirmation to the owner. Account-security product work stays deferred;
+  repository visibility remains public.
+
+## Previous handoff (2026-10-20): Schwab live-format preview correction
 
 - **Cause:** owner OAuth/account linking succeeded, but first preview rejected
   valid Schwab `SMA_ADJUSTMENT` buying-power bookkeeping. The live source also
