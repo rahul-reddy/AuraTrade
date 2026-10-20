@@ -2,7 +2,40 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Automatic rollout stopped safely; portable identity fix
+## Current handoff (2026-10-20): Automatic production deployment verified
+
+- **Verified live release:** `cf1d216c4cbb1d91647e4b5d249beb704d8a4e8b`, guarded
+  squash merge of PR #37; its tree matches reviewed head `ca7f465` exactly.
+  Gemini high-effort independent review approved with zero blocking findings:
+  https://github.com/rahul-reddy/AuraTrade/pull/37#issuecomment-6304084337 .
+- **Automatic delivery succeeded:** merged-main CI triggered the off-host build,
+  verified artifact transfer, portable image identity, backup, migration and health
+  gates without a workstation deployment command. Actual successful run:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39515763780 .
+  Server CURRENT, web image tag and OCI revision all match the release above;
+  web, DB and Caddy are healthy. Earlier engine-ID failures stopped safely before
+  migration/swap and were corrected without weakening archive integrity checks.
+- **Exact-revision CI:** merged CI `39515274367` passed 358 units / 34 suites,
+  24 deployment/operational tests and all 21 browser tests without retries;
+  lint, types, build and migration/drift checks passed. PR CI also passed but its
+  chart-review browser test needed one retry; merged CI passed it first try.
+- **Live checks:** authenticated Connections page/API return 200 and configured/
+  connected remain true; all 15 migrations applied. Broker credentials still
+  match private configuration, callback and daily worker remain enabled. Public
+  Chromium desktop/mobile light/dark, reload and cross-tab theme persistence
+  passed with zero page errors; registration remains closed. Checks wrote no
+  canonical trades. The owner still selects a start date and confirms import.
+- **Recovery evidence:** deployment backup at `2026-10-20T23:36:58Z` succeeded;
+  restore completed at `23:37:42Z` into a disposable DB, schema/data queries passed,
+  and cleanup independently confirmed zero leftover restore DBs.
+- **Handoff:** automatic successful-main deployment is enabled under the owner's
+  standing authorization. This handoff-only follow-up will itself trigger another
+  delivery after merged CI; the evidence above names the last verified app release,
+  not a prediction about a future documentation revision. No financial formulas,
+  application behavior or schema changed in this follow-up. Account security remains
+  deferred. Independent PR #36 reviewer-harness changes are preserved.
+
+## Previous handoff (2026-10-20): Automatic rollout stopped safely; portable identity fix
 
 - **Owner scope:** Schwab correction is live (`022f186`); automatically deploy
   future successful merged-main CI without renewed confirmation. Account-security
