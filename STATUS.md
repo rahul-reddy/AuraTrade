@@ -2,7 +2,45 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Schwab preview fix merged; deployment awaits owner
+## Current handoff (2026-10-20): Schwab fix live; automatic deployment in review
+
+- **Owner authorization:** deploy the prepared fix and enable automatic deployment
+  after successful merged-main CI (latest instruction, 2026-10-20). AGENTS.md and
+  the runbook now record this repository-specific exception to manual confirmation.
+  Account-security product work remains deferred; public visibility is preserved.
+- **Live fix:** `022f186c978250d4dac0a21fbddd24cfff1a80c5` deployed using verified
+  off-host Linux images. Pre-deployment backup `20261020T182556Z-pre-022f186` succeeded;
+  all 15 migrations were already applied. Web/DB/Caddy are healthy. Authenticated
+  Connections page/API return 200; connected/configured remain true. Live preview
+  now returns the actionable mutual-fund/day message, with canonical trade count
+  unchanged. The owner chooses the start date and confirms the preview in the UI.
+- **Recovery / UI evidence:** fresh backup `20261020T183330Z-daily` restored and
+  queried successfully in a disposable DB; cleanup independently confirms zero
+  remaining restore DBs. Real Chromium public desktop/mobile light/dark checks,
+  theme reload/cross-tab persistence passed with zero page errors; login 200,
+  signed-out redirects and registration closed. Runtime broker keys still match.
+- **Automation:** delivery builds both web/migrate images off-host, preserves web
+  publishing, verifies exact-SHA main CI and artifact/image identity, transfers via
+  pinned SSH, backs up then migrates. GitHub serialization plus a server lock avoid
+  overlapping swaps; superseded revisions are skipped. Startup/public-health
+  failures attempt previous-app rollback without reversing DB migrations. CURRENT
+  updates atomically only after health checks; active/previous releases survive
+  cleanup. Legacy host builds require explicit opt-in to protect the 2 GB server.
+- **Credentials:** dedicated restricted SSH key provisioned, pinned-host login
+  verified, repository deployment secrets installed without printing private values.
+  No broker/DB credentials enter GitHub or builds. The server holds no GitHub token.
+- **Validation:** 358 units / 34 suites and lint/types passed locally (two existing
+  lint warnings). All **20** deployment/operational tests passed, including real
+  receiver checksum validation, corrupt-transfer refusal, cleanup, retry handling,
+  serialized swaps and rollback. Actionlint 1.7.12, shell syntax, cross-review
+  self-test and repository skill validation passed. CI now runs deployment tests.
+- **Next:** finish final shell/deployment checks, PR CI and independent review,
+  guarded-merge automation, then observe its first real automatic production
+  deployment and verify CURRENT/public/authenticated health. No further per-merge
+  deployment confirmation is required. Do not claim automation is live until that
+  workflow succeeds. No application financial formulas or schema changes.
+
+## Previous handoff (2026-10-20): Schwab preview fix merged; deployment awaits owner
 
 - **Ready release:** `022f186c978250d4dac0a21fbddd24cfff1a80c5`, guarded squash
   merge of PR #33. Its tree matches reviewed head `1eec053` exactly. Independent

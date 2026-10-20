@@ -3,6 +3,9 @@
 > Last updated: 2026-03-20
 
 ## Context
+- **Owner decision (2026-10-20):** deploy the Schwab preview correction now and
+  automatically deploy future successful merged-main CI through the reviewed,
+  off-host delivery pipeline, preserving backup and service-health gates.
 - **Owner-approved follow-up (2026-10-18):** full non-security roadmap: durable
   chart-side journal and screenshots; daily review/reflection; playbook rules and
   examples; grouped edge analysis with uncertainty and trade drill-down; weekly

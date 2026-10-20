@@ -1,6 +1,5 @@
 name: Deliver container
-# Builds and publishes the web image after CI passes on a push to main. This
-# never deploys anything: deployment is a separate manual step (docs/DEPLOYMENT.md).
+# Owner-authorized automatic deployment after exact-SHA CI on main only.
 on:
   workflow_run:
     workflows: [CI]
@@ -8,26 +7,85 @@ on:
     branches: [main]
 permissions:
   contents: read
+  checks: read
   packages: write
+concurrency:
+  group: auratrade-production-delivery
+  cancel-in-progress: false
 jobs:
   publish:
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      REVISION: ${{ github.event.workflow_run.head_sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Skip superseded release
+        id: current
+        run: |
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$latest" = "$REVISION" ]; then echo 'deploy=true' >> "$GITHUB_OUTPUT"; else echo 'Skipping superseded release'; fi
       - uses: docker/setup-buildx-action@v3
+        if: steps.current.outputs.deploy == 'true'
       - uses: docker/login-action@v3
+        if: steps.current.outputs.deploy == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - name: Build migration image off-host
+        if: steps.current.outputs.deploy == 'true'
+        uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: ghcr.io/rahul-reddy/auratrade-web:${{ github.event.workflow_run.head_sha }}
-          labels: org.opencontainers.image.source=https://github.com/rahul-reddy/AuraTrade
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          target: migrate
+          platforms: linux/amd64
+          load: true
+          tags: auratrade-migrate:${{ env.REVISION }}
+          labels: org.opencontainers.image.revision=${{ env.REVISION }}
+          cache-from: |
+            type=gha,scope=app
+            type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=app
+      - name: Build web image off-host
+        if: steps.current.outputs.deploy == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: auratrade-web:${{ env.REVISION }}
+          labels: org.opencontainers.image.revision=${{ env.REVISION }}
+          cache-from: |
+            type=gha,scope=app
+            type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=app
+      - name: Publish web image
+        if: steps.current.outputs.deploy == 'true'
+        run: |
+          docker tag "auratrade-web:$REVISION" "ghcr.io/rahul-reddy/auratrade-web:$REVISION"
+          docker push "ghcr.io/rahul-reddy/auratrade-web:$REVISION"
+      - name: Deploy verified images
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          DEPLOY_KEY: ${{ secrets.AURATRADE_DEPLOY_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.AURATRADE_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "$DEPLOY_KEY" && test -n "$DEPLOY_KNOWN_HOSTS"
+          umask 077
+          key="$RUNNER_TEMP/auratrade-deploy-key"
+          hosts="$RUNNER_TEMP/auratrade-known-hosts"
+          trap 'rm -f "$key" "$hosts"' EXIT
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$hosts"
+          bash scripts/deploy-prebuilt.sh "$REVISION" 18.226.191.214 auratrades.quest "$key" "$hosts"

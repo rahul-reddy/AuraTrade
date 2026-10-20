@@ -60,6 +60,36 @@ database exists does **not** change the database's password; use `ALTER USER` fi
 
 ## Deploying
 
+**Automatic production deployment is owner-authorized (2026-10-20).** Every
+successful main push CI triggers `Deliver container`. The job builds both Linux
+images on GitHub's runner, publishes the web image, then transfers the exact Git
+source and checksummed images over SSH. It verifies exact-SHA CI and image
+identity/platform/revision, backs up before migrating, waits for healthy services
+and checks public login/closed registration before atomically updating CURRENT.
+No new confirmation is required after each reviewed merge.
+
+Deployments serialize through a GitHub concurrency group (in-progress deploys
+are not cancelled) and a server lock. Superseded main commits are skipped before
+building and again before deployment. Only successful same-repository main-push
+CI events can deploy; PR, fork and manual CI-dispatch events cannot. A rerun of a
+successful current-main push CI can retry delivery. Failed CI leaves production
+unchanged. Check the `Deliver container` run for deployment outcome, not just CI.
+
+The dedicated `AURATRADE_DEPLOY_KEY` repository secret has an independent,
+revocable server authorized key with forwarding/PTY restrictions. The pinned
+server host key is `AURATRADE_DEPLOY_KNOWN_HOSTS`; neither value is printed or
+stored in Git. No GitHub credentials are stored on the server. Broker/database
+secrets remain in its private runtime `.env`, never build arguments or image ENV.
+
+Backup or migration failures stop before changing the application. If app startup
+or public checks fail, the server attempts to restore the previous application;
+database migrations are retained, never reversed automatically. A failed rollback
+requires operator intervention. Destructive migrations still require an explicit
+owner decision and backup under AGENTS.md. The workflow makes no cloud resource
+or pricing changes. Builds stay off the 2 GB host.
+
+### Manual recovery / workstation fallback
+
 Only merged, CI-green revisions of `main` deploy. From the workstation, in the
 repository root, with a clean worktree:
 
@@ -67,8 +97,9 @@ repository root, with a clean worktree:
 build caused memory pressure and a transient 502, despite the old containers
 remaining started. Cancelling the build restored service before any migration.
 For this instance, use the off-host image procedure below instead of starting
-another on-host build. A dedicated prebuilt-image mode in `scripts/deploy.ps1`
-is a follow-up; the default command below still builds on the server.
+another on-host build. The server now refuses legacy on-host builds unless an
+operator explicitly sets `AURATRADE_ALLOW_HOST_BUILD=1` there. The workstation
+command below is legacy; use off-host images on this instance.
 
 ```
 pwsh -NoProfile -File scripts/deploy.ps1 -Confirm "DEPLOY <first 7 of the sha>"
@@ -108,9 +139,9 @@ Export both images with `docker save`, transfer the archive and the exact Git
 release over SSH, verify the archive SHA-256 and image IDs, then `docker load`.
 Check loaded IDs and revision labels against the locally built artifacts. Labels
 alone do not establish provenance: the source archive, successful build and exact
-artifact identity checks are all required. Execute the reviewed
-`deploy/server-deploy.sh` sequence with **only** its `dc ... build web migrate`
-invocation replaced by checks for those already loaded image IDs. Preserve the
+artifact identity checks are all required. The server now directly supports:
+`sh deploy/server-deploy.sh <sha> <web-image-id> <migrate-image-id> <site-host>`.
+It checks those preloaded images and never builds in this mode. Preserve the
 pre-migration backup, migration, service health waits, CURRENT update and cleanup.
 Do not call the default workstation deployer afterward: it would rebuild on-host.
 Run the usual public/authenticated smoke checks and a fresh backup/restore check.
@@ -310,10 +341,11 @@ COPY errors can include raw row values, which must not reach operational logs.
 
 ## Container image on GHCR (delivery)
 
-Separately, every push to `main` that passes CI publishes
+Every push to `main` that passes CI publishes
 `ghcr.io/rahul-reddy/auratrade-web:<full sha>` (`.github/workflows/delivery.yml`). The
-server does not use it (pulling a private image would need a GitHub token on the
-server); it builds the same Dockerfile from the same commit instead.
+server receives the same built web image plus its migration image over pinned
+SSH. It does not pull from GHCR or hold a registry token. The runner builds once;
+the production server only loads and verifies the resulting artifacts.
 
 ## Schwab runtime secrets
 
