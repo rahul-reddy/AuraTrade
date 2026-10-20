@@ -26,23 +26,11 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
-for kind in web migrate; do docker image inspect "auratrade-$kind:$sha" > "$work/$kind.json"; done
-# Inspect privately; never dump image environment into job logs.
-python3 - "$work" "$sha" <<'PY'
-import json,re,sys
-from pathlib import Path
-root=Path(sys.argv[1]); sha=sys.argv[2]
-for kind in ('web','migrate'):
-    value=json.loads((root/f'{kind}.json').read_text())[0]
-    if value['Os']!='linux' or value['Architecture']!='amd64' or value['Config'].get('Labels',{}).get('org.opencontainers.image.revision')!=sha:
-        raise SystemExit('Unexpected image platform/revision')
-    allowed={'PATH','NODE_VERSION','YARN_VERSION','NODE_ENV','NEXT_TELEMETRY_DISABLED','PORT','HOSTNAME'}
-    if any(s.partition('=')[0] not in allowed for s in value['Config'].get('Env',[])):
-        raise SystemExit('Runtime configuration must not be baked into images')
-    image_id=value['Id']
-    if not re.fullmatch(r'sha256:[0-9a-f]{64}',image_id): raise SystemExit('Invalid image identity')
-    (root/f'{kind}.id').write_text(image_id)
-PY
+for kind in web migrate; do
+    docker image inspect "auratrade-$kind:$sha" > "$work/$kind.json"
+    # The shared validator never dumps image environment or other private metadata.
+    python3 deploy/image-identity.py "$sha" < "$work/$kind.json" > "$work/$kind.id"
+done
 web_id=$(cat "$work/web.id"); migrate_id=$(cat "$work/migrate.id")
 git archive --format=tar --output="$work/source.tar" "$sha"
 docker save "auratrade-web:$sha" "auratrade-migrate:$sha" | gzip -1 > "$work/images.tar.gz"

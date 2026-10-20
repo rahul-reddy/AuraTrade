@@ -2,7 +2,46 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Gemini reviewer runs through Antigravity
+## Current handoff (2026-10-20): Automatic rollout stopped safely; portable identity fix
+
+- **Owner scope:** Schwab correction is live (`022f186`); automatically deploy
+  future successful merged-main CI without renewed confirmation. Account-security
+  product work remains deferred and repository visibility stays public.
+- **Automation merged:** PR #35, release `c5f09d3`, reviewed head `658c24c`,
+  independent Claude Opus approval (0 blocking):
+  https://github.com/rahul-reddy/AuraTrade/pull/35#issuecomment-6299021453 .
+  Final PR CI and merged CI each passed 358 units, 21 deployment/operational
+  checks and all 21 browser tests without retries; migration/drift checks passed.
+  Main CI: https://github.com/rahul-reddy/AuraTrade/actions/runs/39481230309 .
+- **First automatic run:** CI successfully triggered delivery without a workstation
+  deploy command. Both images built/published/transferred; source/image archive
+  checksums passed. Docker archive import changes `.Id` across GitHub's Docker
+  backend and the server's containerd backend. The strict ID check stopped before
+  backup/migration/swap. CURRENT stayed `022f186`, healthy; incoming files cleaned.
+  Evidence: https://github.com/rahul-reddy/AuraTrade/actions/runs/39481889717 .
+- **Correction:** shared, deterministic `deploy/image-identity.py` validates platform,
+  revision and allowed image ENV, then hashes runtime configuration and ordered
+  uncompressed layer digests. Both runner and server compare this portable content
+  identity, retaining exact archive checksums. Engine IDs/creation history are
+  excluded; changes to filesystem or runtime configuration remain rejected before
+  backup. The validator used for manual rollback follows the executing script.
+- **Evidence:** 24 deployment/operational tests passed, including different engine
+  IDs with identical content, changed imported filesystem refusal, changed runtime
+  settings, corruption, rollback and cleanup. A real disposable image was exported
+  as a Docker archive and imported into the production host's image store (never
+  run): engine IDs differed while portable identities matched. Probe image/archive
+  were removed; the live app was untouched. No broker values or credentials logged.
+- **Isolation:** unrelated working edits to the review harness appeared in the
+  original checkout. They are preserved. This fix is isolated in a fresh worktree
+  based on committed main, and does not modify the review harness.
+- **Review update:** prior head passed CI and Claude Opus review (0 blocking). Rebased
+  over merged PR #36, preserving its Antigravity harness and handoff; only STATUS
+  conflicted. The new head needs fresh CI and independent review.
+- **Next:** exact-head CI and independent review, guarded merge, then observe the
+  automatic delivery and verify live CURRENT/image revision/public/authenticated
+  health. Do not claim automatic rollout complete until that real workflow passes.
+
+## Previous handoff (2026-10-20): Gemini reviewer runs through Antigravity
 
 - **Owner request:** make the Gemini reviewer work through Google Antigravity on the owner's Pro
   login, let it review critical diffs at high effort, and apply it to TenFold, Trading_Strats and
