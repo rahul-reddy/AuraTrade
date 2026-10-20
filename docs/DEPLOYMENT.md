@@ -92,37 +92,17 @@ or pricing changes. Builds stay off the 2 GB host.
 
 ### Manual recovery / workstation fallback
 
-Only merged, CI-green revisions of `main` deploy. From the workstation, in the
-repository root, with a clean worktree:
+Only merged, CI-green revisions of `main` deploy. To retry current main, rerun its
+successful push CI run; that triggers delivery again and rechecks current main.
+For an owner-confirmed manual rollback or recovery, use the off-host procedure
+below with the selected revision and its reviewed source/CI evidence.
 
-**Current 2 GB host limitation (2026-10-20):** the latest server-side TypeScript
-build caused memory pressure and a transient 502, despite the old containers
-remaining started. Cancelling the build restored service before any migration.
-For this instance, use the off-host image procedure below instead of starting
-another on-host build. The server now refuses legacy on-host builds unless an
-operator explicitly sets `AURATRADE_ALLOW_HOST_BUILD=1` there. The workstation
-command below is legacy; use off-host images on this instance.
-
-```
-pwsh -NoProfile -File scripts/deploy.ps1 -Confirm "DEPLOY <first 7 of the sha>"
-```
-
-`-Revision` defaults to `origin/main`; the script prints the exact confirmation it
-wants if `-Confirm` does not match. It:
-
-1. refuses an uncommitted worktree, a revision not on `origin/main`, or one without a
-   successful `Verify AuraTrade` check;
-2. copies `git archive <sha>` to `~/auratrade/releases/<sha>` over SSH. The server holds
-   no GitHub credential and never pulls;
-3. runs `deploy/server-deploy.sh <sha>` there: build the `web` and `migrate` images
-   (the running version keeps serving), dump the database, `prisma migrate deploy`,
-   then replace the web container and wait for its health check. A failed build or
-   migration stops before the swap. It keeps the newest 3 releases and their images;
-4. smoke-checks `https://auratrades.quest`: `/login` 200, signed-out `/dashboard`
-   redirects to `/login`, sign-up answers 403.
-
-A deploy creates no AWS resources, so it takes no spending limit; the server's price is
-fixed above. A build takes about 5–6 minutes.
+`scripts/deploy.ps1` is a legacy workstation command that requests an on-host
+build. It cannot complete against the default server configuration and must not
+be used on this 2 GB instance: a previous TypeScript build caused memory pressure
+and a transient 502. The server rejects on-host builds unless explicitly opted
+in through `AURATRADE_ALLOW_HOST_BUILD=1` in the executing process. Routine
+delivery uses the prebuilt mode and requires no workstation deployment command.
 
 ### Off-host images for the current instance
 
@@ -138,15 +118,23 @@ Dockerfile's Prisma generation and Next.js typecheck/build. Keep credentials out
 of build args and image environment; they are supplied by the server at runtime.
 
 Export both images with `docker save`, transfer the archive and the exact Git
-release over SSH, verify the archive SHA-256 and image IDs, then `docker load`.
-Check loaded IDs and revision labels against the locally built artifacts. Labels
-alone do not establish provenance: the source archive, successful build and exact
-artifact identity checks are all required. The server now directly supports:
-`sh deploy/server-deploy.sh <sha> <web-image-id> <migrate-image-id> <site-host>`.
+release over SSH, verify the archive SHA-256, then `docker load`. Compute each
+portable identity with `docker image inspect <tag> | python3 deploy/image-identity.py <sha>`.
+This hashes the uncompressed filesystem layer digests and normalized runtime
+configuration (environment, commands, user, working directory, labels, ports,
+volumes, stop signal and health check). Docker/containerd engine `.Id` values can
+change on archive import, so they are not compared across hosts. Archive checksums
+still verify the exact transferred bytes. Platform/revision and the image ENV
+allowlist remain mandatory. Labels alone do not establish provenance.
+The server directly supports:
+`sh deploy/server-deploy.sh <sha> <web-content-identity> <migrate-content-identity> <site-host>`.
 It checks those preloaded images and never builds in this mode. Preserve the
 pre-migration backup, migration, service health waits, CURRENT update and cleanup.
 Do not call the default workstation deployer afterward: it would rebuild on-host.
 Run the usual public/authenticated smoke checks and a fresh backup/restore check.
+When recovering to a release predating portable identities, invoke the current
+reviewed server script and its sibling identity helper with the older target SHA;
+the target's own legacy script would request a host build.
 This changes neither AWS resources nor the fixed hosting bill. The recovery for
 `57e7c92` used this procedure; its worktree-only helper and identity checks remain
 under ignored `.local/` for audit, not as a supported public deployment command.
