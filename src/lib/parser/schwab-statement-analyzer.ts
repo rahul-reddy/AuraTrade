@@ -64,6 +64,7 @@ export interface StatementActionBreakdown {
 }
 
 export type StatementSourceFormat =
+  | 'SCHWAB_API'
   | 'SCHWAB_TRANSACTION_HISTORY'
   | 'TOS_ACCOUNT_STATEMENT'
 
