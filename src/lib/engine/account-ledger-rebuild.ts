@@ -32,6 +32,8 @@ import {
  * if any, rank below every real statement and never own events):
  *   - FILL rows (equity/option trades): thinkorswim Account Statement beats
  *     Schwab Transaction History (per-second times beat date-only), then the
+ *     API's complete-day transaction snapshot beats a date-only CSV. API
+ *     snapshots cannot supply or suppress lifecycle/event rows. Within a format,
  *     statement whose coverage ends latest, then the most recently created.
  *   - EVENT rows (expirations, journals/transfers, mergers, cash): only
  *     Transaction History carries these — TOS Trade History lists fills only —
@@ -70,6 +72,7 @@ type RowClass = 'FILL' | 'EVENT'
 
 const FORMAT_RANK: Record<StatementSourceFormat, number> = {
   TOS_ACCOUNT_STATEMENT: 2,
+  SCHWAB_API: 1.5,
   SCHWAB_TRANSACTION_HISTORY: 1,
 }
 
@@ -246,6 +249,7 @@ function asActionCategory(value: string): StatementActionCategory {
 }
 
 export function asSourceFormat(value: string): StatementSourceFormat {
+  if (value === 'SCHWAB_API') return value
   return value === 'TOS_ACCOUNT_STATEMENT' ? 'TOS_ACCOUNT_STATEMENT' : 'SCHWAB_TRANSACTION_HISTORY'
 }
 

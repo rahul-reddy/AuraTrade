@@ -111,10 +111,10 @@ function mapWarningCreateManyInput(
 }
 
 export async function persistBrokerStatementImport(
-  db: PrismaClient,
+  db: PrismaClient | Prisma.TransactionClient,
   args: PersistBrokerStatementArgs,
 ): Promise<{ statementImportId: string }> {
-  return db.$transaction(async (tx) => {
+  const persist = async (tx: Prisma.TransactionClient) => {
     const existing = await tx.brokerStatementImport.findUnique({
       where: {
         accountId_fileHash: {
@@ -194,5 +194,6 @@ export async function persistBrokerStatementImport(
     }
 
     return { statementImportId: statementImport.id }
-  })
+  }
+  return '$transaction' in db ? db.$transaction(persist) : persist(db)
 }

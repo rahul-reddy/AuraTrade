@@ -2,7 +2,85 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-19): full non-security roadmap deployed
+## Current handoff (2026-10-20): Schwab connection ready for review
+
+- **Owner authorization:** developer access approved, app created, private keys
+  supplied in ignored `.env`; proceed with connection and daily sync. Branch
+  `feat/schwab-sync`, based on `a52d84c`. Live code remains `687011d` until the
+  exact-head CI/review/guarded merge and deployment complete.
+- **Implemented:** Settings → Connections with Schwab OAuth, one-use state bound
+  to the signed-in user and HttpOnly cookie, explicit owned-account mapping,
+  inspectable transaction/fee preview, atomic ledger/snapshot confirmation,
+  opt-in daily completed-day sync, pause, reconnect and local disconnect.
+  Existing journals/trades survive disconnect. Espresso & Acid themes and fee
+  presentation masking are supported. There is no order-placement API client.
+- **Data safety:** API snapshots have a separate source type, below timestamped
+  TOS fills and above date-only CSV fills. They cannot suppress CSV lifecycle
+  events. Stable content comparisons skip unchanged days; immutable observations
+  detect A → B → A revisions. Changed prior days pause background importing.
+  Source fee costs are summed as absolute broker-reported charges and must
+  reconcile exactly with rounded USD cash movement; fees are never inferred.
+  Unsupported assets, events, statuses, fee layouts, precision or response sizes
+  reject the whole batch. Missing carry-in positions stop confirmation.
+- **Credentials:** AES-256-GCM binds encrypted tokens, account identifiers and
+  pending source data to user/purpose. Refresh commits separately so rejected
+  source data cannot roll back a rotated token. All connection writers serialize
+  via DB locks; canonical changes share the existing account ledger lock. Private
+  runtime credentials and a stable random encryption key were installed in the
+  host environment through SSH stdin, without values in commands, git or logs.
+- **Validation on the final implementation working tree:** `npm test` passed
+  **352 tests / 34 suites**; lint passed (0 errors, two existing warnings), types
+  and isolated production build passed. The prior candidate passed **21/21**
+  browser tests; the final Schwab browser regression passed after fee masking and
+  immutable-observation fixes. It exercises real APIs/database with synthetic
+  previews, fees, failed-save retry, rollback of an earlier day when a later day
+  fails, concurrent confirmation, session/origin boundaries, both themes and
+  disconnect retaining trades. Full exact-head CI remains required before merge.
+- **Migration:** additive `20261020120000_schwab_connection` applied to both local
+  databases. All **15** migrations also deployed to a fresh disposable database;
+  drift check found no difference. No applied migration was edited. Production
+  migration waits for the deployment's pre-migration backup. Harness self-test
+  and repository skill validator passed. Public repository visibility retained.
+- **Limits / next action:** first sync checks up to 59 completed days, later runs
+  recheck at least seven; older gaps need CSV history. Ordinary single-leg USD
+  equities only; options, position transfers/lifecycle and ambiguous records
+  require CSV review. Approximate weekly authorization renewal remains necessary.
+  Live brokerage payloads have NOT been verified: the owner must authorize on
+  Schwab and inspect the first preview after deployment. Finish exact-head CI,
+  independent cross-model review, guarded merge, deploy, and read-only live smoke.
+  Account-security product work remains deferred.
+- **PR / CI follow-up:** PR #31 head `3b54c3c` passed the full local 21-browser
+  suite. Initial GitHub CI passed migrations/lint/types/352 unit tests/build but
+  exposed an ambiguous browser status selector when dummy client credentials
+  were absent. The fixture now supplies synthetic credentials and waits for the
+  specific completion status. No broker request or import correctness failure
+  occurred. Re-run exact-head CI and independent review after this test fix.
+- **Final integration correction:** the `5128333` fixture-fix head passed CI
+  (352 units; all browsers, one existing chart-review retry) and the original
+  application tree received Claude approval with zero blocking findings.
+  Final audit identified that a changed ledger rebuild also needs to restart
+  existing technical enrichment/classification. Manual and scheduled imports
+  now start that pipeline only after successful commit; unchanged/failed batches
+  do not. A regression checks the commit boundary and rejection path. Validate,
+  commit, re-run CI/review on the new head before release. Review advisories:
+  bounded slow-first-sync timeout, supported EQUITY source types only, empty
+  revision recovery, immutable-observation retention and explicit callback config.
+  Comma-separated types were confirmed against schwab-py's primary source; daily
+  content markers prevent unchanged snapshots creating duplicate observations.
+- **Blocking review finding addressed:** the exact `5128333` review found that
+  the precedence test still labeled its supposed API statements as CSV history.
+  The regression now contests an older complete SCHWAB_API day against a newer
+  partial CSV and checks the completed round trip/P&L, then contests API against
+  an older timestamped TOS statement. This exercises both rank boundaries rather
+  than only the pre-existing CSV timestamp tie-break. New head needs fresh review.
+- **Fix verification:** 353 units passed, final production build/lint/types passed,
+  and the real Schwab browser regression passed after the enrichment change.
+  Temporarily inverting API rank below CSV and above TOS each caused the new
+  precedence regression to fail as intended; the original engine source was
+  restored byte-for-byte and the normal regression passed. No engine ranking
+  behavior changed in the fix; the test now guards the intended existing rank.
+
+## Previous handoff (2026-10-19): full non-security roadmap deployed
 
 - **Live release:** `687011de23182e6882e1bd11601594c325c12589` at
   https://auratrades.quest. PR #29 was squash-merged by `scripts/merge-pr.ps1`

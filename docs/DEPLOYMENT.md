@@ -280,3 +280,22 @@ Separately, every push to `main` that passes CI publishes
 `ghcr.io/rahul-reddy/auratrade-web:<full sha>` (`.github/workflows/delivery.yml`). The
 server does not use it (pulling a private image would need a GitHub token on the
 server); it builds the same Dockerfile from the same commit instead.
+
+## Schwab runtime secrets
+
+Set `SCHWAB_CLIENT_ID`, `SCHWAB_CLIENT_SECRET` and `SCHWAB_TOKEN_KEY` in the private
+host `~/auratrade/.env` (mode 0600), without putting values in commands, logs or
+git. The key is 32 random bytes encoded as 64 hex characters; preserve it across
+releases and keep a secure off-host copy alongside other deployment secrets.
+The compose web service receives these only at runtime, enables the persistent
+daily sync worker and uses the HTTPS callback at
+`/api/brokers/schwab/callback` on the configured site host. No extra public ports,
+cron bearer tokens or orders endpoint are needed. Do not rotate the encryption
+key without re-encrypting stored broker values or disconnecting all connections.
+After deployment the owner must complete Schwab's interactive authorization in
+Settings → Connections and review the first batch. Verify the app is active and
+the registered callback matches exactly if authorization fails. Automatic sync
+failures pause the connection and show an in-app message; no private upstream
+payloads or raw exceptions are logged. Imported trades remain available while
+reconnection is required. Database restore checks do not prove that Schwab
+authorization remains valid; restored broker tokens may require reconnection.

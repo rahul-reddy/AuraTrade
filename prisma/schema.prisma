@@ -23,6 +23,7 @@ model User {
   sessions         Session[]
   tradingAccounts  TradingAccount[]
   brokerStatements BrokerStatementImport[]
+  schwabConnection SchwabConnection?
 }
 
 model AuthAccount {
@@ -115,8 +116,31 @@ model TradingAccount {
   dailyReviews   DailyReview[]
   playbooks      Playbook[]
   weeklyReviews  WeeklyReview[]
+  schwabConnection SchwabConnection?
 
   @@index([userId])
+}
+
+// Broker credentials, account hashes and pending source data are authenticated
+// ciphertext. Never expose this model directly through an API response.
+model SchwabConnection {
+  id String @id @default(cuid())
+  userId String @unique
+  accountId String? @unique
+  tokens String? @db.Text
+  accounts String? @db.Text
+  binding String? @db.Text
+  oauthState String?
+  oauthExpiresAt DateTime?
+  refreshExpiresAt DateTime?
+  preview String? @db.Text
+  previewHash String?
+  autoSync Boolean @default(false)
+  lastAttemptAt DateTime?
+  lastSyncAt DateTime?
+  message String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account TradingAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model Upload {

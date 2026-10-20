@@ -8,7 +8,8 @@
   examples; grouped edge analysis with uncertainty and trade drill-down; weekly
   experiment; exact source inspection; saved views/chart preferences/j-k review;
   presentation amount masking; import/cache/backup/restore health. Account
-  security comes last. Schwab connector implementation waits for access approval.
+  security comes last. Schwab developer access is approved (2026-10-20); the owner
+  authorized the OAuth connection, preview and completed-day daily sync build.
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
 - Will become SaaS. Account size: $250K–$1M (fractional Kelly emphasized)
 - Running locally for now (local PostgreSQL)
