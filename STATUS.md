@@ -2,7 +2,51 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Schwab connection deployed
+## Current handoff (2026-10-20): Schwab live-format preview correction
+
+- **Cause:** owner OAuth/account linking succeeded, but first preview rejected
+  valid Schwab `SMA_ADJUSTMENT` buying-power bookkeeping. The live source also
+  contains ETFs typed `COLLECTIVE_INVESTMENT / EXCHANGE_TRADED_FUND` and an older
+  mutual-fund redemption. Diagnostics emitted structural categories only; no
+  broker identifiers, credentials, symbols, prices or amounts were logged/saved.
+- **Change:** accept only the observed reconciled USD currency-only SMA layout
+  and explicitly typed single-leg ETFs. Existing reported-fee and exact cash
+  reconciliation checks remain. Mutual funds, options and position events still
+  block the complete preview. Errors now identify the blocked calendar day and
+  mutual-fund review requirement without private source values.
+- **First-sync choice:** optional start date must be a completed date in the
+  initial 59-day window. Excluded history is disclosed in the UI; the boundary
+  is encrypted in the pending preview and committed only with explicit review
+  confirmation. Future overlap and same-account reconnect preserve the boundary.
+  Later syncs cannot narrow their overlap with a custom date. No schema change.
+- **Source validation:** privately replayed the adapter against the live window:
+  every observed ordinary stock/ETF/SMA layout passed; one mutual-fund day remains
+  deliberately blocked. No canonical live import or user-selected exclusion was
+  performed. Local fixture sources are entirely synthetic.
+- **Validation:** 358 unit tests / 34 suites passed; lint passed (two existing
+  warnings), types and isolated production build passed. All **21 Chromium tests**
+  passed without retries before the review clarification, including first-sync input/request validation,
+  blocked-day recovery, persisted confirmation boundary, fees and both themes.
+  PR #33 head `c2d002a` CI passed (358 units, 20 browsers first attempt plus one
+  existing chart-heading strict-selector retry; Schwab passed first attempt):
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39455759031 . Fresh database
+  migration/drift checks passed. Secret advisory exited unsuccessfully and its
+  SARIF contained zero results; do not claim a completed clean secret scan.
+  Independent Claude Opus medium review approved that head with zero blocking
+  findings: https://github.com/rahul-reddy/AuraTrade/pull/33#issuecomment-6295669682 .
+  Its advisory is addressed: the preview now explicitly shows the boundary that
+  confirmation will commit, independent of subsequent date-input edits or a failed
+  refetch. Final clarification reran 358 units, production build and the focused
+  real Schwab browser flow (both themes), all passed. Standalone lint/types and
+  final exact-head CI/review must finish before merge.
+- **Next:** independently review and guarded-merge
+  the fix, prepare Linux images off-host (never build on the 2 GB server), then
+  obtain owner confirmation for manual deployment under the updated standing
+  workflow. After deployment, verify the live error/connection. Owner chooses whether to exclude older
+  history and reviews the resulting preview before importing. Account-security
+  product work remains deferred; repository visibility stays public.
+
+## Previous handoff (2026-10-20): Schwab connection deployed
 
 - **Live release:** `57e7c9297aaa9962d2f036094ff2a9a36de70993` at
   https://auratrades.quest. PR #31 was guarded squash-merged after exact-head CI

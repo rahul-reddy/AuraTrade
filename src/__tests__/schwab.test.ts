@@ -34,6 +34,32 @@ describe('Schwab conservative transaction adapter', () => {
     expect(evaluateStatementImportSupport(dryRun).supported).toBe(true)
     expect(buildBrokerPositionLedger(dryRun.rows).positions[0]).toMatchObject({ side: 'SHORT', netPnl: 99.95, isOpen: false })
   })
+  test('explicit Schwab ETF subtype uses the same reported-fee ledger as stocks', () => {
+    const rows = [trade(1), trade(2, -10, 110, 0.17, 'CLOSING')].map(tx => ({ ...tx,
+      transferItems: tx.transferItems.map(i => i.instrument.assetType === 'EQUITY'
+        ? { ...i, instrument: { ...i.instrument, assetType: 'COLLECTIVE_INVESTMENT', type: 'EXCHANGE_TRADED_FUND' } } : i),
+    }))
+    const dryRun = analyzeApiCsv(transactionsToCsv(rows, day), day)
+    expect(dryRun.rows.map(r => r.fees)).toEqual([0, 0.17])
+    expect(buildBrokerPositionLedger(dryRun.rows).positions[0]).toMatchObject({ side: 'LONG', netPnl: 99.83, isOpen: false })
+    for (const type of [undefined, 'CLOSED_END_FUND', 'UNIT_INVESTMENT_TRUST', 'UNKNOWN']) {
+      const tx = rows[0]
+      expect(() => transactionsToCsv([{ ...tx, transferItems: tx.transferItems.map(i => i.instrument.assetType === 'COLLECTIVE_INVESTMENT' ? { ...i, instrument: { ...i.instrument, type } } : i) }], day)).toThrow()
+    }
+  })
+  test('ignores only reconciled USD SMA bookkeeping, including weekend posting dates', () => {
+    const sma = { activityId: 30, type: 'SMA_ADJUSTMENT', status: 'VALID', time: `${day}T01:00:00Z`, tradeDate: '2026-10-16T04:00:00Z', netAmount: 2500,
+      transferItems: [{ instrument: { assetType: 'CURRENCY', symbol: 'CURRENCY_USD' }, amount: 2500, cost: 0 }] }
+    expect(transactionsToCsv([sma, trade(1)], day)).toBe(transactionsToCsv([trade(1)], day))
+    expect(analyzeApiCsv(transactionsToCsv([sma], day), day).rows).toHaveLength(0)
+    for (const patch of [{ netAmount: 1 }, { status: 'REVERSED' }, { transferItems: [] }, { transferItems: [...sma.transferItems, trade(1).transferItems[1]] }]) {
+      expect(() => transactionsToCsv([{ ...sma, ...patch }], day)).toThrow()
+    }
+    for (const patch of [{ cost: -1 }, { fee: 1 }, { feeType: 'COMMISSION' }, { positionEffect: 'OPENING' }, { instrument: { assetType: 'CURRENCY', symbol: 'CURRENCY_EUR' } }, { instrument: { assetType: 'EQUITY', symbol: 'SYN' } }]) {
+      expect(() => transactionsToCsv([{ ...sma, transferItems: [{ ...sma.transferItems[0], ...patch }] }], day)).toThrow()
+    }
+    expect(() => transactionsToCsv([sma, trade(1), { ...trade(2), type: 'JOURNAL' }], day)).toThrow()
+  })
   test.each(['OPTION', 'FUTURE', 'UNKNOWN'])('blocks unsupported %s assets', asset => {
     const tx = trade(1); tx.transferItems[1].instrument.assetType = asset
     expect(() => transactionsToCsv([tx], day)).toThrow(/unsupported|ambiguous/)
@@ -61,6 +87,11 @@ describe('Schwab conservative transaction adapter', () => {
     const tx = trade(1)
     expect(analyzeApiCsv(transactionsToCsv([{ ...tx, type: 'DIVIDEND_OR_INTEREST', transferItems: [tx.transferItems[0]] }], day), day).rows).toHaveLength(0)
     expect(() => transactionsToCsv([{ ...tx, type: 'DIVIDEND_OR_INTEREST' }], day)).toThrow()
+  })
+  test('mutual-fund redemption stays blocked with an actionable message, including mixed batches', () => {
+    const tx = trade(2, -10, 1, 0, 'CLOSING')
+    tx.transferItems[1].instrument.assetType = 'MUTUAL_FUND'
+    expect(() => transactionsToCsv([trade(1), tx], day)).toThrow('Mutual-fund transactions require CSV review')
   })
   test('API overlap owns a trading day once and timestamped TOS fills still take precedence', () => {
     const rows = analyzeApiCsv(transactionsToCsv([trade(1), trade(2, -10, 110, 0.17, 'CLOSING')], day), day).rows

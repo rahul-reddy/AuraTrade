@@ -13,8 +13,8 @@ import { configuration, hash, seal, unseal } from './crypto'
 import { accountsSchema, brokerGet, exchange, SchwabError, tokensSchema } from './client'
 import { analyzeApiCsv, transactionsToCsv } from './transactions'
 
-const previewSchema = z.object({ createdAt: z.number(), days: z.array(z.object({ day: z.string(), csv: z.string(), fileHash: z.string() })) })
-const bindingSchema = z.object({ hashValue: z.string().regex(/^[A-Za-z0-9_-]+$/), label: z.string() })
+const previewSchema = z.object({ createdAt: z.number(), initialFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), days: z.array(z.object({ day: z.string(), csv: z.string(), fileHash: z.string() })) })
+const bindingSchema = z.object({ hashValue: z.string().regex(/^[A-Za-z0-9_-]+$/), label: z.string(), syncFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })
 // Comma-separated serialization matches the primary schwab-py client:
 // https://github.com/alexgolec/schwab-py/blob/master/schwab/client/base.py#L329-L385
 const TYPES = 'TRADE,RECEIVE_AND_DELIVER,DIVIDEND_OR_INTEREST,ACH_RECEIPT,ACH_DISBURSEMENT,CASH_RECEIPT,CASH_DISBURSEMENT,ELECTRONIC_FUND,WIRE_OUT,WIRE_IN,JOURNAL,MEMORANDUM,MARGIN_CALL,MONEY_MARKET,SMA_ADJUSTMENT'
@@ -81,7 +81,8 @@ export async function connectionStatus(userId: string) {
   return { configured, connected: !!c?.tokens, needsReconnect: !!c?.tokens && (!c.refreshExpiresAt || c.refreshExpiresAt.getTime() < Date.now()),
     accounts, localAccounts, accountId: c?.accountId, bound: !!c?.binding, autoSync: c?.autoSync ?? false,
     refreshExpiresAt: c?.refreshExpiresAt, lastSyncAt: c?.lastSyncAt, message: c?.message,
-    preview: preview ? { hash: c!.previewHash, days: preview.days.length, rows: preview.days.reduce((n, d) => n + analyzeApiCsv(d.csv, d.day).totalRows, 0), from: preview.days[0]?.day, to: preview.days.at(-1)?.day,
+    syncFrom: c?.binding ? bindingSchema.parse(unseal(userId, 'binding', c.binding)).syncFrom : undefined,
+    preview: preview ? { hash: c!.previewHash, initialFrom: preview.initialFrom, days: preview.days.length, rows: preview.days.reduce((n, d) => n + analyzeApiCsv(d.csv, d.day).totalRows, 0), from: preview.days[0]?.day, to: preview.days.at(-1)?.day,
       transactions: preview.days.flatMap(d => analyzeApiCsv(d.csv, d.day).rows.map(r => ({ day: d.day, action: r.action, symbol: r.symbol, quantity: r.quantity, price: r.price, fees: r.fees }))).slice(0, 500) } : null }
 }
 
@@ -97,7 +98,8 @@ export async function bindAccount(userId: string, index: number, accountId: stri
     // Binding is permanent until disconnect: account history must never be
     // silently switched to another broker account by a later reconnect.
     if (c.binding && (bindingSchema.parse(unseal(userId, 'binding', c.binding)).hashValue !== selected.hashValue || c.accountId !== accountId)) throw new SchwabError(409, 'Disconnect before changing the account mapping. Keep separate broker accounts in separate AuraTrade accounts.')
-    await tx.schwabConnection.update({ where: { userId }, data: { accountId: account.id, binding: seal(userId, 'binding', selected), accounts: null, preview: null, previewHash: null, message: 'Account linked. Fetch a preview before importing.' } })
+    const previous = c.binding ? bindingSchema.parse(unseal(userId, 'binding', c.binding)) : null
+    await tx.schwabConnection.update({ where: { userId }, data: { accountId: account.id, binding: seal(userId, 'binding', { ...selected, ...(previous?.syncFrom ? { syncFrom: previous.syncFrom } : {}) }), accounts: null, preview: null, previewHash: null, message: 'Account linked. Fetch a preview before importing.' } })
   })
 }
 
@@ -109,9 +111,13 @@ export function completedDays(now: Date, lastSyncAt: Date | null): string[] {
   return Array.from({ length: count }, (_, i) => new Date(end - (count - i - 1) * 86400000).toISOString().slice(0, 10))
 }
 
-async function collectPreview(tx: Prisma.TransactionClient, userId: string) {
+async function collectPreview(tx: Prisma.TransactionClient, userId: string, initialFrom?: string) {
   const c = await tx.schwabConnection.findUniqueOrThrow({ where: { userId } })
   if (!c.binding || !c.accountId || c.accounts) throw new SchwabError(409, 'Select and link your Schwab account first.')
+  const window = completedDays(new Date(), c.lastSyncAt)
+  // Narrowing is an explicit first-sync choice only. Later syncs must keep the
+  // overlap window intact so a custom date cannot conceal a broker correction.
+  if (initialFrom && (c.lastSyncAt || !window.includes(initialFrom))) throw new SchwabError(422, 'Choose a completed date within the first-sync window (the past 59 days). A start date cannot change the overlap after a successful sync.')
   const binding = bindingSchema.parse(unseal(userId, 'binding', c.binding))
   // Refresh was committed in a separate, serialized transaction before any
   // source validation. A rejected import must not roll back a rotated token.
@@ -119,13 +125,18 @@ async function collectPreview(tx: Prisma.TransactionClient, userId: string) {
   const days: z.infer<typeof previewSchema>['days'] = []
   // One complete trading-date request at a time: below Schwab's request budget,
   // with a strict size/count ceiling instead of assuming truncated data complete.
-  for (const day of completedDays(new Date(), c.lastSyncAt)) {
+  const from = initialFrom ?? binding.syncFrom
+  for (const day of window.filter(day => !from || day >= from)) {
     const next = new Date(new Date(`${day}T00:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10)
     const startDate = fromZonedTime(`${day}T00:00:00`, 'America/New_York').toISOString()
     const endDate = new Date(fromZonedTime(`${next}T00:00:00`, 'America/New_York').getTime() - 1).toISOString()
     const params = new URLSearchParams({ startDate, endDate, types: TYPES })
     const raw = await brokerGet(access, `accounts/${binding.hashValue}/transactions?${params}`)
-    const csv = transactionsToCsv(raw, day)
+    let csv: string
+    try { csv = transactionsToCsv(raw, day) } catch (error) {
+      if (error instanceof SchwabError && error.status === 422) throw new SchwabError(422, `Schwab preview blocked on ${day}. ${error.message}`)
+      throw error
+    }
     const marker = `Schwab API content SHA-256: ${hash(csv)}`
     const latest = await tx.brokerStatementImport.findFirst({ where: { userId, accountId: c.accountId, sourceFormat: 'SCHWAB_API', fileName: `Schwab API ${day}.csv`, confirmedAt: { not: null } }, orderBy: { createdAt: 'desc' }, select: { assumptions: true } })
     // Compare with the CURRENT snapshot, not any historic matching hash. If the
@@ -136,7 +147,7 @@ async function collectPreview(tx: Prisma.TransactionClient, userId: string) {
       days.push({ day, csv, fileHash })
     }
   }
-  const preview = { createdAt: Date.now(), days }
+  const preview = { createdAt: Date.now(), ...(initialFrom ? { initialFrom } : {}), days }
   await tx.schwabConnection.update({ where: { userId }, data: { preview: seal(userId, 'preview', preview), previewHash: hash(JSON.stringify(preview)), lastAttemptAt: new Date(), message: 'Preview ready. Review and confirm before changing your trades.' } })
 }
 
@@ -172,16 +183,20 @@ async function applyPreview(tx: Prisma.TransactionClient, userId: string, expect
     await rebuildLedgerTradesForAccount(tx, account.id)
     await rebuildDailySnapshotsForAccount(tx, account.id, account.startingBalance.toNumber())
   }
-  await tx.schwabConnection.update({ where: { userId }, data: { preview: null, previewHash: null, lastSyncAt: new Date(), lastAttemptAt: new Date(), autoSync, message: changed ? 'Sync complete. Transactions reconciled with uploaded statements.' : 'Sync complete. No new supported trades.' } })
+  // Persist the owner's reviewed first-sync boundary only on confirmation, so
+  // later overlap does not silently backfill the explicitly excluded history.
+  const binding = preview.initialFrom && c.binding && !c.lastSyncAt
+    ? seal(userId, 'binding', { ...bindingSchema.parse(unseal(userId, 'binding', c.binding)), syncFrom: preview.initialFrom }) : undefined
+  await tx.schwabConnection.update({ where: { userId }, data: { ...(binding ? { binding } : {}), preview: null, previewHash: null, lastSyncAt: new Date(), lastAttemptAt: new Date(), autoSync, message: changed ? 'Sync complete. Transactions reconciled with uploaded statements.' : 'Sync complete. No new supported trades.' } })
   return { accountId: account.id, changed }
 }
 
-export async function syncAction(userId: string, action: 'preview' | 'confirm' | 'disconnect' | 'pause', previewHash?: string, autoSync = false) {
+export async function syncAction(userId: string, action: 'preview' | 'confirm' | 'disconnect' | 'pause', previewHash?: string, autoSync = false, initialFrom?: string) {
   if (action === 'preview') await withConnection(userId, tx => accessToken(tx, userId))
   const result = await withConnection(userId, async tx => {
     if (action === 'disconnect') { await tx.schwabConnection.deleteMany({ where: { userId } }); return }
     if (action === 'pause') { await tx.schwabConnection.updateMany({ where: { userId }, data: { autoSync: false } }); return }
-    if (action === 'preview') await collectPreview(tx, userId)
+    if (action === 'preview') await collectPreview(tx, userId, initialFrom)
     else return applyPreview(tx, userId, previewHash ?? '', autoSync)
   })
   // A ledger rebuild invalidates derived contexts/classifications. Start the
