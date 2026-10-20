@@ -71,7 +71,8 @@ and the Trades back link returns to all symbols in the current account.
   backup/restore evidence. Missing evidence is unknown; no external notifications
   are configured. See [operational monitoring](docs/DEPLOYMENT.md#operational-health).
 
-Schwab daily synchronization waits for developer access approval. Account security
+Schwab developer access is approved; connection and opt-in daily synchronization
+are available in Settings → Connections. Account security
 improvements are deferred until after this non-security roadmap, per the owner.
 
 ## Verification commands
@@ -132,8 +133,13 @@ days, with extra overlap after downtime (capped at 59). Older gaps need CSV
 history. Each broker day is fetched separately and normalized through the existing
 date-only Schwab statement ledger, so TOS timestamped fills keep precedence and
 overlaps do not count twice. Broker posting timestamps are not fill timestamps.
-Only ordinary single-leg USD equity trades with explicit, reconcilable broker
-fees are currently supported. Options, security transfers, lifecycle events,
+Only ordinary single-leg USD stock and explicitly typed ETF trades with explicit,
+reconcilable broker fees are currently supported. USD SMA buying-power bookkeeping
+is ignored only when its currency-only layout reconciles. An optional first-sync
+start date excludes earlier history after explicit preview confirmation; daily
+overlap respects that boundary, including after reconnect. Earlier history needs
+CSV review. The start date cannot narrow overlap after a successful sync.
+Options, mutual funds, security transfers, lifecycle events,
 unknown types/statuses, missing fees and oversized responses stop the entire
 batch. Recognized cash-only activity does not enter trading P&L. Missing earlier
 positions also stop confirmation. Previously synced days that change pause

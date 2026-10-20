@@ -6,7 +6,7 @@ import { analyzeBrokerStatement } from '@/lib/parser/analyze-broker-statement'
 
 const decimal = z.union([z.number().finite(), z.string().regex(/^-?\d+(\.\d+)?$/)])
 const item = z.object({
-  instrument: z.object({ assetType: z.string(), symbol: z.string().optional() }),
+  instrument: z.object({ assetType: z.string(), symbol: z.string().optional(), type: z.string().optional() }),
   amount: decimal, cost: decimal, price: decimal.optional(), feeType: z.string().optional(),
   fee: decimal.optional(), positionEffect: z.string().optional(),
 })
@@ -25,7 +25,8 @@ const fail = () => new SchwabError(422, 'This batch contains an unsupported or a
  * component is the broker trading date; currency fee cost is the reported fee.
  * Trade time is deliberately date-only: transaction posting time is NOT a fill
  * timestamp. TOS statement fills retain their existing higher precedence.
- * Only single-leg USD equities with explicit fees and VALID status are accepted.
+ * Single-leg USD equities and explicitly typed ETFs with reported fees and VALID
+ * status are accepted. Other collective investments remain unsupported.
  * Fee total = sum(abs(currency fee cost)); no fee is derived from prices.
  * Cash reconciliation is validation only: signed share cost - fees = netAmount.
  * Unknown statuses, types, assets, adjustments, lifecycle events and fee layouts
@@ -46,12 +47,28 @@ export function transactionsToCsv(value: unknown, day: string): string {
     if (seen.has(id)) { if (seen.get(id) !== signature) throw fail(); continue }
     seen.set(id, signature)
     if (tx.status !== 'VALID') throw fail()
+    // Schwab emits SMA (Special Memorandum Account) buying-power adjustments,
+    // including weekends. These are not executions or security movements. Only
+    // the observed USD currency-only layout (net equals reported amount, zero
+    // cost) is bookkeeping; netAmount here describes SMA, not execution cash.
+    // an adjustment carrying securities or cash cost still requires review.
+    if (tx.type === 'SMA_ADJUSTMENT') {
+      if (tx.transferItems.length !== 1 || tx.transferItems.some(i =>
+        i.instrument.assetType !== 'CURRENCY' || i.instrument.symbol !== 'CURRENCY_USD' ||
+        !new Prisma.Decimal(i.cost).isZero() || !new Prisma.Decimal(i.amount).equals(tx.netAmount) || i.feeType != null ||
+        (i.fee != null && !new Prisma.Decimal(i.fee).isZero()) || i.positionEffect != null)) throw fail()
+      continue
+    }
     if (CASH_TYPES.has(tx.type)) {
       if (tx.transferItems.some(i => i.instrument.assetType !== 'CURRENCY')) throw fail()
       continue
     }
+    if (tx.type === 'TRADE' && tx.transferItems.some(i => i.instrument.assetType === 'MUTUAL_FUND')) throw new SchwabError(422, 'Mutual-fund transactions require CSV review. For a first sync, you may choose a later start date to review newer history separately. No trades were imported.')
     if (tx.type !== 'TRADE' || !tx.tradeDate?.startsWith(day) || Number.isNaN(Date.parse(tx.tradeDate))) throw fail()
-    const equities = tx.transferItems.filter(i => i.instrument.assetType === 'EQUITY')
+    // ETFs use COLLECTIVE_INVESTMENT, not EQUITY, in the Schwab API. Match the
+    // explicit instrument subtype; do not admit other funds or unknown assets.
+    const equities = tx.transferItems.filter(i => i.instrument.assetType === 'EQUITY' ||
+      (i.instrument.assetType === 'COLLECTIVE_INVESTMENT' && i.instrument.type === 'EXCHANGE_TRADED_FUND'))
     const fees = tx.transferItems.filter(i => i.instrument.assetType === 'CURRENCY')
     if (equities.length !== 1 || fees.length === 0 || tx.transferItems.length !== equities.length + fees.length) throw fail()
     const stock = equities[0]
@@ -92,6 +109,6 @@ export function analyzeApiCsv(csv: string, day: string) {
   // Only actual transaction-history CSVs provide events in the account ledger.
   dryRun.sourceFormat = 'SCHWAB_API'
   dryRun.coverage = { from: new Date(`${day}T00:00:00Z`), to: new Date(`${day}T00:00:00Z`) }
-  dryRun.assumptions.push('Schwab API transaction tradeDate is date-only; posting timestamps are not execution times. Ordinary USD equity trades only; reported currency fee costs are required.')
+  dryRun.assumptions.push('Schwab API transaction tradeDate is date-only; posting timestamps are not execution times. Ordinary USD stock and explicitly typed ETF trades only; reported currency fee costs are required. Reconciled USD SMA bookkeeping does not enter trade P&L.')
   return dryRun
 }
