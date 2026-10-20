@@ -45,6 +45,11 @@ services:
       AUTH_TRUST_HOST: "true"
       # Optional, server-only Finviz daily export credential. Never a build arg.
       AURATRADE_FINVIZ_TOKEN: ${AURATRADE_FINVIZ_TOKEN:-}
+      SCHWAB_CLIENT_ID: ${SCHWAB_CLIENT_ID:-}
+      SCHWAB_CLIENT_SECRET: ${SCHWAB_CLIENT_SECRET:-}
+      SCHWAB_TOKEN_KEY: ${SCHWAB_TOKEN_KEY:-}
+      SCHWAB_REDIRECT_URI: https://${AURATRADE_SITE_HOST:?}/api/brokers/schwab/callback
+      SCHWAB_AUTO_SYNC_ENABLED: "1"
       # Fixed here, not read from .env: the hosted server never has public sign-up.
       AURATRADE_REGISTRATION: closed
       AURATRADE_HEALTH_FILE: /app/operational-health/status.json

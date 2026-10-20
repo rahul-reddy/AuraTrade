@@ -105,3 +105,44 @@ build and start to use `.next-validation` without sharing dev build artifacts.
 
 Real broker statements belong in the ignored `documents/` directory. Never commit
 credentials, account numbers or real statements.
+
+## Schwab connection
+
+In Settings → Connections, authorize Schwab, explicitly match the brokerage
+account to its AuraTrade account, fetch a preview, inspect transactions/fees and
+confirm. Optionally enable daily sync. The persistent hosted Node worker checks
+hourly and imports completed days after 06:00 America/New_York. Reconnect about
+weekly when Schwab authorization expires. Disconnect deletes stored credentials
+and pending previews, retaining imported trades and journals; revoke access at
+Schwab separately to remove its authorization.
+
+Server-only environment (never `NEXT_PUBLIC_*`): `SCHWAB_CLIENT_ID`,
+`SCHWAB_CLIENT_SECRET`, `SCHWAB_TOKEN_KEY` (64 hexadecimal characters generated
+from 32 random bytes), `SCHWAB_REDIRECT_URI` (defaults to
+`https://auratrades.quest/api/brokers/schwab/callback`), and
+`SCHWAB_AUTO_SYNC_ENABLED=1` on a persistent Node server. The registered callback
+must match exactly and use HTTPS. The hosted compose stack supplies these at
+runtime, never during image builds. Keep the encryption key stable and back it
+up securely with the server configuration: database backups alone cannot decrypt
+broker credentials. There is no public scheduler endpoint or order-placement
+code. Multi-process workers coordinate through database locks.
+
+First sync requests up to 59 completed days. Later runs recheck at least seven
+days, with extra overlap after downtime (capped at 59). Older gaps need CSV
+history. Each broker day is fetched separately and normalized through the existing
+date-only Schwab statement ledger, so TOS timestamped fills keep precedence and
+overlaps do not count twice. Broker posting timestamps are not fill timestamps.
+Only ordinary single-leg USD equity trades with explicit, reconcilable broker
+fees are currently supported. Options, security transfers, lifecycle events,
+unknown types/statuses, missing fees and oversized responses stop the entire
+batch. Recognized cash-only activity does not enter trading P&L. Missing earlier
+positions also stop confirmation. Previously synced days that change pause
+automatic sync for manual review; empty responses never erase prior positions.
+Previews expire after 30 minutes. Canonical confirmation and daily snapshots are
+one transaction; failed batches retain the prior successful sync watermark.
+
+Browser fixture tests require `SCHWAB_TEST_DATABASE_URL` pointing to the same
+isolated test database as the test server and the same synthetic
+`SCHWAB_TOKEN_KEY` in both processes. They create synthetic broker records without
+contacting Schwab. Real brokerage authorization requires the account owner's
+interactive consent; tests do not claim to verify a live brokerage response.

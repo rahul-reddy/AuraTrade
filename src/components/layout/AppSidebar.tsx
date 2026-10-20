@@ -52,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Playbooks', href: '/playbooks', icon: NotebookPen },
   { label: 'Weekly Review', href: '/weekly-review', icon: NotebookPen },
   { label: 'Health', href: '/settings/health', icon: Settings },
+  { label: 'Connections', href: '/settings/connections', icon: Settings },
   {
     label: 'Upload',
     href: '/upload',
@@ -159,7 +160,7 @@ export default function AppSidebar({ userEmail, accountName }: AppSidebarProps) 
           const Icon = item.icon
           // Use exact match for root-like paths, prefix+slash for nested ones
           const isActive =
-            pathname === item.href || pathname.startsWith(item.href + '/') || (item.label === 'Settings' && pathname.startsWith('/settings') && !pathname.startsWith('/settings/health')) || (item.label === 'Trades' && pathname.startsWith('/chart/'))
+            pathname === item.href || pathname.startsWith(item.href + '/') || (item.label === 'Settings' && pathname.startsWith('/settings') && !pathname.startsWith('/settings/health') && !pathname.startsWith('/settings/connections')) || (item.label === 'Trades' && pathname.startsWith('/chart/'))
 
           const itemClass = cn(
             'group flex items-center gap-3 rounded-lg px-3 py-3 text-[13px] transition-colors',
