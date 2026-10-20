@@ -8,12 +8,15 @@ import { buildBrokerPositionLedger } from '@/lib/engine/broker-position-ledger'
 import { evaluateStatementImportSupport } from '@/lib/engine/broker-trade-importer'
 import { lockAccountLedger, previewStatementImport, rebuildLedgerTradesForAccount } from '@/lib/engine/account-ledger-rebuild'
 import { rebuildDailySnapshotsForAccount } from '@/lib/engine/daily-snapshots'
+import { startEnrichment } from '@/lib/engine/trade-enrichment'
 import { configuration, hash, seal, unseal } from './crypto'
 import { accountsSchema, brokerGet, exchange, SchwabError, tokensSchema } from './client'
 import { analyzeApiCsv, transactionsToCsv } from './transactions'
 
 const previewSchema = z.object({ createdAt: z.number(), days: z.array(z.object({ day: z.string(), csv: z.string(), fileHash: z.string() })) })
 const bindingSchema = z.object({ hashValue: z.string().regex(/^[A-Za-z0-9_-]+$/), label: z.string() })
+// Comma-separated serialization matches the primary schwab-py client:
+// https://github.com/alexgolec/schwab-py/blob/master/schwab/client/base.py#L329-L385
 const TYPES = 'TRADE,RECEIVE_AND_DELIVER,DIVIDEND_OR_INTEREST,ACH_RECEIPT,ACH_DISBURSEMENT,CASH_RECEIPT,CASH_DISBURSEMENT,ELECTRONIC_FUND,WIRE_OUT,WIRE_IN,JOURNAL,MEMORANDUM,MARGIN_CALL,MONEY_MARKET,SMA_ADJUSTMENT'
 
 // All writers (including refresh, reconnect and disconnect) take this same
@@ -170,16 +173,20 @@ async function applyPreview(tx: Prisma.TransactionClient, userId: string, expect
     await rebuildDailySnapshotsForAccount(tx, account.id, account.startingBalance.toNumber())
   }
   await tx.schwabConnection.update({ where: { userId }, data: { preview: null, previewHash: null, lastSyncAt: new Date(), lastAttemptAt: new Date(), autoSync, message: changed ? 'Sync complete. Transactions reconciled with uploaded statements.' : 'Sync complete. No new supported trades.' } })
+  return { accountId: account.id, changed }
 }
 
 export async function syncAction(userId: string, action: 'preview' | 'confirm' | 'disconnect' | 'pause', previewHash?: string, autoSync = false) {
   if (action === 'preview') await withConnection(userId, tx => accessToken(tx, userId))
-  await withConnection(userId, async tx => {
+  const result = await withConnection(userId, async tx => {
     if (action === 'disconnect') { await tx.schwabConnection.deleteMany({ where: { userId } }); return }
     if (action === 'pause') { await tx.schwabConnection.updateMany({ where: { userId }, data: { autoSync: false } }); return }
     if (action === 'preview') await collectPreview(tx, userId)
-    else await applyPreview(tx, userId, previewHash ?? '', autoSync)
+    else return applyPreview(tx, userId, previewHash ?? '', autoSync)
   })
+  // A ledger rebuild invalidates derived contexts/classifications. Start the
+  // existing pipeline only after commit, never against uncommitted trade IDs.
+  if (result?.changed) startEnrichment(result.accountId, prisma)
 }
 
 export async function runDailySync() {
@@ -190,13 +197,14 @@ export async function runDailySync() {
   for (const { userId } of connections) {
     try {
       await withConnection(userId, tx => accessToken(tx, userId))
-      await withConnection(userId, async tx => {
+      const result = await withConnection(userId, async tx => {
         const c = await tx.schwabConnection.findUnique({ where: { userId } })
         if (!c?.autoSync || (c.lastAttemptAt && c.lastAttemptAt >= today)) return
         await collectPreview(tx, userId)
         const preview = await tx.schwabConnection.findUniqueOrThrow({ where: { userId } })
-        await applyPreview(tx, userId, preview.previewHash!, true, true)
+        return applyPreview(tx, userId, preview.previewHash!, true, true)
       })
+      if (result?.changed) startEnrichment(result.accountId, prisma)
     } catch {
       // Fail closed; no private upstream diagnostics. Preserve last successful
       // sync watermark and stop automatic imports until a person reviews.

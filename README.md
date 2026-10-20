@@ -140,6 +140,8 @@ positions also stop confirmation. Previously synced days that change pause
 automatic sync for manual review; empty responses never erase prior positions.
 Previews expire after 30 minutes. Canonical confirmation and daily snapshots are
 one transaction; failed batches retain the prior successful sync watermark.
+Changed imports trigger the existing technical-context/classification pipeline
+after commit; unchanged or rejected batches do not restart it.
 
 Browser fixture tests require `SCHWAB_TEST_DATABASE_URL` pointing to the same
 isolated test database as the test server and the same synthetic

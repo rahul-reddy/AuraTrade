@@ -55,6 +55,30 @@
   were absent. The fixture now supplies synthetic credentials and waits for the
   specific completion status. No broker request or import correctness failure
   occurred. Re-run exact-head CI and independent review after this test fix.
+- **Final integration correction:** the `5128333` fixture-fix head passed CI
+  (352 units; all browsers, one existing chart-review retry) and the original
+  application tree received Claude approval with zero blocking findings.
+  Final audit identified that a changed ledger rebuild also needs to restart
+  existing technical enrichment/classification. Manual and scheduled imports
+  now start that pipeline only after successful commit; unchanged/failed batches
+  do not. A regression checks the commit boundary and rejection path. Validate,
+  commit, re-run CI/review on the new head before release. Review advisories:
+  bounded slow-first-sync timeout, supported EQUITY source types only, empty
+  revision recovery, immutable-observation retention and explicit callback config.
+  Comma-separated types were confirmed against schwab-py's primary source; daily
+  content markers prevent unchanged snapshots creating duplicate observations.
+- **Blocking review finding addressed:** the exact `5128333` review found that
+  the precedence test still labeled its supposed API statements as CSV history.
+  The regression now contests an older complete SCHWAB_API day against a newer
+  partial CSV and checks the completed round trip/P&L, then contests API against
+  an older timestamped TOS statement. This exercises both rank boundaries rather
+  than only the pre-existing CSV timestamp tie-break. New head needs fresh review.
+- **Fix verification:** 353 units passed, final production build/lint/types passed,
+  and the real Schwab browser regression passed after the enrichment change.
+  Temporarily inverting API rank below CSV and above TOS each caused the new
+  precedence regression to fail as intended; the original engine source was
+  restored byte-for-byte and the normal regression passed. No engine ranking
+  behavior changed in the fix; the test now guards the intended existing rank.
 
 ## Previous handoff (2026-10-19): full non-security roadmap deployed
 

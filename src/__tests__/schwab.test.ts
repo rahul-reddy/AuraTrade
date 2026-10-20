@@ -63,14 +63,20 @@ describe('Schwab conservative transaction adapter', () => {
     expect(() => transactionsToCsv([{ ...tx, type: 'DIVIDEND_OR_INTEREST' }], day)).toThrow()
   })
   test('API overlap owns a trading day once and timestamped TOS fills still take precedence', () => {
-    const rows = analyzeApiCsv(transactionsToCsv([trade(1)], day), day).rows
-    const base = { coverageFrom: new Date(day), coverageTo: new Date(day), rows, sourceFormat: 'SCHWAB_TRANSACTION_HISTORY' as const }
+    const rows = analyzeApiCsv(transactionsToCsv([trade(1), trade(2, -10, 110, 0.17, 'CLOSING')], day), day).rows
+    const base = { coverageFrom: new Date(day), coverageTo: new Date(day), rows, sourceFormat: 'SCHWAB_API' as const }
     const old = { ...base, id: 'old', createdAt: new Date('2026-10-19') }
     const fresh = { ...base, id: 'fresh', createdAt: new Date('2026-10-20') }
-    expect(selectAccountLedgerRows([old, fresh]).rows).toHaveLength(1)
-    expect(selectAccountLedgerRows([old, fresh]).rowOrigins[0].statementId).toBe('fresh')
-    const tos = { ...old, id: 'tos', sourceFormat: 'TOS_ACCOUNT_STATEMENT' as const, rows: rows.map(r => ({ ...r, date: new Date(`${day}T14:30:00Z`) })) }
-    expect(selectAccountLedgerRows([fresh, tos]).rowOrigins[0].statementId).toBe('tos')
+    // A NEWER mid-session CSV contains only the opening buy. Format priority,
+    // not creation time, must keep the complete API day including its close.
+    const partialCsv = { ...base, id: 'partial-csv', createdAt: new Date('2026-10-21'), sourceFormat: 'SCHWAB_TRANSACTION_HISTORY' as const, rows: rows.slice(0, 1) }
+    const selected = selectAccountLedgerRows([old, fresh, partialCsv])
+    expect(selected.rows).toHaveLength(2)
+    expect(selected.rowOrigins.map(r => r.statementId)).toEqual(['fresh', 'fresh'])
+    expect(buildBrokerPositionLedger(selected.rows).positions[0]).toMatchObject({ isOpen: false, netPnl: 99.83 })
+    // Even an OLDER timestamped TOS statement must outrank newer API snapshots.
+    const tos = { ...old, id: 'tos', sourceFormat: 'TOS_ACCOUNT_STATEMENT' as const, rows: rows.map((r, i) => ({ ...r, date: new Date(`${day}T14:${i ? '45' : '30'}:00Z`) })) }
+    expect(selectAccountLedgerRows([fresh, tos, partialCsv]).rowOrigins.map(r => r.statementId)).toEqual(['tos', 'tos'])
   })
   test('API fills never erase lifecycle events supplied by transaction-history statements', () => {
     const rows = analyzeApiCsv(transactionsToCsv([trade(1)], day), day).rows

@@ -3,20 +3,31 @@ jest.mock('@/lib/brokers/schwab/client', () => {
   const actual = jest.requireActual('@/lib/brokers/schwab/client')
   return { ...actual, exchange: jest.fn(), brokerGet: jest.fn() }
 })
+jest.mock('@/lib/engine/trade-enrichment', () => ({ startEnrichment: jest.fn() }))
+jest.mock('@/lib/parser/broker-statement-store', () => ({ persistBrokerStatementImport: jest.fn() }))
+jest.mock('@/lib/engine/daily-snapshots', () => ({ rebuildDailySnapshotsForAccount: jest.fn() }))
+jest.mock('@/lib/engine/account-ledger-rebuild', () => {
+  const actual = jest.requireActual('@/lib/engine/account-ledger-rebuild')
+  return { ...actual, previewStatementImport: jest.fn(), rebuildLedgerTradesForAccount: jest.fn() }
+})
 import { prisma } from '@/lib/prisma'
 import { beginConnection, bindAccount, completedDays, connectionStatus, finishConnection, runDailySync, syncAction } from '@/lib/brokers/schwab/service'
 import { Prisma } from '@/generated/prisma'
 import { hash, seal, unseal } from '@/lib/brokers/schwab/crypto'
 import { transactionsToCsv } from '@/lib/brokers/schwab/transactions'
+import { startEnrichment } from '@/lib/engine/trade-enrichment'
+import { persistBrokerStatementImport } from '@/lib/parser/broker-statement-store'
+import { previewStatementImport } from '@/lib/engine/account-ledger-rebuild'
 import { brokerGet, exchange } from '@/lib/brokers/schwab/client'
 
 const findUnique = jest.fn()
 const update = jest.fn()
-const tx = { $executeRaw: jest.fn(), schwabConnection: { findUnique, findUniqueOrThrow: findUnique, upsert: jest.fn(), update, deleteMany: jest.fn(), updateMany: jest.fn() }, tradingAccount: { findFirst: jest.fn() }, brokerStatementImport: { findFirst: jest.fn() } }
+const tx = { $executeRaw: jest.fn(), schwabConnection: { findUnique, findUniqueOrThrow: findUnique, upsert: jest.fn(), update, deleteMany: jest.fn(), updateMany: jest.fn() }, tradingAccount: { findFirst: jest.fn() }, brokerStatementImport: { findFirst: jest.fn(), findFirstOrThrow: jest.fn(), update: jest.fn() } }
 
 beforeEach(() => {
   jest.clearAllMocks()
   update.mockReset()
+  jest.mocked(startEnrichment).mockReset()
   jest.mocked(brokerGet).mockReset()
   process.env.SCHWAB_TOKEN_KEY = 'ab'.repeat(32)
   process.env.SCHWAB_CLIENT_ID = 'synthetic-client'; process.env.SCHWAB_CLIENT_SECRET = 'synthetic-secret'
@@ -71,6 +82,7 @@ test('account selection rejects another user account and prevents remapping link
   tx.tradingAccount.findFirst.mockResolvedValue({ id: 'local' })
   await expect(bindAccount('owner', 0, 'local')).rejects.toThrow('Disconnect')
   expect(update).not.toHaveBeenCalled()
+  expect(startEnrichment).not.toHaveBeenCalled()
 })
 test('confirm rejects changed and expired previews before any ledger writes', async () => {
   findUnique.mockResolvedValue({ preview: 'cipher', accountId: 'local', previewHash: 'new' })
@@ -115,10 +127,35 @@ test('daily worker waits until morning and checks the persisted attempt before i
     jest.mocked(brokerGet).mockResolvedValue([])
     await runDailySync()
     expect(brokerGet).toHaveBeenCalledTimes(8)
+    expect(startEnrichment).not.toHaveBeenCalled()
     expect(c.lastSyncAt).toEqual(new Date())
     await runDailySync()
     expect(brokerGet).toHaveBeenCalledTimes(8)
   } finally { jest.useRealTimers() }
+})
+test('confirmed ledger changes start technical enrichment only after commit; rejected batches never start it', async () => {
+  const day = '2026-10-19'
+  const csv = 'Date,Action,Symbol,Description,Quantity,Price,Fees & Comm,Amount\n10/19/2026,Buy,SYN,Synthetic,1,100,0,-100'
+  const c = { userId: 'owner', accountId: 'local', previewHash: 'reviewed', preview: seal('owner', 'preview', { createdAt: Date.now(), days: [{ day, csv, fileHash: 'synthetic-hash' }] }) }
+  findUnique.mockResolvedValue(c)
+  tx.tradingAccount.findFirst.mockResolvedValue({ id: 'local', startingBalance: new Prisma.Decimal(0) })
+  tx.brokerStatementImport.findFirst.mockResolvedValue(null)
+  tx.brokerStatementImport.findFirstOrThrow.mockResolvedValue({ id: 'statement', createdAt: new Date() })
+  jest.mocked(persistBrokerStatementImport).mockResolvedValue({ statementImportId: 'statement' })
+  jest.mocked(previewStatementImport).mockResolvedValue({ warnings: [] } as never)
+  let committed = false
+  jest.mocked(prisma.$transaction).mockImplementation(async (callback: unknown) => {
+    const result = await (callback as (db: unknown) => Promise<unknown>)(tx)
+    committed = true
+    return result as never
+  })
+  jest.mocked(startEnrichment).mockImplementation(() => { expect(committed).toBe(true) })
+  await syncAction('owner', 'confirm', 'reviewed')
+  expect(startEnrichment).toHaveBeenCalledWith('local', prisma)
+  jest.mocked(startEnrichment).mockClear()
+  jest.mocked(previewStatementImport).mockResolvedValue({ warnings: ['Missing earlier history'] } as never)
+  await expect(syncAction('owner', 'confirm', 'reviewed')).rejects.toThrow('unresolved')
+  expect(startEnrichment).not.toHaveBeenCalled()
 })
 test('unchanged days skip against the current observation, but a broker A → B → A revision is not lost as an old duplicate', async () => {
   const rawForDay = (day: string) => [{ activityId: 1, type: 'TRADE', status: 'VALID', time: `${day}T14:30:00Z`, tradeDate: `${day}T04:00:00Z`, netAmount: -100,
