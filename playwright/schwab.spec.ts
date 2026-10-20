@@ -34,8 +34,8 @@ test('Schwab preview, transactional confirm, ownership, retry, concurrent reques
   const email = await register(page)
   const user = await db.user.findUniqueOrThrow({ where: { email } })
   const account = await db.tradingAccount.create({ data: { userId: user.id, name: 'Synthetic Schwab', startingBalance: 0 } })
-  async function preview(days: { day: string; csv: string }[]) {
-    const data = { createdAt: Date.now(), days: days.map(d => ({ ...d, fileHash: hash(`synthetic:${d.day}:${d.csv}`) })) }
+  async function preview(days: { day: string; csv: string }[], initialFrom?: string) {
+    const data = { createdAt: Date.now(), ...(initialFrom ? { initialFrom } : {}), days: days.map(d => ({ ...d, fileHash: hash(`synthetic:${d.day}:${d.csv}`) })) }
     const previewHash = hash(JSON.stringify(data))
     await db.schwabConnection.upsert({ where: { userId: user.id }, create: {
       userId: user.id, accountId: account.id, binding: seal(user.id, 'binding', { hashValue: 'synthetic-hash', label: 'Synthetic account' }),
@@ -45,10 +45,24 @@ test('Schwab preview, transactional confirm, ownership, retry, concurrent reques
     return previewHash
   }
   try {
-    const initialHash = await preview([{ day: '2026-10-19', csv: csv('2026-10-19', 'DAY,Buy,SYN,Synthetic buy,10,100,0,-1000\nDAY,Sell,SYN,Synthetic sell,10,110,0.17,1099.83') }])
+    const initialHash = await preview([{ day: '2026-10-19', csv: csv('2026-10-19', 'DAY,Buy,SYN,Synthetic buy,10,100,0,-1000\nDAY,Sell,SYN,Synthetic sell,10,110,0.17,1099.83') }], '2026-10-19')
     await page.goto('/settings/connections')
     const main = page.locator('#main-content')
     await expect(main.getByRole('heading', { name: 'Sync preview', exact: true })).toBeVisible()
+    const startDate = main.getByLabel('First sync start date (optional)')
+    await expect(startDate).toBeVisible()
+    await startDate.fill('2026-10-18')
+    await expect(main.getByText(/Daily sync will not backfill excluded dates/)).toBeVisible()
+    await page.route('**/api/brokers/schwab', async route => {
+      expect(route.request().postDataJSON()).toEqual({ action: 'preview', initialFrom: '2026-10-18' })
+      await route.fulfill({ status: 422, json: { message: 'Schwab preview blocked on 2026-10-18. Mutual-fund transactions require CSV review.' } })
+    }, { times: 1 })
+    await main.getByRole('button', { name: 'Fetch sync preview', exact: true }).click()
+    await expect(main.getByRole('alert')).toContainText('blocked on 2026-10-18')
+    await expect(main.getByRole('button', { name: 'Fetch sync preview', exact: true })).toBeEnabled()
+    await startDate.fill('2099-01-01')
+    expect((await page.request.post('/api/brokers/schwab', { data: { action: 'preview', initialFrom: '2099-01-01' } })).status()).toBe(422)
+    await startDate.fill('')
     await main.getByText('Inspect transactions and broker fees', { exact: true }).click()
     await expect(main.getByRole('table')).toContainText('0.17')
     await page.getByRole('button', { name: 'Hide P&L and balances', exact: true }).click()
@@ -63,6 +77,8 @@ test('Schwab preview, transactional confirm, ownership, retry, concurrent reques
     await expect(main.getByRole('button', { name: 'Confirm sync', exact: true })).toBeEnabled()
     await main.getByRole('button', { name: 'Confirm sync', exact: true }).click()
     await expect(main.getByRole('status').filter({ hasText: 'Sync complete' })).toBeVisible()
+    await expect(main.getByLabel('First sync start date (optional)')).toHaveCount(0)
+    await expect(main.getByText('API sync starts on 2026-10-19.', { exact: false })).toBeVisible()
     const trade = await db.roundTripTrade.findFirstOrThrow({ where: { accountId: account.id } })
     expect(trade.netPnl?.toString()).toBe('99.83')
     expect((await page.request.post('/api/brokers/schwab', { data: { action: 'confirm', hash: initialHash, autoSync: false } })).status()).toBe(409)

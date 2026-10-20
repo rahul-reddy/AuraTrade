@@ -7,7 +7,7 @@ import { PrivateAmount } from '@/components/providers/AmountPrivacy'
 type Status = {
   configured: boolean; connected: boolean; needsReconnect: boolean; bound: boolean; accountId?: string | null;
   accounts: { index: number; label: string }[]; localAccounts: { id: string; name: string }[];
-  autoSync: boolean; refreshExpiresAt?: string | null; lastSyncAt?: string | null; message?: string | null;
+  autoSync: boolean; refreshExpiresAt?: string | null; lastSyncAt?: string | null; message?: string | null; syncFrom?: string;
   preview: { hash: string; days: number; rows: number; from?: string; to?: string; transactions: { day: string; action: string; symbol: string; quantity: number; price: number; fees: number }[] } | null;
 }
 
@@ -20,6 +20,7 @@ export default function ConnectionsClient() {
   const [acknowledged, setAcknowledged] = useState(false)
   const [autoSync, setAutoSync] = useState(false)
   const [disconnect, setDisconnect] = useState(false)
+  const [initialFrom, setInitialFrom] = useState('')
   async function load() {
     try {
       const response = await fetch('/api/brokers/schwab', { cache: 'no-store' })
@@ -65,7 +66,9 @@ export default function ConnectionsClient() {
       </div>}
       {status.bound && !status.accounts.length && !status.needsReconnect && <div className="space-y-4 border-t pt-5">
         <p className="text-sm">Linked to {status.localAccounts.find(a => a.id === status.accountId)?.name}. Fetch recent completed days for review. This can take a few minutes.</p>
-        <Button variant="outline" disabled={busy} onClick={() => void act({ action: 'preview' })}>Fetch sync preview</Button>
+        {status.syncFrom && <p className="text-sm text-muted-foreground">API sync starts on {status.syncFrom}. Earlier history remains excluded; import it separately by CSV.</p>}
+        {!status.lastSyncAt && <div className="space-y-2"><label className="block space-y-2 text-sm">First sync start date (optional)<input type="date" className="block rounded border bg-background p-2" value={initialFrom} disabled={busy} onChange={e => setInitialFrom(e.target.value)} /></label><p className="text-sm text-muted-foreground">Leave blank to check all 59 completed days. Choosing a later date excludes earlier history from this sync; import that history separately by CSV. Daily sync will not backfill excluded dates.</p></div>}
+        <Button variant="outline" disabled={busy} onClick={() => void act({ action: 'preview', ...(!status.lastSyncAt && initialFrom ? { initialFrom } : {}) })}>Fetch sync preview</Button>
         {status.preview && <div className="space-y-3 rounded-lg border p-4"><h3 className="font-medium">Sync preview</h3><p>{status.preview.rows} equity transactions across {status.preview.days} checked days{status.preview.from ? ` (${status.preview.from} to ${status.preview.to})` : ''}.</p>
           <p className="text-sm text-muted-foreground">The existing ledger reconciles overlapping uploads. Timestamped thinkorswim fills take precedence. Fees come from Schwab; transaction times are treated as date-only. Missing earlier positions or unsupported records block the batch.</p>
           <details><summary className="cursor-pointer text-sm">Inspect transactions and broker fees</summary><div className="mt-3 max-h-80 overflow-auto"><table className="w-full text-left text-sm"><thead><tr>{['Day', 'Action', 'Symbol', 'Shares', 'Price', 'Fees'].map(label => <th className="p-2" key={label}>{label}</th>)}</tr></thead><tbody>{status.preview.transactions.map((t, i) => <tr className="border-t font-mono" key={i}><td className="p-2">{t.day}</td><td className="p-2">{t.action}</td><td className="p-2">{t.symbol}</td><td className="p-2">{t.quantity}</td><td className="p-2">{t.price}</td><td className="p-2"><PrivateAmount>{t.fees}</PrivateAmount></td></tr>)}</tbody></table></div>{status.preview.rows > 500 && <p className="text-sm">Showing the first 500 transactions of {status.preview.rows}.</p>}</details>

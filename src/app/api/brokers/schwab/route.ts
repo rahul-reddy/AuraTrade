@@ -9,7 +9,7 @@ import { JournalError } from '@/lib/journal/contracts'
 const inputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('connect') }),
   z.object({ action: z.literal('bind'), index: z.number().int().min(0).max(99), accountId: z.string().min(1).max(100), acknowledged: z.literal(true) }),
-  z.object({ action: z.literal('preview') }),
+  z.object({ action: z.literal('preview'), initialFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
   z.object({ action: z.literal('confirm'), hash: z.string().length(64), autoSync: z.boolean() }),
   z.object({ action: z.literal('disconnect') }),
   z.object({ action: z.literal('pause') }),
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       return response
     }
     if (input.action === 'bind') await bindAccount(session.user.id, input.index, input.accountId)
-    else await syncAction(session.user.id, input.action, input.action === 'confirm' ? input.hash : undefined, input.action === 'confirm' && input.autoSync)
+    else await syncAction(session.user.id, input.action, input.action === 'confirm' ? input.hash : undefined, input.action === 'confirm' && input.autoSync, input.action === 'preview' ? input.initialFrom : undefined)
     return NextResponse.json(await connectionStatus(session.user.id), { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) { return failure(error) }
 }

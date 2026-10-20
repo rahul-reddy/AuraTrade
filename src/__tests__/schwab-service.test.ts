@@ -83,6 +83,9 @@ test('account selection rejects another user account and prevents remapping link
   await expect(bindAccount('owner', 0, 'local')).rejects.toThrow('Disconnect')
   expect(update).not.toHaveBeenCalled()
   expect(startEnrichment).not.toHaveBeenCalled()
+  findUnique.mockResolvedValue({ accounts: seal('owner', 'accounts', [selected]), binding: seal('owner', 'binding', { ...selected, syncFrom: '2026-10-18' }), accountId: 'local' })
+  await bindAccount('owner', 0, 'local')
+  expect(unseal('owner', 'binding', update.mock.calls.at(-1)![0].data.binding)).toEqual({ ...selected, syncFrom: '2026-10-18' })
 })
 test('confirm rejects changed and expired previews before any ledger writes', async () => {
   findUnique.mockResolvedValue({ preview: 'cipher', accountId: 'local', previewHash: 'new' })
@@ -96,9 +99,11 @@ test('disconnect deletes only the requesting user connection', async () => {
   expect(tx.schwabConnection.deleteMany).toHaveBeenCalledWith({ where: { userId: 'owner' } })
 })
 test('status uses an explicit safe response instead of serializing connection secrets', async () => {
-  jest.mocked(prisma.schwabConnection.findUnique).mockResolvedValue({ tokens: 'never-return', binding: 'private', accounts: null, preview: null, userId: 'owner', refreshExpiresAt: new Date(Date.now() + 60000) } as never)
+  jest.mocked(prisma.schwabConnection.findUnique).mockResolvedValue({ tokens: 'never-return', binding: seal('owner', 'binding', { hashValue: 'private-hash', label: 'Private', syncFrom: '2026-10-18' }), accounts: null, preview: null, userId: 'owner', refreshExpiresAt: new Date(Date.now() + 60000) } as never)
   jest.mocked(prisma.tradingAccount.findMany).mockResolvedValue([])
-  expect(JSON.stringify(await connectionStatus('owner'))).not.toContain('never-return')
+  const status = await connectionStatus('owner')
+  expect(status.syncFrom).toBe('2026-10-18')
+  expect(JSON.stringify(status)).not.toMatch(/never-return|private-hash|Private/)
   expect(prisma.tradingAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'owner' } }))
 })
 test('completed date windows exclude today in New York and retain overlap across DST', () => {
@@ -132,6 +137,51 @@ test('daily worker waits until morning and checks the persisted attempt before i
     await runDailySync()
     expect(brokerGet).toHaveBeenCalledTimes(8)
   } finally { jest.useRealTimers() }
+})
+
+test('first-sync date narrows requests explicitly, rejects invalid ranges, and cannot hide later corrections', async () => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-10-20T16:00:00Z'))
+  try {
+    const c = { userId: 'owner', accountId: 'local', accounts: null, lastSyncAt: null as Date | null,
+      binding: seal('owner', 'binding', { hashValue: 'synthetic-hash', label: 'Synthetic' }),
+      tokens: seal('owner', 'tokens', { access_token: 'synthetic-access', refresh_token: 'synthetic-refresh', expiresAt: Date.now() + 1800000 }), refreshExpiresAt: new Date(Date.now() + 86400000) }
+    findUnique.mockResolvedValue(c)
+    tx.brokerStatementImport.findFirst.mockResolvedValue(null)
+    jest.mocked(brokerGet).mockResolvedValue([])
+    await syncAction('owner', 'preview', undefined, false, '2026-10-18')
+    expect(brokerGet).toHaveBeenCalledTimes(2)
+    expect(jest.mocked(brokerGet).mock.calls.map(([, path]) => new URLSearchParams(path.split('?')[1]).get('startDate'))).toEqual(['2026-10-18T04:00:00.000Z', '2026-10-19T04:00:00.000Z'])
+    const preview = unseal('owner', 'preview', update.mock.calls.at(-1)![0].data.preview) as { days: { day: string }[] }
+    expect(preview.days.map(d => d.day)).toEqual(['2026-10-18', '2026-10-19'])
+    expect(persistBrokerStatementImport).not.toHaveBeenCalled()
+    jest.mocked(brokerGet).mockClear(); update.mockClear()
+    for (const date of ['2026-10-20', '2026-10-21', '2026-08-01', '2026-09-31', 'not-a-date']) {
+      await expect(syncAction('owner', 'preview', undefined, false, date)).rejects.toThrow('completed date')
+    }
+    c.lastSyncAt = new Date('2026-10-19T12:00:00Z')
+    await expect(syncAction('owner', 'preview', undefined, false, '2026-10-18')).rejects.toThrow('overlap')
+    expect(brokerGet).not.toHaveBeenCalled(); expect(update).not.toHaveBeenCalled()
+    c.lastSyncAt = null
+    jest.mocked(brokerGet).mockResolvedValue([{ unsupported: true }])
+    await expect(syncAction('owner', 'preview', undefined, false, '2026-10-19')).rejects.toThrow('blocked on 2026-10-19')
+    expect(update).not.toHaveBeenCalled()
+    jest.mocked(brokerGet).mockReset(); jest.mocked(brokerGet).mockResolvedValue([])
+    c.lastSyncAt = new Date('2026-10-19T12:00:00Z')
+    c.binding = seal('owner', 'binding', { hashValue: 'synthetic-hash', label: 'Synthetic', syncFrom: '2026-10-18' })
+    await syncAction('owner', 'preview')
+    expect(brokerGet).toHaveBeenCalledTimes(2)
+  } finally { jest.useRealTimers() }
+})
+
+test('first-sync exclusion boundary is committed only with the reviewed preview', async () => {
+  const c = { userId: 'owner', accountId: 'local', lastSyncAt: null, binding: seal('owner', 'binding', { hashValue: 'synthetic-hash', label: 'Synthetic' }),
+    previewHash: 'reviewed', preview: seal('owner', 'preview', { createdAt: Date.now(), initialFrom: '2026-10-18', days: [] }) }
+  findUnique.mockResolvedValue(c)
+  tx.tradingAccount.findFirst.mockResolvedValue({ id: 'local', startingBalance: new Prisma.Decimal(0) })
+  await expect(syncAction('owner', 'confirm', 'wrong')).rejects.toThrow('changed')
+  expect(update).not.toHaveBeenCalled()
+  await syncAction('owner', 'confirm', 'reviewed')
+  expect(unseal('owner', 'binding', update.mock.calls.at(-1)![0].data.binding)).toEqual({ hashValue: 'synthetic-hash', label: 'Synthetic', syncFrom: '2026-10-18' })
 })
 test('confirmed ledger changes start technical enrichment only after commit; rejected batches never start it', async () => {
   const day = '2026-10-19'
