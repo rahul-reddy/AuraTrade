@@ -2,7 +2,22 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Schwab fix live; automatic deployment in review
+## Current handoff (2026-10-20): Gemini reviewer runs through Antigravity
+
+- **Owner request:** make the Gemini reviewer work through Google Antigravity on the owner's Pro
+  login, let it review critical diffs at high effort, and apply it to TenFold, Trading_Strats and
+  AuraTrade.
+- **Branch `feat/antigravity-gemini-reviewer`:** `gemini` runs `agy` (`~/.gemini/bin`) instead of
+  the Gemini CLI: pinned `gemini-3.8-flash-high` (`--effort high`; medium on low tier), plan mode +
+  sandbox, prompt on stdin, fail-closed on a model swap, a non-SUCCESS result, or configured MCP
+  servers/plugins. Critical exclusion is an explicit, empty `$CriticalTierExcluded` list. Ported
+  from rahul-reddy/Trading_Strats#8/#9 and rahul-reddy/TenFold#141; only project lines differ.
+- **Verified:** `scripts/cross-review-selftest.ps1` passes. End to end in Trading_Strats, Gemini
+  approved a clean change and blocked a planted bug.
+- **Deploy note:** review harness and docs only; the automatic post-merge deploy ships unchanged
+  app code.
+
+## Previous handoff (2026-10-20): Schwab fix live; automatic deployment in review
 
 - **Owner authorization:** deploy the prepared fix and enable automatic deployment
   after successful merged-main CI (latest instruction, 2026-10-20). AGENTS.md and
