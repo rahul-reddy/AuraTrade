@@ -1,5 +1,6 @@
 """Disposable Linux-only deployment tests; Docker/SSH/HTTP are synthetic stubs."""
 import json
+import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -10,8 +11,19 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SHA = 'a' * 40
 PREVIOUS = 'b' * 40
-WEB = 'sha256:' + '1' * 64
-MIGRATE = 'sha256:' + '2' * 64
+identity_spec = importlib.util.spec_from_file_location('image_identity', ROOT / 'deploy/image-identity.py')
+identity_module = importlib.util.module_from_spec(identity_spec)
+identity_spec.loader.exec_module(identity_module)
+
+
+def metadata(kind):
+    return {'Id': 'sha256:' + ('1' if kind == 'web' else '2') * 64, 'Os': 'linux', 'Architecture': 'amd64',
+            'Config': {'Labels': {'org.opencontainers.image.revision': SHA}, 'Env': []},
+            'RootFS': {'Type': 'layers', 'Layers': ['sha256:' + ('a' if kind == 'web' else 'b') * 64]}}
+
+
+WEB = identity_module.image_identity(metadata('web'), SHA)
+MIGRATE = identity_module.image_identity(metadata('migrate'), SHA)
 
 STUB = r'''#!/usr/bin/env python3
 import json,os,sys,time,shutil,subprocess,tarfile
@@ -21,8 +33,9 @@ with open(os.environ['CALL_LOG'],'a') as out: out.write(os.environ.get('TEST_RUN
 if tool=='docker':
  if args[:2]==['image','inspect']:
   kind='web' if 'auratrade-web:' in text else 'migrate'
-  value={'Id':'sha256:'+('1' if kind=='web' else '2')*64,'Os':'linux','Architecture':'amd64','Config':{'Labels':{'org.opencontainers.image.revision':os.environ['RELEASE_SHA']},'Env':[]}}
+  value={'Id':'sha256:'+('1' if kind=='web' else '2')*64,'Os':'linux','Architecture':'amd64','Config':{'Labels':{'org.opencontainers.image.revision':os.environ['RELEASE_SHA']},'Env':[]},'RootFS':{'Type':'layers','Layers':['sha256:'+('a' if kind=='web' else 'b')*64]}}
   if os.environ.get('BAD_ID'):value['Id']='sha256:'+'3'*64
+  if os.environ.get('BAD_CONTENT') or (os.environ.get('CHANGE_ON_IMPORT') and (Path(os.environ['HOME'])/'imported').exists()):value['RootFS']['Layers']=['sha256:'+'c'*64]
   if os.environ.get('BAD_LABEL'):value['Config']['Labels']['org.opencontainers.image.revision']='c'*40
   if os.environ.get('BAD_PLATFORM'):value['Architecture']='arm64'
   if os.environ.get('BAD_ENV'):value['Config']['Env']=['AUTH_SECRET=synthetic-private-value']
@@ -38,6 +51,7 @@ if tool=='docker':
   if os.environ.get('FAIL_DUMP'):sys.exit(1)
   print('synthetic database dump')
  elif args[0]=='save':sys.stdout.buffer.write(b'synthetic image archive')
+ elif args[0]=='load':(Path(os.environ['HOME'])/'imported').write_text('loaded')
  elif 'migrate' in args and 'run' in args:
   if os.environ.get('FAIL_MIGRATE'):sys.exit(1)
   time.sleep(float(os.environ.get('MIGRATE_DELAY','0')))
@@ -84,7 +98,7 @@ class DeploymentTests(unittest.TestCase):
         for revision in [SHA, PREVIOUS]:
             folder = self.base / 'releases' / revision / 'deploy'
             folder.mkdir(parents=True)
-            for name in ['server-deploy.sh', 'backup.sh', 'dc.sh', 'health-status.py', 'restore-check.sh']:
+            for name in ['server-deploy.sh', 'image-identity.py', 'backup.sh', 'dc.sh', 'health-status.py', 'restore-check.sh']:
                 shutil.copy(ROOT / 'deploy' / name, folder / name)
             (folder / 'compose.yaml').write_text('synthetic fixture')
         (self.base / '.env').write_text('synthetic fixture')
@@ -122,7 +136,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(json.loads((self.base / 'health/status.json').read_text())['backup']['state'], 'success')
 
     def test_untrusted_image_metadata_blocks_before_backup(self):
-        for flag in ['BAD_ID', 'BAD_LABEL', 'BAD_PLATFORM']:
+        for flag in ['BAD_CONTENT', 'BAD_LABEL', 'BAD_PLATFORM', 'BAD_ENV']:
             with self.subTest(flag=flag):
                 self.assertNotEqual(self.server(**{flag: '1'}).returncode, 0)
                 self.assertEqual(self.current(), PREVIOUS)
@@ -223,6 +237,35 @@ class DeploymentTests(unittest.TestCase):
         self.assertNotIn('pg_dump', self.calls())
         self.assertEqual(self.current(), PREVIOUS)
         self.assertEqual(list((self.base / 'incoming').iterdir()), [])
+
+    def test_engine_specific_image_id_does_not_change_content_identity(self):
+        result = self.server(BAD_ID='1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.current(), SHA)
+
+    def test_loaded_filesystem_change_is_blocked_before_backup(self):
+        result = self.runner(EXEC_REMOTE='1', CHANGE_ON_IMPORT='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Image content identity mismatch', result.stderr)
+        self.assertNotIn('pg_dump', self.calls())
+        self.assertEqual(self.current(), PREVIOUS)
+
+    def test_fingerprint_binds_runtime_settings_and_normalizes_only_empty_defaults(self):
+        from copy import deepcopy
+        original = metadata('web')
+        baseline = identity_module.image_identity(original, SHA)
+        compatible = deepcopy(original)
+        compatible.update({'Id': 'different engine identifier', 'Created': 'different creation metadata', 'Variant': None})
+        compatible['Config'].update({'User': None, 'Entrypoint': None, 'Volumes': None, 'Healthcheck': None})
+        self.assertEqual(identity_module.image_identity(compatible, SHA), baseline)
+        for key, value in [('Cmd', ['node', 'different.js']), ('Entrypoint', ['other']), ('Env', ['NODE_ENV=development']),
+                           ('User', 'unrelated'), ('WorkingDir', '/other'), ('StopSignal', 'SIGQUIT'),
+                           ('Healthcheck', {'Test': ['CMD', 'false']}), ('ExposedPorts', {'9999/tcp': {}}),
+                           ('Volumes', {'/other': {}}), ('Shell', ['different']), ('OnBuild', ['RUN false'])]:
+            changed = deepcopy(original); changed['Config'][key] = value
+            self.assertNotEqual(identity_module.image_identity(changed, SHA), baseline, key)
+        changed = deepcopy(original); changed['RootFS']['Layers'].append('sha256:' + 'f' * 64)
+        self.assertNotEqual(identity_module.image_identity(changed, SHA), baseline)
 
     def test_receiver_migration_failure_retains_current_and_cleans_transferred_files(self):
         result = self.runner(EXEC_REMOTE='1', FAIL_MIGRATE='1')

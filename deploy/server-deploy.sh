@@ -2,14 +2,14 @@
 # Runs ON the AuraTrade server. Automatic delivery (scripts/deploy-prebuilt.sh)
 # checks exact-main CI, transfers verified images, and unpacks git archive into
 #   ~/auratrade/releases/<sha>
-# Usage: sh <script> <sha> <web-image-id> <migrate-image-id> [site-host]
+# Usage: sh <script> <sha> <web-content-identity> <migrate-content-identity> [site-host]
 #
 # Order matters: verify images (the old version keeps serving), back up, migrate,
 # then swap the web container. A failed build or migration stops before the
 # swap. Migrations are never reversed automatically; see docs/DEPLOYMENT.md.
 set -eu
 
-sha=${1:?usage: server-deploy.sh <full commit sha> [web image ID migrate image ID site host]}
+sha=${1:?usage: server-deploy.sh <full commit sha> [web identity migrate identity site host]}
 case "$sha" in
     *[!0-9a-f]* | "") echo "Not a commit sha: $sha" >&2; exit 2 ;;
 esac
@@ -43,15 +43,17 @@ elif [ "$#" -eq 3 ] || [ "$#" -eq 4 ]; then
     for kind in web migrate; do
         if [ "$kind" = web ]; then expected=$2; else expected=$3; fi
         digest=${expected#sha256:}
-        case "$digest" in *[!0-9a-f]* | "") echo 'Invalid image ID.' >&2; exit 2 ;; esac
+        case "$digest" in *[!0-9a-f]* | "") echo 'Invalid image content identity.' >&2; exit 2 ;; esac
         [ "$expected" = "sha256:$digest" ] && [ "${#digest}" -eq 64 ] || exit 2
         image="auratrade-$kind:$sha"
-        [ "$(docker image inspect --format '{{.Id}}' "$image")" = "$expected" ] || { echo 'Image identity mismatch.' >&2; exit 1; }
-        [ "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")" = "$sha" ] || { echo 'Image revision mismatch.' >&2; exit 1; }
-        [ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" = linux/amd64 ] || { echo 'Image platform mismatch.' >&2; exit 1; }
+        metadata=$(mktemp)
+        if ! docker image inspect "$image" > "$metadata"; then rm -f "$metadata"; exit 1; fi
+        if ! actual=$(python3 "$(dirname "$0")/image-identity.py" "$sha" < "$metadata"); then rm -f "$metadata"; exit 1; fi
+        rm -f "$metadata"
+        [ "$actual" = "$expected" ] || { echo 'Image content identity mismatch.' >&2; exit 1; }
     done
 else
-    echo 'Supply both expected image IDs, or neither.' >&2; exit 2
+    echo 'Supply both expected image content identities, or neither.' >&2; exit 2
 fi
 
 previous=""
