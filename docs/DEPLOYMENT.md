@@ -63,6 +63,13 @@ database exists does **not** change the database's password; use `ALTER USER` fi
 Only merged, CI-green revisions of `main` deploy. From the workstation, in the
 repository root, with a clean worktree:
 
+**Current 2 GB host limitation (2026-10-20):** the latest server-side TypeScript
+build caused memory pressure and a transient 502, despite the old containers
+remaining started. Cancelling the build restored service before any migration.
+For this instance, use the off-host image procedure below instead of starting
+another on-host build. A dedicated prebuilt-image mode in `scripts/deploy.ps1`
+is a follow-up; the default command below still builds on the server.
+
 ```
 pwsh -NoProfile -File scripts/deploy.ps1 -Confirm "DEPLOY <first 7 of the sha>"
 ```
@@ -83,6 +90,33 @@ wants if `-Confirm` does not match. It:
 
 A deploy creates no AWS resources, so it takes no spending limit; the server's price is
 fixed above. A build takes about 5–6 minutes.
+
+### Off-host images for the current instance
+
+Keep the same release gates: clean worktree, exact revision merged to `main`,
+successful `Verify AuraTrade` on that revision, independent PR approval and the
+reviewed file tree. Build from `git archive <sha>` extracted into a fresh directory,
+never the live workstation tree or its environment files. On a Linux/amd64-capable
+Docker builder, build the repository Dockerfile twice: target `migrate` tagged
+`auratrade-migrate:<sha>`, then the default target tagged `auratrade-web:<sha>`.
+Use `--platform linux/amd64` and label each with
+`org.opencontainers.image.revision=<sha>`. Both builds must pass, including the
+Dockerfile's Prisma generation and Next.js typecheck/build. Keep credentials out
+of build args and image environment; they are supplied by the server at runtime.
+
+Export both images with `docker save`, transfer the archive and the exact Git
+release over SSH, verify the archive SHA-256 and image IDs, then `docker load`.
+Check loaded IDs and revision labels against the locally built artifacts. Labels
+alone do not establish provenance: the source archive, successful build and exact
+artifact identity checks are all required. Execute the reviewed
+`deploy/server-deploy.sh` sequence with **only** its `dc ... build web migrate`
+invocation replaced by checks for those already loaded image IDs. Preserve the
+pre-migration backup, migration, service health waits, CURRENT update and cleanup.
+Do not call the default workstation deployer afterward: it would rebuild on-host.
+Run the usual public/authenticated smoke checks and a fresh backup/restore check.
+This changes neither AWS resources nor the fixed hosting bill. The recovery for
+`57e7c92` used this procedure; its worktree-only helper and identity checks remain
+under ignored `.local/` for audit, not as a supported public deployment command.
 
 Never run `prisma migrate dev` or `prisma migrate reset` against the server's database.
 

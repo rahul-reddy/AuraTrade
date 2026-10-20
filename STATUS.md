@@ -2,7 +2,67 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Schwab connection ready for review
+## Current handoff (2026-10-20): Schwab connection deployed
+
+- **Live release:** `57e7c9297aaa9962d2f036094ff2a9a36de70993` at
+  https://auratrades.quest. PR #31 was guarded squash-merged after exact-head CI
+  and independent Claude Opus approval of `d07e07a` (critical tier, medium effort,
+  zero blocking findings). Merged and reviewed file trees match. Review:
+  https://github.com/rahul-reddy/AuraTrade/pull/31#issuecomment-6292409300 .
+- **Delivered:** Settings → Connections; Schwab OAuth, explicit owned-account
+  matching, inspectable fee/transaction preview, atomic ledger/snapshot import,
+  opt-in completed-day daily sync after 06:00 New York, pause/reconnect/disconnect.
+  Changed imports restart technical context/setup classification after commit.
+  Tokens, account identifiers and pending source data are encrypted; app keys stay
+  server-only. Existing TOS fills, CSV lifecycle events, journals and fee masking
+  retain their safeguards. Espresso & Acid light/dark/mobile UI is verified.
+- **Validation:** final local **353 units / 34 suites**, lint (0 errors, two
+  existing warnings), types, production build and **21/21 browser tests** passed.
+  Fresh deployment of all **15 migrations** and zero drift passed. The fixed
+  precedence regression rejects both deliberately inverted API ranks. Final PR CI:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39433080843 . Exact merged
+  release CI independently passed 353 units and all 21 browsers **without retries**:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39433768487 . Harness and
+  skill validation passed. Synthetic light/desktop and dark/mobile images inspected.
+- **Rollout incident and recovery:** the normal guarded server build exhausted
+  much of the 2 GB host's memory and a public probe returned 502. The build was
+  cancelled before backup/migration/swap; CURRENT remained `687011d`, and the old
+  release recovered to HTTP 200 without reboot, resource changes or DB restore.
+  Both Linux/amd64 images were then built off-host from `git archive` of the same
+  CI-green release, with no environment files. Transferred archive checksum and
+  exact image IDs were verified before running the reviewed backup/migrate/swap
+  sequence with only its build invocation replaced by image identity checks.
+  The Linux image build/typecheck passed. No cloud resource upgrade was made.
+  **Do not repeat an on-host build on this 2 GB instance; use the documented
+  off-host procedure until a dedicated deployment mode is added.**
+- **Migration / restore:** pre-migration backup
+  `auratrade-20261020T141320Z-pre-57e7c92.dump` (1.1 MB) completed; additive
+  `20261020120000_schwab_connection` applied successfully (15 production migrations).
+  New backup `auratrade-20261020T141427Z-daily.dump` (1.1 MB) was restored and queried
+  in a disposable database. Cleanup succeeded; an independent catalog query
+  confirmed **0** remaining restore-check DBs. Backup and restore health evidence
+  both show success. Existing weekly restore-check schedule is retained.
+- **Live checks:** web/DB/Caddy healthy; CURRENT is `57e7c92`. Read-only authenticated
+  Connections page/API returned 200 and configuration was ready. A private value
+  comparison confirmed all runtime broker keys match workstation configuration;
+  callback and daily worker are configured. **0 application writes/test users**
+  were made by release verification. Real Chromium checked public desktop/mobile
+  light/dark themes, reload and cross-tab persistence: **0 page errors**. Login 200,
+  signed-out root/dashboard redirect, registration closed. Live brokerage consent
+  and source payload verification still require the owner's interactive Schwab login.
+- **Limits / next action:** owner opens `/settings/connections`, authorizes Schwab,
+  matches the brokerage account, reviews the first preview and optionally enables
+  daily sync. Supported single-leg USD EQUITY records only; additional instrument
+  layouts/options/position events require CSV review. Initial window is up to 59
+  completed days; later overlap is at least seven. Older gaps need CSV history,
+  and authorization generally needs weekly renewal. Review follow-ups: slow-first-
+  sync transaction duration, empty revision recovery, explicit downtime-gap notice,
+  transient failure retry policy, preview parsing and Prisma transaction detection.
+  Automatic sync pauses on any failure. Account-security product work stays deferred.
+  Merge this documentation-only handoff; no application redeploy is needed.
+  Repository visibility remains public.
+
+## Previous handoff (2026-10-20): Schwab connection ready for review
 
 - **Owner authorization:** developer access approved, app created, private keys
   supplied in ignored `.env`; proceed with connection and daily sync. Branch
