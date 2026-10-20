@@ -52,6 +52,7 @@ test('Schwab preview, transactional confirm, ownership, retry, concurrent reques
     const startDate = main.getByLabel('First sync start date (optional)')
     await expect(startDate).toBeVisible()
     await startDate.fill('2026-10-18')
+    await expect(main.getByText(/Confirming this preview sets the API sync start date to 2026-10-19/)).toBeVisible()
     await expect(main.getByText(/Daily sync will not backfill excluded dates/)).toBeVisible()
     await page.route('**/api/brokers/schwab', async route => {
       expect(route.request().postDataJSON()).toEqual({ action: 'preview', initialFrom: '2026-10-18' })
@@ -59,6 +60,7 @@ test('Schwab preview, transactional confirm, ownership, retry, concurrent reques
     }, { times: 1 })
     await main.getByRole('button', { name: 'Fetch sync preview', exact: true }).click()
     await expect(main.getByRole('alert')).toContainText('blocked on 2026-10-18')
+    await expect(main.getByText(/Confirming this preview sets the API sync start date to 2026-10-19/)).toBeVisible()
     await expect(main.getByRole('button', { name: 'Fetch sync preview', exact: true })).toBeEnabled()
     await startDate.fill('2099-01-01')
     expect((await page.request.post('/api/brokers/schwab', { data: { action: 'preview', initialFrom: '2099-01-01' } })).status()).toBe(422)

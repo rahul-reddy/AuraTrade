@@ -99,10 +99,11 @@ test('disconnect deletes only the requesting user connection', async () => {
   expect(tx.schwabConnection.deleteMany).toHaveBeenCalledWith({ where: { userId: 'owner' } })
 })
 test('status uses an explicit safe response instead of serializing connection secrets', async () => {
-  jest.mocked(prisma.schwabConnection.findUnique).mockResolvedValue({ tokens: 'never-return', binding: seal('owner', 'binding', { hashValue: 'private-hash', label: 'Private', syncFrom: '2026-10-18' }), accounts: null, preview: null, userId: 'owner', refreshExpiresAt: new Date(Date.now() + 60000) } as never)
+  jest.mocked(prisma.schwabConnection.findUnique).mockResolvedValue({ tokens: 'never-return', binding: seal('owner', 'binding', { hashValue: 'private-hash', label: 'Private', syncFrom: '2026-10-18' }), accounts: null, preview: seal('owner', 'preview', { createdAt: Date.now(), initialFrom: '2026-10-19', days: [] }), userId: 'owner', refreshExpiresAt: new Date(Date.now() + 60000) } as never)
   jest.mocked(prisma.tradingAccount.findMany).mockResolvedValue([])
   const status = await connectionStatus('owner')
   expect(status.syncFrom).toBe('2026-10-18')
+  expect(status.preview?.initialFrom).toBe('2026-10-19')
   expect(JSON.stringify(status)).not.toMatch(/never-return|private-hash|Private/)
   expect(prisma.tradingAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'owner' } }))
 })

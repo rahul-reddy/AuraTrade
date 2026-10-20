@@ -25,9 +25,20 @@
   performed. Local fixture sources are entirely synthetic.
 - **Validation:** 358 unit tests / 34 suites passed; lint passed (two existing
   warnings), types and isolated production build passed. All **21 Chromium tests**
-  passed without retries on this code, including first-sync input/request validation,
+  passed without retries before the review clarification, including first-sync input/request validation,
   blocked-day recovery, persisted confirmation boundary, fees and both themes.
-  Working tree is based on `ab11683`; final PR-head CI supplies commit evidence.
+  PR #33 head `c2d002a` CI passed (358 units, 20 browsers first attempt plus one
+  existing chart-heading strict-selector retry; Schwab passed first attempt):
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39455759031 . Fresh database
+  migration/drift checks passed. Secret advisory exited unsuccessfully and its
+  SARIF contained zero results; do not claim a completed clean secret scan.
+  Independent Claude Opus medium review approved that head with zero blocking
+  findings: https://github.com/rahul-reddy/AuraTrade/pull/33#issuecomment-6295669682 .
+  Its advisory is addressed: the preview now explicitly shows the boundary that
+  confirmation will commit, independent of subsequent date-input edits or a failed
+  refetch. Final clarification reran 358 units, production build and the focused
+  real Schwab browser flow (both themes), all passed. Standalone lint/types and
+  final exact-head CI/review must finish before merge.
 - **Next:** independently review and guarded-merge
   the fix, prepare Linux images off-host (never build on the 2 GB server), then
   obtain owner confirmation for manual deployment under the updated standing

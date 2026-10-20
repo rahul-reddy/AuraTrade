@@ -82,7 +82,7 @@ export async function connectionStatus(userId: string) {
     accounts, localAccounts, accountId: c?.accountId, bound: !!c?.binding, autoSync: c?.autoSync ?? false,
     refreshExpiresAt: c?.refreshExpiresAt, lastSyncAt: c?.lastSyncAt, message: c?.message,
     syncFrom: c?.binding ? bindingSchema.parse(unseal(userId, 'binding', c.binding)).syncFrom : undefined,
-    preview: preview ? { hash: c!.previewHash, days: preview.days.length, rows: preview.days.reduce((n, d) => n + analyzeApiCsv(d.csv, d.day).totalRows, 0), from: preview.days[0]?.day, to: preview.days.at(-1)?.day,
+    preview: preview ? { hash: c!.previewHash, initialFrom: preview.initialFrom, days: preview.days.length, rows: preview.days.reduce((n, d) => n + analyzeApiCsv(d.csv, d.day).totalRows, 0), from: preview.days[0]?.day, to: preview.days.at(-1)?.day,
       transactions: preview.days.flatMap(d => analyzeApiCsv(d.csv, d.day).rows.map(r => ({ day: d.day, action: r.action, symbol: r.symbol, quantity: r.quantity, price: r.price, fees: r.fees }))).slice(0, 500) } : null }
 }
 
