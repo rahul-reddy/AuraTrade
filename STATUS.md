@@ -2,7 +2,41 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-21): History cleanup published; app improvements under verification
+## Current handoff (2026-10-21): App improvements deployed; chart smoke-test follow-up
+
+- **Live app release:** `fa4326fa54735e6a7f19ba11dd9cfb1dca2f11c4`, guarded
+  squash merge of PR #42. Its file tree matches reviewed head `0c72f03` exactly.
+  Gemini high-effort independent review approved with zero blocking findings:
+  https://github.com/rahul-reddy/AuraTrade/pull/42#issuecomment-6325093933 .
+- **Delivered:** hiding the chart inspector or switching its tabs preserves an
+  unsaved journal; unopened journals no longer trigger queries. Trade switching
+  retains discard confirmation. CSV exports escape formula-leading text while
+  preserving numeric losses; trade API failures do not echo/log raw exceptions.
+  Financial calculations, canonical imports and schema are unchanged.
+- **Validation:** final PR CI 39637022642 passed 371 units / 35 suites, 29
+  operational checks and all 22 browsers without retries. Merged-main CI
+  39665147371 passed the same checks; one pre-existing chart smoke-test selector
+  needed a retry because Next retained a streamed copy outside main content.
+  This follow-up scopes that smoke test to active content, requires unique visible
+  headings/links, and removes the forced navigation click and first-match heading.
+  Three local production-browser repeats passed without retries; the production
+  app code is unchanged from the reviewed/live release above. Local lint (two
+  existing warnings) and TypeScript passed after the smoke-test change.
+- **Deployment verified:** automatic delivery 39665741176 succeeded. Server
+  CURRENT, image tag and OCI revision match the live app SHA; web/DB are healthy.
+  Authenticated broker, health and CSV-export checks return 200 without exposing
+  transaction rows. Schwab remains configured/connected and all 15 migrations are
+  applied. Deployment backup succeeded at `2026-10-21T19:59:37Z`; restore evidence
+  is from the prior successful check. This test/handoff follow-up must pass its
+  own CI, independent review and guarded merge, then triggers automatic delivery.
+- **Security cleanup:** all nine remote branches and three local worktrees use
+  sanitized history; branch-tip files were preserved. Main protection, secret
+  scanning and push protection remain enabled; visibility remains owner-controlled
+  and public. Old PR refs/cached views still require a GitHub Support purge. The
+  private request draft and affected-ref list are prepared locally; no ticket or
+  external message was submitted by this agent. Owner submission is pending.
+
+## Previous handoff (2026-10-21): History cleanup published; app improvements under verification
 
 - **Owner-approved cleanup completed:** the owner explicitly approved the temporary
   exception to the no-force-push rule. All nine remote branches were rewritten
