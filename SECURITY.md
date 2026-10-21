@@ -21,6 +21,9 @@ they are excluded from tracing. Do not distribute local standalone bundles:
 hosted builds use a clean Git checkout without environment files, and the bundle
 check rejects copied environment files. Runtime configuration is supplied by the
 server. Docker also excludes local validation builds and AI-tool directories.
+Production builds explicitly use Webpack because the tested Turbopack path does
+not apply instrumentation tracing exclusions. The CI canaries protect this
+boundary when changing bundlers or upgrading Next.js.
 
 The owner enables GitHub secret scanning, push protection, Dependabot alerts and
 security updates where the plan and visibility support them. Native secret

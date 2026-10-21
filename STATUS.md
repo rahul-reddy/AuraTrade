@@ -20,6 +20,11 @@
   Review marker comments now require the owner's verified GitHub author identity;
   forged approvals/rejections cannot affect the merge gate. Docker/tracing
   exclusions protect private worktree paths. `SECURITY.md` documents the policy.
+  The clean-build canary caught Turbopack's instrumentation exclusion gap;
+  production builds now use Webpack, whose generated instrumentation trace was
+  verified to contain zero private worktree entries locally. The corrected
+  Webpack standalone server also passed all 21 browser tests without retries.
+  CI still must verify the final clean artifact and suite on this corrected head.
 - **Dependencies:** Next.js 16.4.2, Auth.js beta.32, Prisma adapter 2.11.3,
   React/React DOM 19.3.1 and compatible lockfile security fixes. Prisma remains
   on v6 (6.19.3 client/CLI), with no schema/migration change. Existing ESLint
