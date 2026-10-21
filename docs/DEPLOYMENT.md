@@ -174,7 +174,7 @@ The same command on an existing email resets its password. `~/auratrade/bin/dc` 
 
 The server holds real brokerage history: uploaded statements are stored in the
 database, raw rows included. The Lightsail disk and its snapshots are encrypted at
-rest; the dumps live on that disk. Keep the repository private, never copy server
+rest; the dumps live on that disk. Treat repository content as public, never copy server
 data into fixtures or logs, and do not open more ports.
 
 ## Built from scratch (2026-10-17)

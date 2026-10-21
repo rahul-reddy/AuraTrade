@@ -11,6 +11,17 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./src/generated/prisma/**/*"],
   },
+  // Prisma's dynamic path lookup can trace the entire local checkout. Keep
+  // private worktree files out of standalone bundles as well as Docker context.
+  outputFileTracingExcludes: {
+    "/**": [
+      "./.env*", "./**/.env*", "./.local/**/*", "./documents/**/*",
+      "./.git/**/*", "./.claude/**/*", "./.codex/**/*",
+      "./**/*.pem", "./**/*.key", "./**/*.p12", "./**/*.pfx",
+      "./**/*.jks", "./**/*.sqlite", "./**/*.sqlite3", "./**/*.db",
+      "./**/*.dump", "./**/*.backup",
+    ],
+  },
 };
 
 export default nextConfig;
