@@ -106,6 +106,9 @@ build and start to use `.next-validation` without sharing dev build artifacts.
 
 Real broker statements belong in the ignored `documents/` directory. Never commit
 credentials, account numbers or real statements.
+See [security and visibility safeguards](SECURITY.md) before changing repository
+visibility. CI secret/private-file checks run in both public and private modes;
+the owner controls visibility, and review and automatic deployment remain gated.
 
 ## Schwab connection
 

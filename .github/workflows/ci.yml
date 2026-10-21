@@ -35,10 +35,26 @@ jobs:
       SCHWAB_CLIENT_SECRET: synthetic-ci-secret
       SCHWAB_TEST_DATABASE_URL: postgresql://auratrade:auratrade_ci@127.0.0.1:5432/auratrade_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # The parent is needed to list what this change touched.
-          fetch-depth: 2
+          # Full history is needed for secret scanning, including docs-only PRs.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject tracked private files
+        run: python3 scripts/check-public-files.py
+      - name: Scan secrets (public and private repositories)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          scanner=$(mktemp -d "$RUNNER_TEMP/gitleaks.XXXXXX")
+          trap 'rm -rf "$scanner"' EXIT
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output "$scanner/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $scanner/gitleaks.tar.gz" | sha256sum --check
+          tar -xzf "$scanner/gitleaks.tar.gz" -C "$scanner" gitleaks
+          "$scanner/gitleaks" git . --log-opts=--all --redact=100 --no-banner
       # A change to documentation alone skips the tests to save Actions minutes,
       # but this job still runs and passes, because merge-pr.ps1 requires it.
       # Docs-only means every changed path (both sides of a rename) is docs/** or
@@ -59,7 +75,9 @@ jobs:
               base=$(git rev-parse HEAD^1)
             fi
           elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
-            git fetch --quiet --depth=1 origin "$BEFORE" && base="$BEFORE"
+            # Full checkout already contains prior main; no authenticated fetch
+            # is needed after checkout has removed its credentials.
+            git cat-file -e "$BEFORE^{commit}" && base="$BEFORE"
           fi
           if [ -z "$base" ] || ! changed=$(git diff --name-only --no-renames "$base" HEAD); then
             echo "Could not list the change; running everything."
@@ -82,9 +100,9 @@ jobs:
       - name: "Docs-only change: skipping tests"
         if: steps.scope.outputs.docs_only == 'true'
         run: echo "Only docs/ or root Markdown changed; tests skipped. The secret scan still runs." | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         if: steps.scope.outputs.docs_only != 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.scope.outputs.docs_only != 'true'
         with:
           node-version: '24'
@@ -126,8 +144,17 @@ jobs:
           secret=$(openssl rand -base64 32)
           echo "::add-mask::$secret"
           echo "AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+      - name: Plant synthetic private-file tracing canaries
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          mkdir -p documents .local
+          printf 'synthetic private-file canary\n' > documents/security-canary.csv
+          printf 'synthetic private-file canary\n' > .local/security-canary.txt
       - run: npm run build
         if: steps.scope.outputs.docs_only != 'true'
+      - name: Reject private files in the standalone bundle
+        if: steps.scope.outputs.docs_only != 'true'
+        run: python3 scripts/check-public-files.py --standalone .next/standalone
       - name: Browser tests against the production build
         if: steps.scope.outputs.docs_only != 'true'
         env:
@@ -140,7 +167,7 @@ jobs:
             sleep 2
           done
           npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always() && steps.scope.outputs.docs_only != 'true'
         with:
           name: verification-evidence
@@ -153,8 +180,3 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
         continue-on-error: true
         run: npm audit --audit-level=high
-      - name: Secret advisory
-        continue-on-error: true
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

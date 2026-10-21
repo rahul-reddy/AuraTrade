@@ -9,7 +9,20 @@ const nextConfig: NextConfig = {
   // The Prisma client lives in src/generated and loads its native query engine
   // by path at runtime, which file tracing can miss; include it explicitly.
   outputFileTracingIncludes: {
-    "/**": ["./src/generated/prisma/**/*"],
+    "**": ["./src/generated/prisma/**/*"],
+  },
+  // Prisma's dynamic path lookup can trace the entire local checkout. Keep
+  // private worktree files out of standalone bundles as well as Docker context.
+  outputFileTracingExcludes: {
+    // Match slashless trace entries as well as route paths. Production builds
+    // use Webpack: Turbopack currently omits instrumentation trace exclusions.
+    "**": [
+      "./.env*", "./**/.env*", "./.local/**/*", "./documents/**/*",
+      "./.git/**/*", "./.claude/**/*", "./.codex/**/*",
+      "./**/*.pem", "./**/*.key", "./**/*.p12", "./**/*.pfx",
+      "./**/*.jks", "./**/*.sqlite", "./**/*.sqlite3", "./**/*.db",
+      "./**/*.dump", "./**/*.backup",
+    ],
   },
 };
 

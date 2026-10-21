@@ -29,6 +29,17 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+__pycache__/
+*.pyc
 
 # claude
 .claude/

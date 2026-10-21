@@ -18,6 +18,10 @@ $ErrorActionPreference = 'Stop'
 
 $expectedHeadSha = $null
 if ($Number) {
+    $publisher = gh api user --jq .login
+    if ($LASTEXITCODE -ne 0 -or $publisher -notin $script:TrustedReviewPublishers) {
+        throw 'PR reviews must be published using a trusted owner account; check gh authentication before running a review.'
+    }
     # Resolve Base/Head from the PR itself rather than trusting caller-supplied
     # values, so an approval marker can never be posted for a different diff than
     # the one actually reviewed (a prior cross-review of this same script found
