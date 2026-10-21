@@ -35,39 +35,46 @@ test("user can navigate from trades into the symbol chart workspace", async ({ p
   });
 
   await page.goto("/trades", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Trade History" })).toBeVisible();
+  const main = page.locator("#main-content");
+  await expect(main.getByRole("heading", { name: "Trade History", exact: true })).toHaveCount(1);
+  await expect(main.getByRole("heading", { name: "Trade History", exact: true })).toBeVisible();
 
   // Navigate to chart from trades list
-  const chartLink = page.getByRole("link", { name: "BROS" });
+  const chartLink = main.getByRole("link", { name: "BROS", exact: true });
   await expect(chartLink).toHaveAttribute("href", /\/chart\/BROS/);
   await Promise.all([
     page.waitForURL(/\/chart\/BROS/, {
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     }),
-    chartLink.click({ force: true }),
+    chartLink.click(),
   ]);
 
   // Header: back link and symbol name visible
-  await expect(page.getByRole("link", { name: "← Trades" })).toBeVisible();
-  await expect(page.getByText("BROS").first()).toBeVisible();
+  // Next may temporarily retain streamed route copies outside main content.
+  const backLink = main.getByRole("link", { name: "← Trades", exact: true });
+  await expect(backLink).toHaveCount(1);
+  await expect(backLink).toBeVisible();
+  const heading = main.getByRole("heading", { name: "BROS", exact: true });
+  await expect(heading).toHaveCount(1);
+  await expect(heading).toBeVisible();
 
   // Stats panel: Net P&L and Win Rate labels visible
-  await expect(page.getByText("Net P&L")).toBeVisible();
-  await expect(page.getByText("Win Rate")).toBeVisible();
+  await expect(main.getByText("Net P&L", { exact: true })).toBeVisible();
+  await expect(main.getByText("Win Rate", { exact: true })).toBeVisible();
 
   // Sidebar: trade list section visible
-  await expect(page.getByText("Trades · BROS")).toBeVisible();
+  await expect(main.getByText("Trades · BROS", { exact: true })).toBeVisible();
 
   // Chart toolbar: all timeframe buttons present
-  await expect(page.getByRole("button", { name: "1D" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "1H" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "15M" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "5M", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "1M", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "1D", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "1H", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "15M", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "5M", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "1M", exact: true })).toBeVisible();
 
   // Click 1H — fixture trade is from 2022, so Yahoo falls back to daily.
   // The amber fallback message in the toolbar confirms the TF switch was processed.
-  await page.getByRole("button", { name: "1H" }).click();
-  await expect(page.getByText(/Intraday.*not available|Showing daily/i)).toBeVisible({ timeout: 15_000 });
+  await main.getByRole("button", { name: "1H", exact: true }).click();
+  await expect(main.getByText(/Intraday.*not available|Showing daily/i)).toBeVisible({ timeout: 15_000 });
 });
