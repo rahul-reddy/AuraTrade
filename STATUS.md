@@ -41,6 +41,13 @@
   boundaries and private errors in both JSON/export requests. Private-file and
   diff-whitespace checks passed. Next: exact-head PR CI, independent review,
   guarded squash merge and automatic deployment verification.
+- **CI follow-up:** PR #42's initial head `e2bab60` passed CI 39635842357 (371
+  units and 29 operational tests); all 22 browsers completed but an existing chart
+  heading assertion needed one retry after Next streamed a duplicate outside the
+  active workspace. The assertion now scopes to `#main-content` and requires
+  exactly one visible heading, matching the established navigation-test pattern.
+  Three local repeats passed without retries against the unchanged production
+  app build. This test-only follow-up needs fresh head-matched CI and review.
 
 ## Previous handoff (2026-10-21): Security hardening verified in production
 
