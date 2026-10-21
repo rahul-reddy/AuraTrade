@@ -14,7 +14,7 @@
   security comes last. Schwab developer access is approved (2026-10-20); the owner
   authorized the OAuth connection, preview and completed-day daily sync build.
 - Professional trading analytics platform for a high-frequency discretionary equity trader (ThinkorSwim/Schwab)
-- Will become SaaS. Account size: $250K–$1M (fractional Kelly emphasized)
+- Will become SaaS. Fractional Kelly sizing is emphasized.
 - Running locally for now (local PostgreSQL)
 - Market data: Finviz daily exports when the server-only `AURATRADE_FINVIZ_TOKEN` is configured; Yahoo fallback and intraday (owner decision, 2026-10-18).
 - User will provide sample TOS CSV after initial build

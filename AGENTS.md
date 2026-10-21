@@ -14,7 +14,10 @@ Trade analytics platform for a discretionary equity trader: imports Schwab/think
 ## Workflow
 - main is the integration branch. Use feat/<topic>, fix/<topic>, or docs/<topic> branches and focused commits.
 - Open a PR, run CI, review the diff, then squash merge. Never force-push main.
-- The repository is intentionally public (owner decision, 2026-10-18). Preserve public visibility. After reviewing the diff, use scripts/merge-pr.ps1 to require successful CI and match the reviewed head SHA.
+- The owner may toggle public/private visibility for Actions usage (2026-10-21).
+  Keep files and automation safe for public exposure in either state; leave
+  visibility changes to the owner. After reviewing the diff, use scripts/merge-pr.ps1
+  to require successful CI and match the reviewed head SHA.
 - Preserve unrelated changes. Coordinate file ownership before multiple agents edit the same files.
 - Update STATUS.md with evidence, remaining work and next action in every meaningful handoff.
 - Owner decision (2026-10-20): automatically deploy successful merged-main CI revisions
@@ -47,6 +50,10 @@ merges on its own model's approval alone.
   next. If none can run, nothing is approved and the gate stays shut.
 - A completed review **stops the search**, whether it approves or rejects. Re-running to
   find a friendlier model is not a way past a rejection.
+- Review marker comments must be published by `rahul-reddy`, the authenticated
+  owner account used by the CLI harness. The gate checks GitHub's comment-author
+  identity before reading markers; public commenters cannot approve or reject a
+  change. Run the review CLI under that account.
 - `scripts/merge-pr.ps1` merges only when some eligible reviewer has approved the exact
   current head **and** no eligible reviewer has an unresolved blocking finding on it.
   One reviewer's approval never overrides another's rejection. Pushing a fix moves the

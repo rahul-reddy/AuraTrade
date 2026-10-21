@@ -2,7 +2,53 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-20): Automatic production deployment verified
+## Current handoff (2026-10-21): Public/private repository security hardening
+
+- **Owner scope:** preserve the existing comment-based independent review,
+  guarded squash merge and automatic deployment while the owner may toggle
+  repository visibility for Actions usage. No visibility change was made.
+- **Verified GitHub settings:** secret scanning, push protection, Dependabot
+  alerts/security updates and private vulnerability reporting are enabled.
+  `main` requires PRs and `Verify AuraTrade`, linear history, and blocks force
+  pushes/deletion including admin bypass. No formal approving GitHub review,
+  merge queue or deployment approval was added. Native protections while private
+  still depend on the owner's GitHub plan; CI/local guards remain available.
+- **Branch `fix/public-repository-security`:** mandatory checksum/version-pinned
+  full-history secret scan (including docs-only changes), tracked private-file
+  guard, standalone artifact guard with synthetic tracing canaries, immutable
+  action references and constrained Claude triggers rooted in trusted checkout.
+  Review marker comments now require the owner's verified GitHub author identity;
+  forged approvals/rejections cannot affect the merge gate. Docker/tracing
+  exclusions protect private worktree paths. `SECURITY.md` documents the policy.
+  The clean-build canary caught Turbopack's instrumentation exclusion gap;
+  production builds now use Webpack, whose generated instrumentation trace was
+  verified to contain zero private worktree entries locally. The corrected
+  Webpack standalone server also passed all 21 browser tests without retries.
+  CI still must verify the final clean artifact and suite on this corrected head.
+- **Dependencies:** Next.js 16.4.2, Auth.js beta.32, Prisma adapter 2.11.3,
+  React/React DOM 19.3.1 and compatible lockfile security fixes. Prisma remains
+  on v6 (6.19.3 client/CLI), with no schema/migration change. Existing ESLint
+  configuration and React Hooks 7.0.1 rule policy are retained to avoid unrelated
+  UI refactors. Final local audit reports **zero critical**, 8 high and 20
+  moderate affected package entries, rooted in braces, deepmerge-ts and sprintf-js
+  tooling dependencies. npm's forced fixes would change major tool versions;
+  advisories remain visible rather than blocking the existing workflow.
+- **Local evidence:** lint (two existing warnings), types, final production build,
+  cross-review self-test (including forged/missing publisher cases), skill and
+  workflow validation passed. Dependency-updated app passed 358 units / 34 suites
+  and all 21 Chromium browser tests without retries, using an isolated synthetic
+  DB; all 15 migrations applied fresh. Linux operational/private-file tests passed
+  27 checks before two additional standalone guard cases; all five current
+  private-file cases pass locally. A synthetic credential was rejected with its
+  value redacted. Clean-checkout CI must verify the final artifact canaries: local
+  build success alone is not proof that a standalone bundle is safe to distribute.
+- **Next:** final-head CI, independent cross-model review, guarded squash merge,
+  then observe automatic delivery and verify production health. History rewriting
+  is excluded from this PR: preparation/evidence is private and any publication
+  must be coordinated with commit/review/deployment references under the no-force-
+  push contract. No financial formulas or canonical trade data were changed.
+
+## Previous handoff (2026-10-20): Automatic production deployment verified
 
 - **Verified live release:** `cf1d216c4cbb1d91647e4b5d249beb704d8a4e8b`, guarded
   squash merge of PR #37; its tree matches reviewed head `ca7f465` exactly.

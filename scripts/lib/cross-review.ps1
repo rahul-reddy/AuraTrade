@@ -28,6 +28,10 @@
 # too. Unlike the CLI reviewers it has no repository access: it reviews from the
 # contract and full diff in the prompt, through the xAI API.
 $script:ReviewerPool = @('gemini', 'codex', 'claude', 'grok')
+# CLI reviews are published using the owner's authenticated GitHub account.
+# Comment bodies are public input; the GitHub-provided author identity must be
+# checked before a marker can approve a change or replace a blocking verdict.
+$script:TrustedReviewPublishers = @('rahul-reddy')
 
 function Invoke-BoundedProcess {
     param(
@@ -573,6 +577,9 @@ function Find-CrossReviewComment {
     )
     $found = @()
     foreach ($c in $Comments) {
+        if ($null -eq $c.author -or $c.author.login -notin $script:TrustedReviewPublishers) {
+            continue
+        }
         $m = [regex]::Match($c.body, $script:CrossReviewMarkerPattern)
         if ($m.Success -and $m.Groups['reviewer'].Value -eq $Reviewer -and
             ($HeadSha -eq '' -or $m.Groups['head'].Value -eq $HeadSha)) {

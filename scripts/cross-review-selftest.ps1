@@ -14,12 +14,14 @@ function Review-Comment {
         [string]$Head,
         [string]$Verdict = 'APPROVE',
         [int]$Blocking = 0,
-        [datetime]$CreatedAt = [datetime]::UtcNow
+        [datetime]$CreatedAt = [datetime]::UtcNow,
+        [string]$Author = 'rahul-reddy'
     )
     [pscustomobject]@{
         body = New-CrossReviewMarker -Reviewer $Reviewer -HeadSha $Head `
             -Verdict $Verdict -Blocking $Blocking
         createdAt = $CreatedAt.ToString('o')
+        author = [pscustomobject]@{ login = $Author }
     }
 }
 
@@ -42,6 +44,21 @@ Assert-Equal (Test-CrossReviewSatisfied -Authors @() -Comments @() -HeadSha $hea
 Assert-Equal (Test-CrossReviewSatisfied -Authors @('codex') `
     -Comments @(Review-Comment -Reviewer gemini -Head $head) -HeadSha $head) $true `
     'eligible same-head approval'
+Assert-Equal (Test-CrossReviewSatisfied -Authors @('codex') `
+    -Comments @(Review-Comment -Reviewer gemini -Head $head -Author 'outside-contributor') -HeadSha $head) $false `
+    'public commenter cannot forge an approval'
+Assert-Equal (Test-CrossReviewSatisfied -Authors @('codex') -Comments @(
+        Review-Comment -Reviewer gemini -Head $head -Verdict REQUEST_CHANGES -Blocking 1 -CreatedAt ([datetime]::UtcNow.AddMinutes(-1))
+        Review-Comment -Reviewer gemini -Head $head -Author 'outside-contributor'
+    ) -HeadSha $head) $false 'forged newer approval cannot erase a trusted rejection'
+Assert-Equal (Test-CrossReviewSatisfied -Authors @('codex') -Comments @(
+        Review-Comment -Reviewer gemini -Head $head -CreatedAt ([datetime]::UtcNow.AddMinutes(-1))
+        Review-Comment -Reviewer gemini -Head $head -Author 'outside-contributor' -Verdict REQUEST_CHANGES -Blocking 1
+    ) -HeadSha $head) $true 'forged rejection cannot block a trusted approval'
+$anonymousComment = Review-Comment -Reviewer gemini -Head $head
+$anonymousComment.author = $null
+Assert-Equal (Test-CrossReviewSatisfied -Authors @('codex') -Comments @($anonymousComment) -HeadSha $head) $false `
+    'missing publisher identity fails closed'
 Assert-Equal (Test-CrossReviewSatisfied -Authors @('codex') `
     -Comments @(Review-Comment -Reviewer gemini -Head $oldHead) -HeadSha $head) $false `
     'stale approval'
