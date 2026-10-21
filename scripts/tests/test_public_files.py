@@ -54,18 +54,19 @@ class PublicFileTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
 
     def test_standalone_bundle_rejects_private_files(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "server.js").write_text("// synthetic", encoding="utf-8")
-            command = [sys.executable, str(SCRIPT), "--standalone", directory]
-            clean = subprocess.run(command, capture_output=True, text=True, check=False)
-            self.assertEqual(clean.returncode, 0, clean.stderr)
-            private = root / "nested" / ".env.local"
-            private.parent.mkdir()
-            private.write_text("SYNTHETIC=1", encoding="utf-8")
-            unsafe = subprocess.run(command, capture_output=True, text=True, check=False)
-            self.assertEqual(unsafe.returncode, 1)
-            self.assertNotIn(str(private), unsafe.stdout + unsafe.stderr)
+        for name in ["nested/.env.local", ".git/config", "documents/private.csv"]:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "server.js").write_text("// synthetic", encoding="utf-8")
+                command = [sys.executable, str(SCRIPT), "--standalone", directory]
+                clean = subprocess.run(command, capture_output=True, text=True, check=False)
+                self.assertEqual(clean.returncode, 0, clean.stderr)
+                private = root / name
+                private.parent.mkdir()
+                private.write_text("SYNTHETIC=1", encoding="utf-8")
+                unsafe = subprocess.run(command, capture_output=True, text=True, check=False)
+                self.assertEqual(unsafe.returncode, 1)
+                self.assertNotIn(str(private), unsafe.stdout + unsafe.stderr)
 
 
 if __name__ == "__main__":

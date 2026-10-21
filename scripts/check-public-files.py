@@ -14,7 +14,7 @@ PRIVATE_SUFFIXES = {
     ".pem", ".key", ".p12", ".pfx", ".jks", ".sqlite", ".sqlite3",
     ".db", ".dump", ".backup",
 }
-PRIVATE_DIRECTORIES = {"documents", ".local", ".claude", ".codex"}
+PRIVATE_DIRECTORIES = {"documents", ".local", ".claude", ".codex", ".git"}
 
 
 def is_private_path(name: str) -> bool:
