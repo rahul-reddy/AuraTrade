@@ -134,7 +134,10 @@ test('one-year trade review has real candle annotations, stable zoom, working co
   await page.getByRole('textbox',{name:'Jump to symbol',exact:true}).fill('AAPL')
   await page.getByRole('button',{name:'Open symbol chart',exact:true}).click()
   await expect(page).toHaveURL(/\/chart\/AAPL\?/)
-  await expect(page.getByRole('heading',{name:'AAPL',exact:true})).toBeVisible()
+  // Next can retain a streamed route copy outside the active workspace.
+  const heading = page.locator('#main-content').getByRole('heading',{name:'AAPL',exact:true})
+  await expect(heading).toHaveCount(1)
+  await expect(heading).toBeVisible()
   await expect(page.getByTestId('price-chart')).toHaveAttribute('data-marker-count','0')
   expect(errors).toEqual([])
 })

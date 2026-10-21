@@ -53,6 +53,9 @@ and the Trades back link returns to all symbols in the current account.
   adherence, mistakes, lessons, notes/tags and up to five raster screenshots.
   Journals survive ledger rebuilds; unmatched journals remain discoverable on
   their original review day. Planned stops are journal records, not risk overrides.
+  Chart journals load when opened. Hiding the inspector or switching its tabs
+  preserves unsaved text; switching trades asks before discarding it. Save before
+  leaving the page to persist a draft.
 - **Playbooks** store entry/exit/invalidation rules and selected example journals.
   Archiving preserves links. Personal labels remain distinct from inferred setups.
 - **Edge Analysis** groups known closed results by playbook, personal/inferred
@@ -65,6 +68,8 @@ and the Trades back link returns to all symbols in the current account.
 - Trades support browser-local **saved views**. Chart display settings persist;
   **j/k** and previous/next controls move through the current symbol's filtered
   trades. Shortcuts are inactive while typing.
+- Trade **CSV exports** protect formula-leading text for spreadsheet use while
+  keeping numeric losses numeric. Stored notes remain unchanged.
 - The toolbar eye masks account P&L, fees and balances for screen sharing. It is
   a presentation preference; data, journals, prices and screenshots remain available.
 - **Health** shows account import alerts, daily-cache retrieval age, and hosted

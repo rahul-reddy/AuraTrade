@@ -45,3 +45,17 @@ credentials first. History cleanup changes commit SHAs and must be coordinated
 separately with open PRs, other clones, CI/review evidence and deployment revision
 references. A normal deletion commit does not remove historical data. Never
 force-push `main` as part of ordinary maintenance.
+
+On 2026-10-21 the owner authorized a one-time history rewrite to remove real
+broker statements. All nine published branches were rewritten; their tip file
+trees were preserved. The three local worktrees were moved onto sanitized
+history, and force-push protection was restored immediately. Old commit IDs in
+earlier release/review records refer to the history before this cleanup.
+
+For any other checkout created before this cleanup, preserve uncommitted work
+privately and use a fresh clone. Do not merge or push an old branch into the
+rewritten history: that can republish the removed records. Reapply only reviewed
+changes onto the new base. Private local backups/reflogs may retain old objects;
+do not publish them. GitHub PR refs and cached commit views need a separate
+GitHub Support purge; rewriting branch history alone does not remove those
+copies. The private support-request draft is prepared but has not been sent.

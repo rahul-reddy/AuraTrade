@@ -124,7 +124,9 @@ export async function GET(req: NextRequest) {
         Notes: t.notes ?? '',
       }))
 
-      const csv = Papa.unparse(rows)
+      // Notes and other text must stay literal when opened in a spreadsheet.
+      // Papa escapes formula-leading strings while leaving numeric losses numeric.
+      const csv = Papa.unparse(rows, { escapeFormulae: true })
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv',
@@ -211,8 +213,8 @@ export async function GET(req: NextRequest) {
         avgLoss: lossCount > 0 ? grossLosses / lossCount : 0,
       },
     })
-  } catch (err) {
-    console.error('[GET /api/trades]', err)
-    return NextResponse.json({ error: 'internal_error', message: String(err) }, { status: 500 })
+  } catch {
+    console.error('[GET /api/trades] Could not load trades.')
+    return NextResponse.json({ error: 'internal_error', message: 'Could not load trades. Please retry.' }, { status: 500 })
   }
 }
