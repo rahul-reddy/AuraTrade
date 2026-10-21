@@ -2,7 +2,47 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-21): Security hardening verified in production
+## Current handoff (2026-10-21): History cleanup published; app improvements under verification
+
+- **Owner-approved cleanup completed:** the owner explicitly approved the temporary
+  exception to the no-force-push rule. All nine remote branches were rewritten
+  atomically with individual ref leases; every branch-tip file tree is unchanged.
+  `main` is now `dc67e532c205d1e6094581f3eca55ea4ff10c31a`. Main protection and
+  automatic delivery were restored immediately and verified. A fresh GitHub clone
+  contains no reachable `documents/` history from branch refs. All 13 local
+  branches and three clean worktrees now use sanitized history. Old release SHAs
+  below describe the history before the rewrite; private reflogs/backups remain.
+- **Fresh cleanup validation:** CI 39633798572 passed 358 units, 29 operational
+  checks and 21 browser tests; Windows harness 39633798645 passed. Automatic
+  delivery 39634351780 succeeded. Server CURRENT, web tag and OCI revision match
+  rewritten main; web/DB are healthy and authenticated broker/health APIs return
+  200. Schwab is configured and connected; all 15 migrations remain applied.
+  The deployment backup succeeded at `2026-10-21T16:27:01Z`. Restore evidence is
+  from the prior successful check, not a new restore run.
+- **Privacy limitation:** GitHub's internal PR refs and cached views still need a
+  Support purge. The final rewrite changes 186 commit mappings and affects 42
+  pull refs across 41 PRs. The private Support draft has been updated; contacting
+  Support remains separately owner-authorized and no message has been sent.
+  GitHub reports zero forks; copies already downloaded cannot be recalled.
+- **Prioritized app improvements:** preserve unsaved chart-journal drafts when
+  hiding the trade inspector, defer unopened journal requests, escape CSV text
+  that spreadsheets interpret as formulas, and suppress raw trade API exception
+  details. Financial calculations, schema and canonical imports are unchanged.
+  These address reproduced draft loss and concrete export/privacy boundaries.
+  Larger edge-analysis queries, safe structured diagnostics and restore-cleanup
+  recovery remain follow-ups requiring their own design and verification.
+- **Local validation:** 371 unit tests / 35 suites, lint (no errors; two
+  pre-existing unused-variable warnings), TypeScript and the Webpack production
+  build passed. All 22 Chromium tests passed without retries against that final
+  production build and a separate local synthetic database with all 15 migrations
+  applied. The new regression covers lazy queries, failed-load retry, panel/tab
+  draft preservation, navigation guards and confirmed trade switching. New API
+  tests cover CSV formula prefixes/ordinary text, numeric losses, ownership/auth
+  boundaries and private errors in both JSON/export requests. Private-file and
+  diff-whitespace checks passed. Next: exact-head PR CI, independent review,
+  guarded squash merge and automatic deployment verification.
+
+## Previous handoff (2026-10-21): Security hardening verified in production
 
 - **Verified app release:** `dc77cc1d85e65a503d007a8bb2a35c998be393ba`, guarded
   squash merge of PR #39; its tree matches reviewed head `58ef87f` exactly.
