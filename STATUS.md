@@ -2,7 +2,27 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-21): App improvements deployed; chart smoke-test follow-up
+## Current handoff (2026-10-21): Owner accepted remaining historical-copy limitation
+
+- **Owner decision:** do not submit a GitHub Support ticket for the remaining old
+  PR refs/cached views. Those historical copies have not been purged; their
+  retention is an accepted limitation, with no pending ticket or owner action.
+  The approved branch rewrite and restored protections remain in effect.
+- **Verified release:** `a58caacc116970085f1144163c3dc7556cd8701d`, guarded merge
+  of PR #43 after head-matched CI and independent Gemini approval. Main CI
+  39667671457 passed 371 units / 35 suites, 29 operational checks and all 22
+  browsers without retries. Automatic delivery 39668181312 succeeded; live
+  CURRENT/image/OCI identity matched, web/DB were healthy, authenticated broker,
+  health and CSV checks returned 200, Schwab was connected and all 15 migrations
+  were applied. Deployment backup succeeded at `2026-10-21T20:16:09Z`.
+- **App improvements complete:** PR #42 preserved chart journal drafts, deferred
+  unopened journal queries, protected CSV text and kept trade API exceptions
+  private. PR #43 strengthened chart smoke navigation. All three worktrees were
+  verified clean; public visibility remains owner-controlled. This documentation
+  record follows the normal CI/review/merge/delivery workflow; the live evidence
+  above names the verified application/test release, with no behavior change here.
+
+## Previous handoff (2026-10-21): App improvements deployed; chart smoke-test follow-up
 
 - **Live app release:** `fa4326fa54735e6a7f19ba11dd9cfb1dca2f11c4`, guarded
   squash merge of PR #42. Its file tree matches reviewed head `0c72f03` exactly.

@@ -59,3 +59,6 @@ changes onto the new base. Private local backups/reflogs may retain old objects;
 do not publish them. GitHub PR refs and cached commit views need a separate
 GitHub Support purge; rewriting branch history alone does not remove those
 copies. The private support-request draft is prepared but has not been sent.
+The owner declined that Support purge on 2026-10-21 and accepts retention of the
+old GitHub copies as a known limitation. No ticket is pending; this decision does
+not mean the old objects or cached views were removed.
