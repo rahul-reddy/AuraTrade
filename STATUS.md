@@ -2,7 +2,40 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-21): Public/private repository security hardening
+## Current handoff (2026-10-21): Security hardening verified in production
+
+- **Verified app release:** `dc77cc1d85e65a503d007a8bb2a35c998be393ba`, guarded
+  squash merge of PR #39; its tree matches reviewed head `58ef87f` exactly.
+  Gemini high-effort independent review approved with zero blocking findings:
+  https://github.com/rahul-reddy/AuraTrade/pull/39#issuecomment-6320139950 .
+- **Exact-revision CI:** both final PR CI and merged-main CI passed 358 units /
+  34 suites, 29 operational/private-file tests and all 21 Chromium browser tests
+  without retries. Lint, types, migrations/drift, full-history secret scanning and
+  clean standalone artifact canaries passed. Merged-main CI:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39629047881 .
+- **Automatic delivery verified:** off-host image builds/publishing, integrity,
+  backup, migration and service-health gates succeeded without a workstation
+  deployment command. Server CURRENT, web image tag and OCI revision match the
+  release above; web and DB are healthy and Caddy is running. Delivery:
+  https://github.com/rahul-reddy/AuraTrade/actions/runs/39629829823 .
+- **Live read-only checks:** authenticated broker and health APIs return 200;
+  Schwab configured/connected remain true. All 15 migrations are applied; public
+  login returns 200 and invalid registration requests are refused with 403 before
+  parsing, proving registration remains closed. Deployment backup succeeded at
+  `2026-10-21T16:00:31Z`; prior successful restore evidence remains available.
+- **Workflow preserved:** the new server-side PR/CI protections allowed the
+  existing guarded merge and automatic deployment. Owner controls visibility;
+  native protection availability while private is plan-dependent. Mandatory CI
+  secret/private-file checks support either visibility. Dependabot's grouped
+  action-update PR #40 is separate work and retains the normal review process.
+- **Remaining:** zero critical audit entries; documented tooling advisories remain
+  visible without forced major migrations. Historical-data remediation is prepared
+  privately, with current-tree equality verified; publication requires coordinated
+  approval under the no-force-push contract. No rewrite or support request was sent.
+  This handoff-only follow-up will trigger another automatic delivery after its
+  merged-main CI; the evidence above names the verified application release.
+
+## Previous handoff (2026-10-21): Public/private repository security hardening
 
 - **Owner scope:** preserve the existing comment-based independent review,
   guarded squash merge and automatic deployment while the owner may toggle
