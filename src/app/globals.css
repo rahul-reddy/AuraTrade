@@ -162,7 +162,6 @@ input, select, textarea { accent-color: var(--primary); }
 input[type="date"] { min-width: 0; }
 .workspace-page { width: 100%; max-width: 1680px; margin-inline: auto; padding: 28px 32px 40px; }
 .eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase; color: var(--muted-foreground); }
-.brand-mark { background: var(--brand); color: var(--brand-ink); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--brand-ink) 12%, transparent), 0 4px 12px #0003; }
 .surface { background: linear-gradient(140deg, var(--card), var(--card) 65%); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 2px 4px #0000000c; }
 .action-primary { min-height: 40px; border: 1px solid var(--primary); border-radius: 8px; background: var(--primary); padding: 10px 16px; color: var(--primary-foreground); font-size: 13px; font-weight: 500; transition: background .15s; }
 .action-primary:hover { background: color-mix(in srgb, var(--primary) 85%, var(--foreground)); }

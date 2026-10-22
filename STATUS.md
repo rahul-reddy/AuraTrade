@@ -2,7 +2,36 @@
 
 > Updated as each phase completes. Claude should update this file after finishing each phase or significant sub-task.
 
-## Current handoff (2026-10-21): Owner accepted remaining historical-copy limitation
+## Current handoff (2026-10-22): Custom AuraTrade crest
+
+- Replaced the stock trend-arrow badge with an original vector A crest: an
+  orbital aura, rising performance crossbar and goal spark in citron/glacier on
+  espresso. Shared by auth screens, expanded/compact sidebar and SVG browser
+  icon; matching 16/32/48 px favicon and 180 px Apple touch icon are included.
+  The brand exposes one accessible name even without the visible wordmark.
+- Public access is limited to the two exact brand asset URLs in the middleware
+  matcher. Browser regression checks unauthenticated asset responses, protected
+  and lookalike paths, registration/login, both themes, mobile, sidebar collapse,
+  successful image loading and favicon metadata/responses. Screenshots from the
+  passing focused production-browser test were visually inspected.
+- Validation of implementation revision `663451d` (PR #45): `npm run lint`
+  passed with two existing warnings; `npm run typecheck`, all 371 units / 35
+  suites, and the isolated Webpack production build passed. The focused final
+  `brand.spec.ts` passed after correcting its relative-redirect URL assertion.
+  The full local browser run passed 21/23: it had loaded the old brand test
+  assertion before its fix, and the existing calendar test timed out waiting
+  for heatmap months. The final brand test and both calendar tests then passed
+  together (3/3), without changing calendar code or tests. Final test-file lint,
+  TypeScript, and screenshot inspection passed. Exact-head CI will verify this
+  documentation follow-up before independent review and guarded merge.
+- Local packaging limitation: the private-file check rejected the reused local
+  standalone output (two private files). That workstation artifact is not a
+  delivery artifact. Clean CI must pass its standalone private-file gate;
+  deployment uses the independently built CI image. Git private-file and
+  diff-whitespace checks passed. Next: finish browser regression, exact-head CI,
+  independent review, guarded squash merge and automatic delivery verification.
+
+## Previous handoff (2026-10-21): Owner accepted remaining historical-copy limitation
 
 - **Owner decision:** do not submit a GitHub Support ticket for the remaining old
   PR refs/cached views. Those historical copies have not been purged; their

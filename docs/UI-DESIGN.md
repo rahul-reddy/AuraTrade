@@ -54,6 +54,20 @@ zoom, data, selected trades and display settings. SVG charts use CSS variables.
 Heatmap intensity uses restrained profit/loss tints, with exact amounts visible.
 Citron branding stays constant across modes; light-mode action text uses olive.
 
+### Brand mark
+
+The custom AuraTrade crest combines a citron A, an open glacier-blue orbit
+(aura/presence), and a rising performance line that forms the A's crossbar and
+reaches toward a four-point goal spark. The line includes a pullback: improvement
+is a practice, not a promise of uninterrupted returns. The espresso tile preserves
+contrast in both themes. The wordmark keeps Aura prominent and Trade quieter.
+
+`public/brand/aura-mark.svg` is the vector source shared by the authentication
+screens, expanded/collapsed sidebar and SVG browser icon. `Brand` exposes one
+accessible AuraTrade name even when its wordmark is hidden. The matching
+`src/app/favicon.ico` contains 16, 32 and 48 px PNG frames; the Apple touch icon
+is a 180 px PNG. Regenerate raster icons from the SVG when the mark changes.
+
 - Inter for interface text; JetBrains Mono for money, quantities and dates.
 - Shared page headers establish context, title, description and a relevant next action.
 - Cards, controls and tables use consistent spacing, rounded corners and focus states.

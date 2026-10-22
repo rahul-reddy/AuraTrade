@@ -17,6 +17,10 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "AuraTrade",
   description: "Professional trading analytics platform",
+  icons: {
+    icon: [{ url: "/brand/aura-mark.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({
