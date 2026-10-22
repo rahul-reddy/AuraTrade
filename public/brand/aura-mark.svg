@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect x="1" y="1" width="62" height="62" rx="18" fill="#211C17" stroke="#514737" stroke-width="2"/>
+  <!-- An open orbit gives the A its aura, with room for the goal spark. -->
+  <path d="M16 29C9 26 8 21 12 17C18 10 36 7 47 12C52 14 55 18 53 22" stroke="#91C9F7" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M15 49L28.5 20C29.7 17.4 33.3 17.4 34.5 20L48 49H39.5L31.5 30L23.5 49H15Z" fill="#D8EB7C"/>
+  <!-- The rising performance stroke becomes the monogram's crossbar. -->
+  <path d="M20 44L29 36L35 40L47 28" stroke="#211C17" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 44L29 36L35 40L47 28" stroke="#91C9F7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M50 20L51.7 24.3L56 26L51.7 27.7L50 32L48.3 27.7L44 26L48.3 24.3L50 20Z" fill="#D8EB7C"/>
+</svg>

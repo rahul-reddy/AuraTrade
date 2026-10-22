@@ -29,8 +29,9 @@ export default auth((req) => {
 });
 
 export const config = {
-  // Protect all app routes; skip Next.js internals, static files, and API auth routes
+  // Keep the public brand assets available before sign-in. Match only these
+  // exact files; other /brand paths and arbitrary SVG/PNG URLs stay protected.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/auth).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/auth|brand/aura-mark\\.svg$|brand/apple-touch-icon\\.png$).*)",
   ],
 };
