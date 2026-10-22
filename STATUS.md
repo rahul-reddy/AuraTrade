@@ -14,13 +14,16 @@
   and lookalike paths, registration/login, both themes, mobile, sidebar collapse,
   successful image loading and favicon metadata/responses. Screenshots from the
   passing focused production-browser test were visually inspected.
-- Validation of the source changes based on main `4b5bd4d`: `npm run lint`
+- Validation of implementation revision `663451d` (PR #45): `npm run lint`
   passed with two existing warnings; `npm run typecheck`, all 371 units / 35
   suites, and the isolated Webpack production build passed. The focused final
   `brand.spec.ts` passed after correcting its relative-redirect URL assertion.
-  Full browser regression is still running; an existing calendar assertion
-  failed in that run and requires inspection. Exact-head CI will verify the
-  committed revision before independent cross-model review and guarded merge.
+  The full local browser run passed 21/23: it had loaded the old brand test
+  assertion before its fix, and the existing calendar test timed out waiting
+  for heatmap months. The final brand test and both calendar tests then passed
+  together (3/3), without changing calendar code or tests. Final test-file lint,
+  TypeScript, and screenshot inspection passed. Exact-head CI will verify this
+  documentation follow-up before independent review and guarded merge.
 - Local packaging limitation: the private-file check rejected the reused local
   standalone output (two private files). That workstation artifact is not a
   delivery artifact. Clean CI must pass its standalone private-file gate;
